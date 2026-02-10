@@ -1,0 +1,26 @@
+body {
+  margin: 0;
+  font-family: 'Courier New', monospace;
+  background: #000;
+  color: #0f0;
+}
+
+.bios-container {
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.status-green { color: #0f0; }
+.status-yellow { color: #ff0; }
+.status-red { color: #f00; }
+.status-unknown { color: #888; }
+
+.blink {
+  animation: blink 1s infinite;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}

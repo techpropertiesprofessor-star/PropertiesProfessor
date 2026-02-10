@@ -1,0 +1,364 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Define CSS custom properties for theming */
+:root {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8fafc;
+  --bg-tertiary: #f1f5f9;
+  --text-primary: #1f2937;
+  --text-secondary: #64748b;
+  --text-tertiary: #94a3b8;
+  --border-color: #e2e8f0;
+  --card-bg: #ffffff;
+  --header-bg: linear-gradient(to right, #fef3c7, #fed7aa, #fef3c7);
+  --sidebar-bg: #ffffff;
+}
+
+/* Dark theme CSS custom properties */
+.dark,
+.dark:root {
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-tertiary: #334155;
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-tertiary: #94a3b8;
+  --border-color: #475569;
+  --card-bg: #1e293b;
+  --header-bg: linear-gradient(to right, #1e293b, #334155, #1e293b);
+  --sidebar-bg: #1e293b;
+}
+
+/* Apply theme variables to body */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Global dark mode styles - comprehensive coverage */
+
+/* Main containers */
+.dark,
+.dark * {
+  border-color: var(--border-color) !important;
+}
+
+.dark body,
+.dark #root,
+.dark main,
+.dark .main-content {
+  background-color: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Cards and containers */
+.dark .bg-white,
+.dark .bg-gray-50,
+.dark .bg-gray-100,
+.dark .bg-gray-200 {
+  background-color: var(--card-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Text colors */
+.dark .text-gray-900,
+.dark .text-gray-800,
+.dark .text-black {
+  color: var(--text-primary) !important;
+}
+
+.dark .text-gray-700,
+.dark .text-gray-600 {
+  color: var(--text-secondary) !important;
+}
+
+.dark .text-gray-500,
+.dark .text-gray-400 {
+  color: var(--text-tertiary) !important;
+}
+
+/* Specific component overrides */
+.dark .dashboard-card,
+.dark .card,
+.dark .panel,
+.dark .widget {
+  background-color: var(--card-bg) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* Forms and inputs */
+.dark input,
+.dark textarea,
+.dark select,
+.dark .form-input,
+.dark .form-control {
+  background-color: var(--bg-tertiary) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: var(--text-tertiary) !important;
+}
+
+/* Buttons */
+.dark .btn,
+.dark button:not(.btn-primary):not(.btn-success):not(.btn-danger):not(.btn-warning) {
+  background-color: var(--bg-tertiary) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* Tables */
+.dark table {
+  background-color: var(--card-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+.dark th {
+  background-color: var(--bg-tertiary) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+.dark td {
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+.dark tr:hover {
+  background-color: var(--bg-secondary) !important;
+}
+
+/* Sidebar */
+.dark .sidebar,
+.dark nav {
+  background-color: var(--sidebar-bg) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+.dark .nav-link,
+.dark .sidebar-link {
+  color: var(--text-secondary) !important;
+}
+
+.dark .nav-link:hover,
+.dark .sidebar-link:hover,
+.dark .nav-link.active {
+  color: var(--text-primary) !important;
+  background-color: var(--bg-secondary) !important;
+}
+
+/* Header */
+.dark .header,
+.dark header {
+  background: var(--header-bg) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* Modals and dropdowns */
+.dark .modal,
+.dark .dropdown-menu,
+.dark .popup,
+.dark .tooltip {
+  background-color: var(--card-bg) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* Borders */
+.dark .border,
+.dark .border-gray-200,
+.dark .border-gray-300 {
+  border-color: var(--border-color) !important;
+}
+
+/* Specific page overrides */
+.dark .dashboard-page,
+.dark .leads-page,
+.dark .tasks-page,
+.dark .inventory-page,
+.dark .login-page {
+  background-color: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Login page specific */
+.dark .login-container {
+  background-color: var(--bg-primary) !important;
+}
+
+.dark .login-form {
+  background-color: var(--card-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Stats cards */
+.dark .stat-card,
+.dark .metric-card,
+.dark .info-card {
+  background-color: var(--card-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Ensure all text is visible */
+.dark h1, .dark h2, .dark h3, .dark h4, .dark h5, .dark h6 {
+  color: var(--text-primary) !important;
+}
+
+.dark p, .dark span, .dark div, .dark label {
+  color: inherit !important;
+}
+
+/* Override any remaining white backgrounds */
+.dark [class*="bg-white"],
+.dark [class*="bg-gray-"] {
+  background-color: var(--card-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Force visibility for all text elements */
+.dark * {
+  color: inherit !important;
+}
+
+.dark *:not(button):not(.btn):not(.badge):not(.alert) {
+  background-color: inherit !important;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* Manager Analytics Dashboard Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.6s ease-out forwards;
+  opacity: 0;
+}
+
+/* Smooth gradient background */
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Hover effects for cards */
+.dashboard-card {
+  transition: all 0.3s ease;
+}
+
+.dashboard-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+/* Modern Sidebar Scrollbar */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(71, 85, 105, 0.5);
+  border-radius: 4px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(71, 85, 105, 0.7);
+}
+
+.scrollbar-track-transparent::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thumb-slate-700::-webkit-scrollbar-thumb {
+  background: rgba(51, 65, 85, 0.5);
+}
+
+.scrollbar-thumb-slate-700::-webkit-scrollbar-thumb:hover {
+  background: rgba(51, 65, 85, 0.8);
+}
+
+/* PDF Generation Styles - Ensure charts are visible and clear */
+[data-chart] {
+  position: relative;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+[data-chart] canvas {
+  max-width: 100% !important;
+  height: auto !important;
+}
+
+[data-chart] svg {
+  max-width: 100% !important;
+  height: auto !important;
+}
+
+/* Ensure recharts render properly for PDF capture */
+.recharts-wrapper {
+  position: relative !important;
+  width: 100% !important;
+}
+
+.recharts-surface {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Animations for dashboard */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.5s ease-out forwards;
+}

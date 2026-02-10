@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Manager Analytics Diagnostic Tool</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .status {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .warning { background: #fff3cd; color: #856404; }
+        button {
+            background: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Manager Analytics Diagnostic Tool</h1>
+    
+    <div class="card">
+        <h2>1. Authentication Check</h2>
+        <div id="auth-status"></div>
+    </div>
+
+    <div class="card">
+        <h2>2. User Role Check</h2>
+        <div id="role-status"></div>
+    </div>
+
+    <div class="card">
+        <h2>3. Backend API Test</h2>
+        <button onclick="testBackendAPI()">Test Analytics API</button>
+        <div id="api-status"></div>
+    </div>
+
+    <div class="card">
+        <h2>4. Token Details</h2>
+        <button onclick="showTokenDetails()">Show Token Info</button>
+        <div id="token-details"></div>
+    </div>
+
+    <script>
+        // Check authentication
+        function checkAuth() {
+            const token = localStorage.getItem('token');
+            const authDiv = document.getElementById('auth-status');
+            
+            if (token) {
+                authDiv.innerHTML = '<span class="status success">✅ Token Found</span>';
+            } else {
+                authDiv.innerHTML = '<span class="status error">❌ No Token Found</span><br><small>Please login first</small>';
+            }
+        }
+
+        // Check user role
+        function checkRole() {
+            const userStr = localStorage.getItem('user');
+            const roleDiv = document.getElementById('role-status');
+            
+            if (!userStr) {
+                roleDiv.innerHTML = '<span class="status error">❌ No User Data</span>';
+                return;
+            }
+
+            try {
+                const user = JSON.parse(userStr);
+                const role = user.role;
+                
+                if (role && role.toLowerCase() === 'manager') {
+                    roleDiv.innerHTML = `<span class="status success">✅ Manager Role</span><br><small>Role: ${role}</small>`;
+                } else {
+                    roleDiv.innerHTML = `<span class="status error">❌ Not a Manager</span><br><small>Current role: ${role || 'unknown'}</small>`;
+                }
+            } catch (e) {
+                roleDiv.innerHTML = '<span class="status error">❌ Invalid User Data</span>';
+            }
+        }
+
+        // Test backend API
+        async function testBackendAPI() {
+            const statusDiv = document.getElementById('api-status');
+            statusDiv.innerHTML = '<p>⏳ Testing API...</p>';
+            
+            const token = localStorage.getItem('token');
+            if (!token) {
+                statusDiv.innerHTML = '<span class="status error">❌ No token available</span>';
+                return;
+            }
+
+            try {
+                const response = await fetch('http://localhost:5000/api/manager-analytics/kpis', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    statusDiv.innerHTML = `
+                        <span class="status success">✅ API Working</span>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    statusDiv.innerHTML = `
+                        <span class="status error">❌ API Error (${response.status})</span>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                statusDiv.innerHTML = `
+                    <span class="status error">❌ Connection Error</span>
+                    <pre>${error.message}</pre>
+                `;
+            }
+        }
+
+        // Show token details
+        function showTokenDetails() {
+            const detailsDiv = document.getElementById('token-details');
+            const token = localStorage.getItem('token');
+            
+            if (!token) {
+                detailsDiv.innerHTML = '<span class="status error">❌ No token</span>';
+                return;
+            }
+
+            try {
+                const parts = token.split('.');
+                const payload = JSON.parse(atob(parts[1]));
+                
+                detailsDiv.innerHTML = `
+                    <pre>${JSON.stringify(payload, null, 2)}</pre>
+                    <small><strong>Role:</strong> ${payload.role || 'Not specified'}</small>
+                `;
+            } catch (e) {
+                detailsDiv.innerHTML = '<span class="status error">❌ Invalid token format</span>';
+            }
+        }
+
+        // Run checks on load
+        window.onload = () => {
+            checkAuth();
+            checkRole();
+        };
+    </script>
+</body>
+</html>

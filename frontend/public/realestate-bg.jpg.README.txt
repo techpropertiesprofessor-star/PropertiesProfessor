@@ -1,0 +1,3 @@
+// This file is for the real estate background image used in the login page.
+// Place this image in the public directory and reference as '/realestate-bg.jpg' or similar in your React code.
+// (This is a placeholder for documentation purposes.)
