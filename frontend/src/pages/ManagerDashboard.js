@@ -31,7 +31,10 @@ const ManagerDashboard = () => {
     try {
       setLoading(true);
       const response = await api.get('/employees/statistics/all');
-      setEmployees(response.data);
+      setEmployees(Array.isArray(response.data)
+  ? response.data
+  : response.data?.data || []);
+
       setError(null);
     } catch (err) {
       console.error('Error fetching employee statistics:', err);
@@ -46,7 +49,10 @@ const ManagerDashboard = () => {
       const response = await axios.get('/api/personal-notes', {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
-      setNotes(response.data);
+      setNotes(Array.isArray(response.data)
+  ? response.data
+  : response.data?.data || []);
+
     } catch (err) {
       console.error('Error fetching notes:', err);
     }
@@ -57,7 +63,10 @@ const ManagerDashboard = () => {
       const response = await axios.get('/api/personal-notes/all', {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
-      setAllNotes(response.data);
+      setAllNotes(typeof response.data === "object"
+  ? response.data
+  : {});
+
     } catch (err) {
       console.error('Error fetching all notes:', err);
     }
@@ -80,8 +89,11 @@ const ManagerDashboard = () => {
     }
   };
 
-  // Filter employees
-  const filteredEmployees = employees.filter(emp => {
+  const safeEmployees = Array.isArray(employees) ? employees : [];
+
+// Filter employees
+const filteredEmployees = safeEmployees.filter(emp => {
+
     const matchesSearch = 
       emp.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       emp.last_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -96,7 +108,8 @@ const ManagerDashboard = () => {
   });
 
   // Calculate overall statistics
-  const overallStats = employees.reduce((acc, emp) => {
+  const overallStats = safeEmployees.reduce((acc, emp) => {
+
     if (emp.statistics) {
       acc.totalTasks += emp.statistics.tasks?.total || 0;
       acc.completedTasks += emp.statistics.tasks?.completed || 0;
@@ -305,7 +318,8 @@ const ManagerDashboard = () => {
 
           {/* Employee Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredEmployees.map((employee) => (
+            {Array.isArray(filteredEmployees) && filteredEmployees.map((employee) => (
+
               <div
                 key={employee._id}
                 className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-shadow overflow-hidden flex flex-col"
