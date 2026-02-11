@@ -11,6 +11,8 @@ import { AuthContext } from '../context/AuthContext';
 import { format, isToday, isSameMonth } from 'date-fns';
 import { FiMapPin, FiClock, FiAlertCircle, FiCheckCircle } from 'react-icons/fi';
 import { usePermissions } from '../hooks/usePermissions';
+import { leaveAPI } from "../api/client";
+
 
 // Geo-fence configuration for attendance marking
 const ALLOWED_RADIUS_METERS = 100;

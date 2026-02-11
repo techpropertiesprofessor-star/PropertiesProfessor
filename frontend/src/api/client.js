@@ -249,3 +249,22 @@ export const calendarAPI = {
 };
 
 export default api;
+
+/**
+ * =====================================================
+ * LEAVE APIs
+ * =====================================================
+ */
+export const leaveAPI = {
+  requestLeave: (data) =>
+    api.post("/leaves/request", data),
+
+  getMyLeaves: () =>
+    api.get("/leaves/mine"),
+
+  getAllLeaves: () =>
+    api.get("/leaves"),
+
+  updateLeaveStatus: (id, data) =>
+    api.put(`/leaves/${id}/status`, data),
+};
