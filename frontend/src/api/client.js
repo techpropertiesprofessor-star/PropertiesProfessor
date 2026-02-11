@@ -134,25 +134,33 @@ export const inventoryAPI = {
 
   // Towers
   getTowers: (projectId) =>
-    api.get(`/inventory/projects/${projectId}/towers`),
+    api.get("/inventory/towers", {
+      params: { projectId },
+    }),
 
   createTower: (projectId, data) =>
-    api.post(`/inventory/projects/${projectId}/towers`, data),
+    api.post("/inventory/towers", {
+      projectId,
+      ...data,
+    }),
 
   // Units
   createUnit: (data) =>
-    api.post("/inventory/units", data),
+  api.post("/inventory/units", data, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  }),
 
   getUnits: (params = {}) =>
     api.get("/inventory/units", { params }),
 
   searchUnits: (params = {}) =>
-    api.get("/inventory/units/search", { params }),
+    api.get("/inventory/units", { params }),
 
-  getStats: (projectId) =>
-    api.get("/inventory/stats", {
-      params: { project_id: projectId },
-    }),
+  // Stats
+  getStats: () =>
+    api.get("/inventory/stats"),
 
   // Media
   listUnitMedia: (id) =>
@@ -170,7 +178,6 @@ export const inventoryAPI = {
       responseType: "blob",
     }),
 };
-
 
 /**
  * =====================================================

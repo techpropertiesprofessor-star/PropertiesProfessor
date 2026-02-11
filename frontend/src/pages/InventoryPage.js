@@ -1051,14 +1051,28 @@ function InventoryPage() {
                       status: 'AVAILABLE'
                     };
                     
-                    // Step 4: Create unit
-                    const res = await inventoryAPI.createUnit(payload);
-                    const unitId = res.data?._id || res.data?.id;
-                    
-                    // Step 5: Upload photos if any
-                    if (unitId && form.photos && form.photos.length > 0) {
-                      await inventoryAPI.uploadUnitMedia(unitId, form.photos, '');
-                    }
+                    // Step 4: Create FormData instead of JSON
+const formData = new FormData();
+
+// Append all fields
+Object.keys(payload).forEach((key) => {
+  if (payload[key] !== undefined && payload[key] !== null) {
+    formData.append(key, payload[key]);
+  }
+});
+
+// Append photos if exist
+if (form.photos && form.photos.length > 0) {
+  form.photos.forEach((file) => {
+    formData.append("photos", file);
+  });
+}
+
+// Step 5: Create unit with photos together
+const res = await inventoryAPI.createUnit(formData);
+
+const unitId = res.data?._id || res.data?.id;
+
                     
                     setCreateModalOpen(false);
                     await fetchProjects();

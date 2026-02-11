@@ -8,7 +8,7 @@ import { useEffect, useCallback, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import axios from 'axios';
 
-const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const API_BASE = process.env.REACT_APP_API_URL;
 
 // Queue for batching activity logs
 class ActivityQueue {
@@ -50,15 +50,15 @@ class ActivityQueue {
 
       // Send all activities in batch
       await Promise.all(
-        batch.map(activity =>
-          axios.post(`${API_BASE}/api/admin/log/activity`, activity, {
-            headers: { Authorization: `Bearer ${token}` }
-          }).catch(err => {
-            // Silently fail - never disrupt user experience
-            console.debug('Activity log failed:', err.message);
-          })
-        )
-      );
+  batch.map(activity =>
+    axios.post(`${API_BASE}/admin/log/activity`, activity, {
+      headers: { Authorization: `Bearer ${token}` }
+    }).catch(err => {
+      console.debug('Activity log failed:', err.message);
+    })
+  )
+);
+
     } catch (error) {
       console.debug('Activity batch failed:', error.message);
     } finally {
