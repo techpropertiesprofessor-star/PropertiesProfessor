@@ -80,9 +80,11 @@ function InventoryPage() {
       Object.keys(filters).forEach((key) => {
         if (filters[key]) params[key] = filters[key];
       });
-      const res = await inventoryAPI.getUnits({ params });
+      const res = await inventoryAPI.getUnits(params);
+
       // assume API returns an array in res.data
-      setUnits(res.data || []);
+      setUnits(Array.isArray(res.data) ? res.data : res.data?.units || []);
+
     } catch (err) {
       console.error('Failed to fetch units:', err);
       setUnits([]);
@@ -108,7 +110,7 @@ function InventoryPage() {
     try {
       const res = await inventoryAPI.getUnit(unitId);
       setSelectedUnit(res.data || null);
-      const mediaRes = await inventoryAPI.getUnitMedia(unitId);
+      const mediaRes = await inventoryAPI.listUnitMedia(unitId);
       setUnitMedia(mediaRes.data || []);
     } catch (err) {
       console.error('Failed to view unit:', err);
@@ -122,7 +124,7 @@ function InventoryPage() {
       const formData = new FormData();
       Array.from(files).forEach((f) => formData.append('files', f));
       if (caption) formData.append('caption', caption);
-      await inventoryAPI.uploadMedia(selectedUnit.id || selectedUnit._id, formData);
+      await inventoryAPI.uploadUnitMedia(selectedUnit.id || selectedUnit._id, formData);
       await viewUnit(selectedUnit.id || selectedUnit._id);
       setCaption('');
     } catch (err) {
@@ -135,7 +137,7 @@ function InventoryPage() {
   const handleDeleteMedia = async (mediaId) => {
     if (!selectedUnit) return;
     try {
-      await inventoryAPI.deleteMedia(selectedUnit.id || selectedUnit._id, mediaId);
+      await inventoryAPI.deleteUnitMedia(selectedUnit.id || selectedUnit._id, mediaId);
       await viewUnit(selectedUnit.id || selectedUnit._id);
     } catch (err) {
       console.error('Delete media failed:', err);
@@ -145,7 +147,7 @@ function InventoryPage() {
   const handleGeneratePDF = async () => {
     if (!selectedUnit) return;
     try {
-      const res = await inventoryAPI.generateUnitPDF(selectedUnit.id || selectedUnit._id);
+      const res = await inventoryAPI.generatePDF(selectedUnit.id || selectedUnit._id);
       if (res.data && res.data.url) {
         window.open(res.data.url, '_blank');
       }
@@ -535,7 +537,8 @@ function InventoryPage() {
                           base_price: Number(form.basePrice) || 0,
                           final_price: Number(form.finalPrice) || 0,
                           price_per_sqft: Number(form.pricePerSqft) || 0,
-                          status: 'AVAILABLE'
+                          status: 'available'
+
                         };
 
                         // Convert payload + photos to FormData

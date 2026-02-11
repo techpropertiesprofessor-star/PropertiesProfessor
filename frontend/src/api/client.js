@@ -131,6 +131,10 @@ export const inventoryAPI = {
 
   createProject: (data) =>
     api.post("/inventory/projects", data),
+  
+  getUnit: (id) =>
+  api.get(`/inventory/units/${id}`),
+
 
   // Towers
 getTowers: (projectId) =>
