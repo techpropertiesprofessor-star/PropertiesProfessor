@@ -476,54 +476,26 @@ const ManagerDashboard = () => {
 
       {/* Add Note Modal */}
       {showAddNoteModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4 overflow-y-auto">
-          <div className="bg-white rounded-lg w-full max-w-md mx-auto p-4 sm:p-6 max-h-[90vh] flex flex-col">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2">
+          <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
             <h3 className="text-xl font-bold mb-4 break-words">Add Personal Note</h3>
             <textarea
               value={newNote}
               onChange={(e) => setNewNote(e.target.value)}
               placeholder="Enter your note..."
-              className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 break-words resize-none min-h-[96px]"
+              className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 break-words"
               rows="4"
             />
-            <div className="flex flex-col gap-3 mt-4 sm:flex-row">
+            <div className="flex flex-col sm:flex-row gap-3 mt-4">
               <button
                 onClick={addNote}
-                className="w-full sm:w-auto flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700"
+                className="flex-1 w-full sm:w-auto bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700"
               >
                 Add Note
               </button>
               <button
                 onClick={() => setShowAddNoteModal(false)}
-                className="w-full sm:w-auto flex-1 bg-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-400"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {showAddNoteModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4 overflow-y-auto">
-          <div className="bg-white rounded-lg w-full max-w-md mx-auto p-4 sm:p-6 max-h-[90vh] flex flex-col">
-            <h3 className="text-xl font-bold mb-4 break-words">Add Personal Note</h3>
-            <textarea
-              value={newNote}
-              onChange={(e) => setNewNote(e.target.value)}
-              placeholder="Enter your note..."
-              className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 break-words resize-none min-h-[96px] max-h-40 sm:max-h-56"
-              rows="4"
-            />
-            <div className="flex flex-col gap-3 mt-4 sm:flex-row">
-              <button
-                onClick={addNote}
-                className="w-full sm:w-auto flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 truncate"
-              >
-                Add Note
-              </button>
-              <button
-                onClick={() => setShowAddNoteModal(false)}
-                className="w-full sm:w-auto flex-1 bg-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-400 truncate"
+                className="flex-1 w-full sm:w-auto bg-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-400"
               >
                 Cancel
               </button>

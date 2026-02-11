@@ -293,11 +293,11 @@ export default function Header({ user, onLogout, onSearch, notificationCount = 0
   return (
     <>
       <header className="bg-gradient-to-r from-yellow-100 via-yellow-200 to-yellow-100 shadow-sm border-b border-yellow-300">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-4 sm:px-6 py-2.5 gap-3">
+        <div className="flex items-center justify-between px-6 py-2.5">
         {/* Brand section with role badge */}
-        <div className="flex items-center gap-3 overflow-hidden w-full sm:w-auto">
+        <div className="flex items-center space-x-3 overflow-hidden">
           {/* Role Badge - moved to left corner */}
-          <div className="group relative break-words">
+          <div className="group relative">
             <div className={`px-3 py-1 rounded-full text-xs font-semibold border-2 cursor-default transition-all duration-200 ${
               user?.role === 'MANAGER' ? 'bg-purple-100 text-purple-800 border-purple-300 hover:bg-purple-200' :
               user?.role === 'ADMIN' ? 'bg-red-100 text-red-800 border-red-300 hover:bg-red-200' :
@@ -316,22 +316,22 @@ export default function Header({ user, onLogout, onSearch, notificationCount = 0
         </div>
         
         {/* Middle section - empty for now */}
-        <div className="hidden md:flex items-center"></div>
-
+        <div className="hidden md:flex items-center">
+        </div>
+        
         {/* Enhanced Live Clock with IST */}
-        <div className="flex items-center gap-3 bg-white/30 rounded-lg px-3 py-2 border border-gray-200 w-full sm:w-auto">
+        <div className="flex items-center space-x-3 bg-white/30 rounded-lg px-3 py-2 border border-gray-200">
           <div className="text-center">
-            <div className="text-sm font-bold text-gray-800 transition-all duration-1000 whitespace-nowrap">
+            <div className="text-sm font-bold text-gray-800 transition-all duration-1000">
               {getISTTime()}
             </div>
-            <div className="text-xs text-gray-600 font-medium whitespace-nowrap">
+            <div className="text-xs text-gray-600 font-medium">
               {getISTDate()}
             </div>
           </div>
         </div>
-
         {/* Right side controls */}
-        <div className="flex items-center gap-3 w-full sm:w-auto">
+        <div className="flex items-center space-x-3">
           {/* Quick Actions Menu */}
           <div className="relative" ref={quickActionsRef}>
             <button
@@ -346,31 +346,31 @@ export default function Header({ user, onLogout, onSearch, notificationCount = 0
                 <div className="p-2 border-b border-gray-100">
                   <div className="text-xs font-semibold text-gray-600 px-2">Quick Actions</div>
                 </div>
-                <div className="py-1 flex flex-col gap-2">
+                <div className="py-1">
                   <button
                     onClick={() => handleQuickAction('add-lead')}
-                    className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 flex items-center gap-2 transition-colors w-full sm:w-auto"
+                    className="w-full px-4 py-2 text-left text-sm hover:bg-blue-50 flex items-center space-x-2 transition-colors"
                   >
                     <FiUser size={16} className="text-blue-600" />
                     <span>Add Lead</span>
                   </button>
                   <button
                     onClick={() => handleQuickAction('add-task')}
-                    className="w-full px-4 py-2 text-left text-sm hover:bg-green-50 flex items-center gap-2 transition-colors w-full sm:w-auto"
+                    className="w-full px-4 py-2 text-left text-sm hover:bg-green-50 flex items-center space-x-2 transition-colors"
                   >
                     <FiCheckCircle size={16} className="text-green-600" />
                     <span>Add Task</span>
                   </button>
                   <button
                     onClick={() => handleQuickAction('add-inventory')}
-                    className="w-full px-4 py-2 text-left text-sm hover:bg-purple-50 flex items-center gap-2 transition-colors w-full sm:w-auto"
+                    className="w-full px-4 py-2 text-left text-sm hover:bg-purple-50 flex items-center space-x-2 transition-colors"
                   >
                     <FiCalendar size={16} className="text-purple-600" />
                     <span>Add Inventory</span>
                   </button>
                   <button
                     onClick={() => handleQuickAction('add-caller')}
-                    className="w-full px-4 py-2 text-left text-sm hover:bg-orange-50 flex items-center gap-2 transition-colors w-full sm:w-auto"
+                    className="w-full px-4 py-2 text-left text-sm hover:bg-orange-50 flex items-center space-x-2 transition-colors"
                   >
                     <FiUser size={16} className="text-orange-600" />
                     <span>Add Caller</span>
@@ -550,46 +550,48 @@ export default function Header({ user, onLogout, onSearch, notificationCount = 0
           {/* Enhanced Profile Mini Menu */}
           <div className="relative" ref={profileMenuRef}>
             <button
-              className="flex items-center gap-2 pl-3 border-l border-gray-200 cursor-pointer hover:bg-white/50 rounded-r-lg p-2 transition-colors duration-200 w-full sm:w-auto"
+              className="flex items-center space-x-2 pl-3 border-l border-gray-200 cursor-pointer hover:bg-white/50 rounded-r-lg p-2 transition-colors duration-200"
               onClick={() => setShowProfileMenu(!showProfileMenu)}
             >
               <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
                 {user?.first_name?.charAt(0) || user?.name?.charAt(0) || 'U'}
               </div>
               <div className="hidden md:block text-left">
-                <p className="text-xs font-semibold text-gray-900 truncate">
+                <p className="text-xs font-semibold text-gray-900">
                   {user?.first_name || user?.name || 'User'}
                 </p>
-                <p className="text-xs text-gray-500 capitalize truncate">{user?.role}</p>
+                <p className="text-xs text-gray-500 capitalize">{user?.role}</p>
               </div>
               <FiChevronDown size={14} className="text-gray-500" />
             </button>
+            
             {/* Enhanced Profile Dropdown */}
             {showProfileMenu && (
               <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
                 <div className="p-3 border-b border-gray-100">
-                  <div className="text-sm font-semibold text-gray-800 break-words">{user?.first_name || user?.name || 'User'}</div>
-                  <div className="text-xs text-gray-500 break-words">{user?.email}</div>
+                  <div className="text-sm font-semibold text-gray-800">{user?.first_name || user?.name || 'User'}</div>
+                  <div className="text-xs text-gray-500">{user?.email}</div>
                 </div>
-                <div className="py-1 flex flex-col gap-2">
+                <div className="py-1">
                   <a
                     href="/profile"
-                    className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 transition-colors w-full sm:w-auto"
+                    className="flex items-center space-x-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 transition-colors"
                   >
                     <FiUser size={16} className="text-gray-500" />
                     <span>My Profile</span>
                   </a>
                   <button
                     onClick={handleChangePassword}
-                    className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors w-full sm:w-auto"
+                    className="flex items-center space-x-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                   >
                     <FiKey size={16} className="text-gray-500" />
                     <span>Change Password</span>
                   </button>
+                  
                   <div className="border-t border-gray-100">
                     <button
                       onClick={onLogout}
-                      className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors w-full sm:w-auto"
+                      className="flex items-center space-x-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
                     >
                       <FiLogOut size={16} />
                       <span>Logout</span>
@@ -597,7 +599,7 @@ export default function Header({ user, onLogout, onSearch, notificationCount = 0
                   </div>
                 </div>
               </div>
-            )}
+            )}  
           </div>
         </div>
       </div>
@@ -605,11 +607,11 @@ export default function Header({ user, onLogout, onSearch, notificationCount = 0
     
     {/* Change Password Modal */}
     {showPasswordModal && (
-      <div className="fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
-        <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-auto max-h-[90vh] flex flex-col">
-          <div className="p-4 sm:p-6">
+      <div className="fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-center justify-center">
+        <div className="bg-white rounded-lg shadow-xl w-96 max-w-md mx-4">
+          <div className="p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900 break-words truncate">Change Password</h3>
+              <h3 className="text-lg font-semibold text-gray-900">Change Password</h3>
               <button
                 onClick={() => setShowPasswordModal(false)}
                 className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
@@ -617,6 +619,7 @@ export default function Header({ user, onLogout, onSearch, notificationCount = 0
                 ×
               </button>
             </div>
+            
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
@@ -624,35 +627,38 @@ export default function Header({ user, onLogout, onSearch, notificationCount = 0
                   type="password"
                   value={passwordForm.currentPassword}
                   onChange={(e) => setPasswordForm(prev => ({...prev, currentPassword: e.target.value}))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 truncate"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Enter current password"
                 />
               </div>
+              
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
                 <input
                   type="password"
                   value={passwordForm.newPassword}
                   onChange={(e) => setPasswordForm(prev => ({...prev, newPassword: e.target.value}))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 truncate"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Enter new password (min 6 characters)"
                 />
               </div>
+              
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
                 <input
                   type="password"
                   value={passwordForm.confirmPassword}
                   onChange={(e) => setPasswordForm(prev => ({...prev, confirmPassword: e.target.value}))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 truncate"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Confirm new password"
                 />
               </div>
             </div>
-            <div className="flex flex-col sm:flex-row gap-3 mt-6">
+            
+            <div className="flex space-x-3 mt-6">
               <button
                 onClick={() => setShowPasswordModal(false)}
-                className="flex-1 w-full sm:w-auto px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 font-medium truncate"
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 font-medium"
                 disabled={passwordLoading}
               >
                 Cancel
@@ -660,7 +666,7 @@ export default function Header({ user, onLogout, onSearch, notificationCount = 0
               <button
                 onClick={handlePasswordSubmit}
                 disabled={passwordLoading || !passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword}
-                className="flex-1 w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {passwordLoading ? 'Changing...' : 'Change Password'}
               </button>

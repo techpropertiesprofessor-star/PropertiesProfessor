@@ -362,3 +362,17 @@ code {
 .animate-fadeIn {
   animation: fadeIn 0.5s ease-out forwards;
 }
+
+/* When user types (or input has a value), ensure text color is black for visibility */
+input[type="email"]:not(:placeholder-shown),
+input[type="password"]:not(:placeholder-shown),
+input:not(:placeholder-shown) {
+  color: #000 !important;
+}
+
+/* Also handle autofill (some browsers keep different color) */
+input:-webkit-autofill,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:hover {
+  -webkit-text-fill-color: #000 !important;
+}
