@@ -180,32 +180,53 @@ export default function TasksPage({ newMessageCount = 0, resetNewMessageCount })
 
   // Pin/Unpin task
   const handlePinTask = async (task) => {
-    try {
-      const taskId = task.id || task._id;
-      const isPinned = task.pinned;
-      
-      if (user.role === 'EMPLOYEE') {
-        // Employee pins their own task
-        if (isPinned) {
+  try {
+    const taskId = task?.id || task?._id;
+    if (!taskId) return;
+
+    const isPinned = task?.pinned;
+
+    if (!taskAPI) {
+      console.error("taskAPI not found");
+      return;
+    }
+
+    if (user?.role === 'EMPLOYEE') {
+      if (isPinned) {
+        if (typeof taskAPI.unpinByEmployee === "function") {
           await taskAPI.unpinByEmployee(taskId);
         } else {
-          await taskAPI.pinByEmployee(taskId);
+          console.error("unpinByEmployee not defined");
         }
       } else {
-        // Manager/Admin pins any task
-        if (isPinned) {
-          await taskAPI.unpinByManager(taskId);
+        if (typeof taskAPI.pinByEmployee === "function") {
+          await taskAPI.pinByEmployee(taskId);
         } else {
-          await taskAPI.pinByManager(taskId);
+          console.error("pinByEmployee not defined");
         }
       }
-      
-      await loadTasks();
-    } catch (err) {
-      alert('Failed to update pin status');
-      console.error(err);
+    } else {
+      if (isPinned) {
+        if (typeof taskAPI.unpinByManager === "function") {
+          await taskAPI.unpinByManager(taskId);
+        } else {
+          console.error("unpinByManager not defined");
+        }
+      } else {
+        if (typeof taskAPI.pinByManager === "function") {
+          await taskAPI.pinByManager(taskId);
+        } else {
+          console.error("pinByManager not defined");
+        }
+      }
     }
-  };
+
+    await loadTasks();
+  } catch (err) {
+    console.error("Pin/Unpin Error:", err);
+    alert("Failed to update pin status");
+  }
+};
 
   if (permissionsLoading) {
     return (

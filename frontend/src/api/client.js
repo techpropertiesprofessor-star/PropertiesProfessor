@@ -87,27 +87,90 @@ export const attendanceAPI = {
 
 /**
  * =====================================================
- * TASK APIs
+ * TASK APIs ✅ (WITH PIN SUPPORT)
  * =====================================================
  */
 export const taskAPI = {
   create: (data) => api.post("/tasks", data),
-  getAll: (params = {}) => api.get("/tasks", { params }),
-  getById: (id) => api.get(`/tasks/${id}`),
-  update: (id, data) => api.put(`/tasks/${id}`, data),
-};
 
+  getAll: (params = {}) =>
+    api.get("/tasks", { params }),
+
+  getById: (id) =>
+    api.get(`/tasks/${id}`),
+
+  update: (id, data) =>
+    api.put(`/tasks/${id}`, data),
+
+  updateStatusByEmployee: (id, data) =>
+    api.put(`/tasks/${id}/update-status`, data),
+
+  // ✅ PIN / UNPIN SUPPORT
+  pinByEmployee: (id) =>
+    api.post(`/tasks/${id}/pin-employee`),
+
+  unpinByEmployee: (id) =>
+    api.post(`/tasks/${id}/unpin-employee`),
+
+  pinByManager: (id) =>
+    api.post(`/tasks/${id}/pin-manager`),
+
+  unpinByManager: (id) =>
+    api.post(`/tasks/${id}/unpin-manager`)
+};
 /**
  * =====================================================
- * INVENTORY APIs
+ * INVENTORY APIs ✅ (FULL VERSION)
  * =====================================================
  */
 export const inventoryAPI = {
+
+  // Projects
   getProjects: (params) =>
     api.get("/inventory/projects", { params }),
+
   createProject: (data) =>
     api.post("/inventory/projects", data),
+
+  // Towers
+  getTowers: (projectId) =>
+    api.get(`/inventory/projects/${projectId}/towers`),
+
+  createTower: (projectId, data) =>
+    api.post(`/inventory/projects/${projectId}/towers`, data),
+
+  // Units
+  createUnit: (data) =>
+    api.post("/inventory/units", data),
+
+  getUnits: (params = {}) =>
+    api.get("/inventory/units", { params }),
+
+  searchUnits: (params = {}) =>
+    api.get("/inventory/units/search", { params }),
+
+  getStats: (projectId) =>
+    api.get("/inventory/stats", {
+      params: { project_id: projectId },
+    }),
+
+  // Media
+  listUnitMedia: (id) =>
+    api.get(`/inventory/units/${id}/media`),
+
+  uploadUnitMedia: (id, formData) =>
+    api.post(`/inventory/units/${id}/media`, formData),
+
+  deleteUnitMedia: (id, mediaId) =>
+    api.delete(`/inventory/units/${id}/media/${mediaId}`),
+
+  // PDF
+  generatePDF: (id) =>
+    api.get(`/inventory/units/${id}/pdf`, {
+      responseType: "blob",
+    }),
 };
+
 
 /**
  * =====================================================
