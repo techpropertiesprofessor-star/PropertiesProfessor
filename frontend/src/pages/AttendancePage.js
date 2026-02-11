@@ -379,7 +379,7 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
         reason: formData.reason,
         leave_type: formData.leave_type
       };
-      await attendanceAPI.requestLeave(payload);
+      await leaveAPI.requestLeave(payload);
       setShowLeaveForm(false);
       setFormData({ start_date: '', end_date: '', reason: '', leave_type: 'sick' });
       await loadLeaveRequests();
