@@ -5,15 +5,23 @@ const helmet = require('helmet');
 const app = express();
 
 /* ========================
-   GLOBAL MIDDLEWARES
+   CORS CONFIG (PRODUCTION SAFE)
 ======================== */
-app.use(cors({
-  origin: true, // Allow all origins for development
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
-}));
+app.use(
+  cors({
+    origin: [
+      "http://localhost:3000", // Local development
+      "https://propertiesprofessor-rt67.vercel.app" // Vercel frontend
+    ],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+  })
+);
 
+/* ========================
+   GLOBAL SECURITY & BODY PARSER
+======================== */
 app.use(helmet());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -21,8 +29,6 @@ app.use(express.urlencoded({ extended: true }));
 /* ========================
    OBSERVABILITY MIDDLEWARE (Non-intrusive)
 ======================== */
-// Add observability middleware AFTER body parsing but BEFORE routes
-// This middleware tracks all API requests and emits real-time metrics
 const { trackApiRequest } = require('./middlewares/observabilityEmitter.middleware');
 app.use(trackApiRequest);
 
@@ -48,27 +54,32 @@ app.use('/api/permissions', require('./routes/permissions.routes'));
 app.use('/api/personal-notes', require('./routes/personalNote.routes'));
 
 /* ========================
-   MANAGER ANALYTICS ROUTES (Manager-Only)
+   MANAGER ANALYTICS ROUTES
 ======================== */
-app.use('/api/manager-analytics', require('./modules/manager-analytics/analytics.routes'));
+app.use(
+  '/api/manager-analytics',
+  require('./modules/manager-analytics/analytics.routes')
+);
 
 /* ========================
-   OBSERVABILITY ROUTES (Isolated)
+   OBSERVABILITY ROUTES
 ======================== */
-// Admin panel routes - /api/admin/*
 app.use('/api/admin', require('./routes/observability/admin.routes'));
-
-// BIOS panel routes - /api/bios/*
 app.use('/api/bios', require('./routes/observability/bios.routes'));
 
 /* ========================
    HEALTH CHECK
 ======================== */
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'OK', message: 'Server is healthy' });
+  res.status(200).json({
+    status: 'OK',
+    message: 'Server is healthy'
+  });
 });
 
-// Error middleware
+/* ========================
+   ERROR HANDLER
+======================== */
 app.use(require('./middlewares/error.middleware'));
 
 module.exports = app;

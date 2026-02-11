@@ -6,8 +6,8 @@ import axios from "axios";
  * =====================================================
  */
 const api = axios.create({
-  baseURL: "/api",
-  withCredentials: true,
+  baseURL: "https://propertiesprofessor.onrender.com/api",
+  withCredentials: false,
   headers: {
     "Content-Type": "application/json",
   },
