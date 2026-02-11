@@ -133,16 +133,12 @@ export const inventoryAPI = {
     api.post("/inventory/projects", data),
 
   // Towers
-  getTowers: (projectId) =>
-    api.get("/inventory/towers", {
-      params: { projectId },
-    }),
+getTowers: (projectId) =>
+  api.get(`/inventory/projects/${projectId}/towers`),
 
-  createTower: (projectId, data) =>
-    api.post("/inventory/towers", {
-      projectId,
-      ...data,
-    }),
+createTower: (projectId, data) =>
+  api.post(`/inventory/projects/${projectId}/towers`, data),
+
 
   // Units
   createUnit: (data) =>
