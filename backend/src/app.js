@@ -11,7 +11,8 @@ app.use(
   cors({
     origin: [
       "http://localhost:3000", // Local development
-      "https://propertiesprofessor-rt67.vercel.app" // Vercel frontend
+      "https://propertiesprofessor-rt67.vercel.app", // Old Vercel URL
+      "https://propertiesprofessor.vercel.app" // Production Vercel URL
     ],
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
