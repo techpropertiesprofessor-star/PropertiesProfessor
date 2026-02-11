@@ -250,21 +250,16 @@ export const calendarAPI = {
 
 export default api;
 
-/**
- * =====================================================
- * LEAVE APIs
- * =====================================================
- */
 export const leaveAPI = {
-  requestLeave: (data) =>
-    api.post("/leaves/request", data),
+  requestLeave: (data) => api.post("/leaves", data),
 
-  getMyLeaves: () =>
-    api.get("/leaves/mine"),
+  getMyLeaves: () => api.get("/leaves/my"),
 
-  getAllLeaves: () =>
-    api.get("/leaves"),
+  getAllLeaves: () => api.get("/leaves/all"),
 
-  updateLeaveStatus: (id, data) =>
-    api.put(`/leaves/${id}/status`, data),
+  approveLeave: (id) =>
+    api.patch(`/leaves/${id}/approve`),
+
+  rejectLeave: (id) =>
+    api.patch(`/leaves/${id}/reject`),
 };
