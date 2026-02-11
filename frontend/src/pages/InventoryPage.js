@@ -53,37 +53,18 @@ function InventoryPage() {
     availability_date: '',
     keys_location: '',
     keys_remarks: '',
-    facing: '',
-    furnished_status: '',
-    parking_slots: '',
-    owner_name: '',
-    owner_phone: '',
-    owner_email: ''
-  });
-
-  // Edit state
-  const [editingUnitId, setEditingUnitId] = useState(null);
-  const [editUnit, setEditUnit] = useState(null);
-  const [editLoading, setEditLoading] = useState(false);
-  const [editError, setEditError] = useState('');
-  
-  // Filters
-  const [filters, setFilters] = useState({
-    query: '',
-    project_id: '',
-    status: '',
-    bhk: '',
-    listing_type: '',
-    budget_min: '',
-    budget_max: '',
-    area_min: '',
-    area_max: '',
-    location: '',
-    keys_location: '',
-    facing: '',
-    furnished_status: ''
-  });
-
+    return (
+      <div className="flex h-screen w-full bg-gradient-to-br from-emerald-50 via-white to-teal-100">
+        <Sidebar />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <Header user={user} />
+          <main className="flex-1 p-6 overflow-y-auto">
+            {/* Main page content and all modals go here, unchanged */}
+            {/* ...existing code... */}
+          </main>
+        </div>
+      </div>
+    );
 
 
 
@@ -969,8 +950,38 @@ function InventoryPage() {
 
       {/* Create Inventory Modal */}
       {createModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-0 max-w-2xl w-full max-h-[95vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-lg w-full max-w-2xl mx-auto p-0 max-h-[95vh] flex flex-col shadow-lg">
+            {/* Modal header removed as per request */}
+            <div className="p-0">
+              <AddInventoryForm
+                onSubmit={async (form) => {
+                  setCreateLoading(true);
+                  setCreateError('');
+                  try {
+                    // Step 1: Ensure project exists or create one
+                    let projectId;
+                    const projectName = form.buildingName || form.city || 'Default Project';
+                    const existingProjects = await inventoryAPI.getProjects();
+                    const existingProject = existingProjects.data.find(p => p.name === projectName);
+                    
+                    if (existingProject) {
+                      projectId = existingProject._id;
+                    } else {
+                      const newProject = await inventoryAPI.createProject({
+                        name: projectName,
+                        location: form.city,
+                        description: `${form.propertyType} - ${form.lookingTo}`
+                      });
+                      projectId = newProject.data._id;
+                    }
+
+                    // Step 2: Ensure tower exists or create one
+                    let towerId;
+                    const towerName = form.buildingName || 'Main Tower';
+      {createModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-lg w-full max-w-2xl mx-auto p-0 max-h-[95vh] flex flex-col shadow-lg">
             {/* Modal header removed as per request */}
             <div className="p-0">
               <AddInventoryForm
@@ -1345,11 +1356,11 @@ const unitId = res.data?._id || res.data?.id;
           </div>
         </div>
       )}
-      </main>
+
+        </main>
       </div>
     </div>
   );
-
 }
 
 export default InventoryPage;

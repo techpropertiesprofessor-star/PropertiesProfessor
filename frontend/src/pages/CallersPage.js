@@ -164,16 +164,15 @@ export default function CallersPage() {
       </div>
 
       {/* ADD / EDIT CALLER MODAL (UNCHANGED) */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-          <div className="bg-white w-full max-w-md rounded-lg shadow-lg">
-            <div className="p-6 border-b">
-              <h3 className="text-lg font-bold">
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-white w-full max-w-md rounded-lg shadow-lg flex flex-col max-h-[90vh] overflow-y-auto">
+            <div className="p-4 sm:p-6 border-b">
+              <h3 className="text-lg font-bold break-words">
                 {editId ? "Edit Caller" : "Add New Client"}
               </h3>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               <input
                 name="name"
                 placeholder="Name"
@@ -201,7 +200,7 @@ export default function CallersPage() {
                 placeholder="Notes"
                 value={formData.notes || ''}
                 onChange={handleChange}
-                className="w-full border px-3 py-2 rounded"
+                className="w-full border px-3 py-2 rounded resize-none min-h-[48px]"
                 rows={2}
               />
               <select
@@ -219,14 +218,14 @@ export default function CallersPage() {
               </select>
             </div>
 
-            <div className="p-6 border-t flex justify-end gap-3">
+            <div className="p-4 sm:p-6 border-t flex flex-col gap-3 sm:flex-row sm:justify-end">
               <button
                 onClick={() => {
                   setShowAddModal(false);
                   setEditId(null);
                   setFormData({ name: "", phone: "", company: "", lastResponse: "" });
                 }}
-                className="px-4 py-2 border rounded"
+                className="w-full sm:w-auto px-4 py-2 border rounded"
               >
                 Cancel
               </button>

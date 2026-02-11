@@ -94,6 +94,7 @@ export default function NotesPage() {
   };
 
   return (
+
     <div className="flex h-screen bg-gray-50">
       <Sidebar />
       <div className="flex-1 flex flex-col">
@@ -135,12 +136,12 @@ export default function NotesPage() {
         </main>
       </div>
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-          <div className="bg-white w-full max-w-md rounded-lg shadow-lg">
-            <div className="p-6 border-b">
-              <h3 className="text-lg font-bold">{editIdx !== null ? "Edit Note" : "Add New Note"}</h3>
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-white w-full max-w-md rounded-lg shadow-lg flex flex-col max-h-[90vh] overflow-y-auto">
+            <div className="p-4 sm:p-6 border-b">
+              <h3 className="text-lg font-bold break-words">{editIdx !== null ? "Edit Note" : "Add New Note"}</h3>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               <input
                 name="title"
                 placeholder="Title"
@@ -153,7 +154,7 @@ export default function NotesPage() {
                 placeholder="Write your note..."
                 value={form.content}
                 onChange={handleChange}
-                className="w-full border px-3 py-2 rounded"
+                className="w-full border px-3 py-2 rounded resize-none min-h-[96px]"
                 rows={4}
               />
               <label className="block text-sm text-gray-600">Reminder (optional)</label>
@@ -165,16 +166,16 @@ export default function NotesPage() {
                 className="w-full border px-3 py-2 rounded"
               />
             </div>
-            <div className="p-6 border-t flex justify-end gap-3">
+            <div className="p-4 sm:p-6 border-t flex flex-col gap-3 sm:flex-row sm:justify-end">
               <button
                 onClick={closeModal}
-                className="px-4 py-2 border rounded"
+                className="w-full sm:w-auto px-4 py-2 border rounded"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSave}
-                className="px-4 py-2 bg-blue-600 text-white rounded"
+                className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded"
               >
                 Save
               </button>
@@ -185,3 +186,4 @@ export default function NotesPage() {
     </div>
   );
 }
+

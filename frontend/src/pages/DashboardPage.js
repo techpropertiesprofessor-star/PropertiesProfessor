@@ -741,17 +741,17 @@ export default function DashboardPage() {
                 </div>
                 <div className="overflow-hidden rounded-xl border border-gray-200 shadow-lg bg-white">
                   <div className="overflow-x-auto">
-                    <table className="w-full">
+                    <table className="w-full min-w-[700px] text-xs">
                       <thead>
                         <tr className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white">
-                          <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider">#</th>
-                          <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider">Lead Details</th>
-                          <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider">Contact</th>
-                          <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider">Source</th>
-                          <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider">Status</th>
-                          <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider">Assigned</th>
-                          <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider">Remarks</th>
-                          <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider">Action</th>
+                          <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider whitespace-nowrap">#</th>
+                          <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider whitespace-nowrap">Lead Details</th>
+                          <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider whitespace-nowrap">Contact</th>
+                          <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider whitespace-nowrap">Source</th>
+                          <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider whitespace-nowrap">Status</th>
+                          <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider whitespace-nowrap">Assigned</th>
+                          <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider whitespace-nowrap">Remarks</th>
+                          <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider whitespace-nowrap">Action</th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-100">
@@ -769,40 +769,40 @@ export default function DashboardPage() {
                         ) : (
                           (user?.role?.toUpperCase() === 'MANAGER' ? allLeads : assignedLeads).slice(0, 6).map((lead, index) => (
                             <tr key={lead._id} className="hover:bg-gradient-to-r hover:from-indigo-50/50 hover:to-purple-50/50 transition-all duration-200 group">
-                              <td className="px-3 py-3">
+                              <td className="px-3 py-3 whitespace-nowrap">
                                 <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-100 to-purple-100 text-indigo-700 font-bold text-xs group-hover:scale-110 transition-transform">
                                   {index + 1}
                                 </div>
                               </td>
-                              <td className="px-3 py-3">
+                              <td className="px-3 py-3 whitespace-nowrap">
                                 <div className="flex items-center gap-2">
                                   <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold text-sm shadow-md group-hover:scale-110 transition-transform">
                                     {lead.name?.charAt(0)?.toUpperCase() || 'L'}
                                   </div>
                                   <div>
-                                    <span className="text-sm font-bold text-gray-900 block">{lead.name}</span>
-                                    <span className="text-xs text-gray-500">{lead.email || 'No email'}</span>
+                                    <span className="text-sm font-bold text-gray-900 block break-words">{lead.name}</span>
+                                    <span className="text-xs text-gray-500 break-words">{lead.email || 'No email'}</span>
                                   </div>
                                 </div>
                               </td>
-                              <td className="px-3 py-3">
-                                <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-700">
+                              <td className="px-3 py-3 whitespace-nowrap">
+                                <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-700 break-words">
                                   <svg className="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                                   </svg>
                                   {lead.phone || '--'}
                                 </div>
                               </td>
-                              <td className="px-3 py-3">
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-sm">
+                              <td className="px-3 py-3 whitespace-nowrap">
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-sm break-words">
                                   <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
                                     <path fillRule="evenodd" d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.214.33-.403.713-.57 1.116-.334.804-.614 1.768-.84 2.734a31.365 31.365 0 00-.613 3.58 2.64 2.64 0 01-.945-1.067c-.328-.68-.398-1.534-.398-2.654A1 1 0 005.05 6.05 6.981 6.981 0 003 11a7 7 0 1011.95-4.95c-.592-.591-.98-.985-1.348-1.467-.363-.476-.724-1.063-1.207-2.03zM12.12 15.12A3 3 0 017 13s.879.5 2.5.5c0-1 .5-4 1.25-4.5.5 1 .786 1.293 1.371 1.879A2.99 2.99 0 0113 13a2.99 2.99 0 01-.879 2.121z" clipRule="evenodd" />
                                   </svg>
                                   {lead.source || '--'}
                                 </span>
                               </td>
-                              <td className="px-3 py-3">
-                                <span className={`inline-flex items-center px-2.5 py-1 text-xs font-bold rounded-full shadow-sm ${
+                              <td className="px-3 py-3 whitespace-nowrap">
+                                <span className={`inline-flex items-center px-2.5 py-1 text-xs font-bold rounded-full shadow-sm break-words ${
                                   lead.status === 'NEW' ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white' :
                                   lead.status === 'CONTACTED' ? 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white' :
                                   lead.status === 'QUALIFIED' ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white' :
@@ -814,28 +814,14 @@ export default function DashboardPage() {
                                   {lead.status || 'ASSIGNED'}
                                 </span>
                               </td>
-                              <td className="px-3 py-3">
+                              <td className="px-3 py-3 whitespace-nowrap">
                                 <div className="flex items-center gap-1.5">
                                   {(() => {
-                                    console.log('🔍 Lead assignedTo:', lead.assignedTo, 'Type:', typeof lead.assignedTo);
-                                    console.log('📋 Available employees:', employees.length);
-                                    
                                     const assignedToId = typeof lead.assignedTo === 'object' && lead.assignedTo?._id 
                                       ? lead.assignedTo._id 
                                       : lead.assignedTo;
-                                    
-                                    console.log('🎯 Looking for employee with ID:', assignedToId);
-                                    
-                                    const assignedEmployee = employees.find(e => {
-                                      const match = String(e._id) === String(assignedToId);
-                                      console.log(`  Checking employee ${e.name} (${e._id}): ${match}`);
-                                      return match;
-                                    });
-                                    
-                                    console.log('✅ Found employee:', assignedEmployee);
-                                    
+                                    const assignedEmployee = employees.find(e => String(e._id) === String(assignedToId));
                                     const employeeName = assignedEmployee?.name || (typeof lead.assignedTo === 'object' && lead.assignedTo?.name) || 'Unassigned';
-                                    
                                     return (
                                       <>
                                         <div className="h-7 w-7 rounded-full bg-gradient-to-br from-indigo-400 to-purple-400 flex items-center justify-center text-white font-bold text-xs shadow">
@@ -849,14 +835,14 @@ export default function DashboardPage() {
                                   })()}
                                 </div>
                               </td>
-                              <td className="px-3 py-3">
+                              <td className="px-3 py-3 whitespace-nowrap">
                                 {lead.remarks ? (
-                                  <span className="text-xs text-gray-600 line-clamp-1 italic">"{lead.remarks}"</span>
+                                  <span className="text-xs text-gray-600 line-clamp-1 italic break-words">"{lead.remarks}"</span>
                                 ) : (
                                   <span className="text-xs text-gray-400">--</span>
                                 )}
                               </td>
-                              <td className="px-3 py-3">
+                              <td className="px-3 py-3 whitespace-nowrap">
                                 <button
                                   onClick={() => navigate('/leads')}
                                   className="px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-lg text-xs font-bold shadow-md hover:shadow-lg transform hover:scale-105 transition-all duration-200 flex items-center gap-1"

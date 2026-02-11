@@ -312,36 +312,36 @@ export default function AttendancePage() {
 
                 {viewMode === 'list' ? (
                   <div className="overflow-x-auto">
-                    <table className="w-full">
+                    <table className="w-full min-w-[500px] text-xs">
                       <thead className="bg-gray-50 border-b">
                         <tr>
-                          <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Date</th>
-                          <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Check In</th>
-                          <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Check Out</th>
-                          <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Status</th>
+                          <th className="px-4 py-2 text-left text-xs font-semibold text-gray-900 whitespace-nowrap">Date</th>
+                          <th className="px-4 py-2 text-left text-xs font-semibold text-gray-900 whitespace-nowrap">Check In</th>
+                          <th className="px-4 py-2 text-left text-xs font-semibold text-gray-900 whitespace-nowrap">Check Out</th>
+                          <th className="px-4 py-2 text-left text-xs font-semibold text-gray-900 whitespace-nowrap">Status</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y">
                         {attendance.length === 0 ? (
                           <tr>
-                            <td colSpan="4" className="px-6 py-4 text-center text-gray-500">
+                            <td colSpan="4" className="px-4 py-6 text-center text-gray-500">
                               No attendance records
                             </td>
                           </tr>
                         ) : (
                           attendance.map((record) => (
                             <tr key={record.id} className="hover:bg-gray-50">
-                              <td className="px-6 py-4 text-sm text-gray-900 font-medium">
+                              <td className="px-4 py-3 text-xs text-gray-900 font-medium whitespace-nowrap break-words">
                                 {format(new Date(record.date), 'MMM dd, yyyy')}
                               </td>
-                              <td className="px-6 py-4 text-sm text-gray-900">
+                              <td className="px-4 py-3 text-xs text-gray-900 whitespace-nowrap break-words">
                                 {record.check_in ? format(new Date(record.check_in), 'HH:mm') : '-'}
                               </td>
-                              <td className="px-6 py-4 text-sm text-gray-900">
+                              <td className="px-4 py-3 text-xs text-gray-900 whitespace-nowrap break-words">
                                 {record.check_out ? format(new Date(record.check_out), 'HH:mm') : '-'}
                               </td>
-                              <td className="px-6 py-4 text-sm">
-                                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                              <td className="px-4 py-3 text-xs whitespace-nowrap">
+                                <span className={`px-3 py-1 rounded-full text-xs font-semibold break-words ${
                                   record.status === 'present' ? 'bg-green-100 text-green-800' :
                                   record.status === 'absent' ? 'bg-red-100 text-red-800' :
                                   'bg-blue-100 text-blue-800'
