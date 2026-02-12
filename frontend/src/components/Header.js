@@ -370,6 +370,10 @@ export default function Header({ user, onLogout, onSearch, notificationCount = 0
         <div className="flex items-center justify-between px-6 py-2.5">
         {/* Brand section with role badge */}
         <div className="flex items-center space-x-3 overflow-hidden">
+          {/* Mobile hamburger (left of role badge) - visible on small screens */}
+          <div className="md:hidden mr-2">
+            <button onClick={() => { setShowMobileSidebar(true); }} className="p-2 rounded-md bg-white/50 hover:bg-white/80 text-gray-700" aria-label="Open menu">☰</button>
+          </div>
           {/* Role Badge - moved to left corner */}
           <div className="group relative">
             <div className={`px-3 py-1 rounded-full text-xs font-semibold border-2 cursor-default transition-all duration-200 ${
@@ -406,12 +410,6 @@ export default function Header({ user, onLogout, onSearch, notificationCount = 0
         </div>
         {/* Right side controls */}
         <div className="flex items-center space-x-3">
-          {/* Mobile hamburger for sidebar */}
-          <div className="md:hidden">
-            <button onClick={() => { console.log('mobile sidebar open clicked'); setShowMobileSidebar(true); }} className="p-2 rounded-md bg-white/50 hover:bg-white/80 text-gray-700">
-              ☰
-            </button>
-          </div>
           {/* Quick Actions Menu */}
           <div className="relative" ref={quickActionsRef}>
             <button
@@ -684,6 +682,134 @@ export default function Header({ user, onLogout, onSearch, notificationCount = 0
         </div>
       </div>
     </header>
+    {/* Mobile Sidebar Overlay (top-level) */}
+    {showMobileSidebar && (
+      <div className="fixed inset-0 z-60">
+        <div className="absolute inset-0 bg-black/40" onClick={() => setShowMobileSidebar(false)} />
+        <div className="absolute inset-y-0 left-0">
+          <Sidebar mobile={true} onClose={() => setShowMobileSidebar(false)} />
+        </div>
+      </div>
+    )}
+
+    {/* Mobile notifications panel (full-width) */}
+    {showDropdown && (
+      <div className="md:hidden fixed top-14 left-0 right-0 z-60">
+        <div className="mx-3 bg-white rounded-lg shadow-xl border border-gray-200 max-h-[60vh] overflow-hidden">
+          <div className="p-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50">
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <FiBell className="text-blue-600" size={18} />
+                <span className="font-semibold text-gray-800">Notifications</span>
+              </div>
+              {totalUnreadCount > 0 && (
+                <button
+                  onClick={markAllAsRead}
+                  className="text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
+                >
+                  Mark all read
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs">
+              {notificationTypes.messages > 0 && (
+                <div className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-medium">{notificationTypes.messages} Messages</div>
+              )}
+              {notificationTypes.tasks > 0 && (
+                <div className="bg-green-100 text-green-800 px-2 py-1 rounded-full font-medium">{notificationTypes.tasks} Tasks</div>
+              )}
+              {notificationTypes.leads > 0 && (
+                <div className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full font-medium">{notificationTypes.leads} Leads</div>
+              )}
+              {notificationTypes.announcements > 0 && (
+                <div className="bg-orange-100 text-orange-800 px-2 py-1 rounded-full font-medium">{notificationTypes.announcements} Announcements</div>
+              )}
+            </div>
+          </div>
+          <div className="max-h-[52vh] overflow-y-auto">
+            {loading ? (
+              <div className="p-5 text-center text-gray-500 text-sm font-medium">Loading...</div>
+            ) : uniqueNotifications.length === 0 ? (
+              <div className="p-5 text-center text-gray-500 text-sm font-medium">No notifications found.</div>
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {uniqueNotifications.map((notif, idx) => {
+                  let sender = notif.senderName;
+                  let message = notif.message || '';
+                  if (notif.type === 'TEAM_CHAT' && !sender && message.includes(' sent a team chat message')) {
+                    sender = message.split(' sent a team chat message')[0];
+                  }
+                  if (notif.type === 'TEAM_CHAT' && message.includes(' sent a team chat message: ')) {
+                    message = message.split(' sent a team chat message: ')[1] || '';
+                  }
+                  const getNotificationStyle = (type) => {
+                    switch (type) {
+                      case 'TEAM_CHAT':
+                        return 'bg-blue-100 text-blue-600';
+                      case 'TASK_ASSIGNED':
+                      case 'TASK_STATUS_UPDATE':
+                        return 'bg-green-100 text-green-600';
+                      case 'lead-assigned':
+                      case 'LEAD_ASSIGNED':
+                        return 'bg-purple-100 text-purple-600';
+                      case 'announcement':
+                        return 'bg-orange-100 text-orange-600';
+                      default:
+                        return 'bg-gray-100 text-gray-600';
+                    }
+                  };
+
+                  return (
+                    <li
+                      key={notif._id || notif.id || idx}
+                      className={`px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors flex gap-3 items-start ${!notif.read ? 'bg-blue-50 border-l-4 border-blue-500' : ''}`}
+                      onClick={async () => {
+                        if (!notif.read && (notif._id || notif.id)) {
+                          await notificationAPI.markAsRead(notif._id || notif.id);
+                          window.dispatchEvent(new CustomEvent('notificationRead', { detail: { type: notif.type } }));
+                        }
+                        if (onNotificationClick) onNotificationClick(notif);
+                        if (notif.type === 'TEAM_CHAT') {
+                          navigate('/chat');
+                        } else if (notif.type === 'calendar-event') {
+                          navigate('/calendar');
+                        } else if (notif.leadId) {
+                          if (onViewLead) onViewLead(notif.leadId);
+                        } else if (notif.type === 'TASK_ASSIGNED' || notif.type === 'TASK_STATUS_UPDATE') {
+                          navigate('/tasks');
+                        } else if (notif.type === 'lead-assigned') {
+                          navigate('/leads');
+                        }
+                        setShowDropdown(false);
+                      }}
+                    >
+                      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${getNotificationStyle(notif.type)}`}>
+                        {notif.type === 'TEAM_CHAT' ? (sender?.[0]?.toUpperCase() || 'M') : (notif.title?.[0] || notif.type?.[0] || 'N')}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        {notif.type === 'TEAM_CHAT' ? (
+                          <>
+                            <div className="font-medium text-gray-800 text-sm truncate">{sender || 'User'}</div>
+                            <div className="text-gray-600 text-sm mt-1 line-clamp-2">{message}</div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="font-medium text-gray-800 text-sm truncate">{notif.title || notif.type || 'Notification'}</div>
+                            <div className="text-gray-600 text-sm mt-1 line-clamp-2">{notif.message}</div>
+                          </>
+                        )}
+                        <div className="text-xs text-gray-400 mt-2">{new Date(notif.createdAt || notif.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })}</div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
+
     {/* Announcement banner under header, centered */}
     {announcementBanner && (
       <div className="fixed top-16 left-1/2 transform -translate-x-1/2 z-[70]">
@@ -713,15 +839,7 @@ export default function Header({ user, onLogout, onSearch, notificationCount = 0
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
 
-            {/* Mobile Sidebar Overlay */}
-            {showMobileSidebar && (
-              <div className="fixed inset-0 z-60">
-                <div className="absolute inset-0 bg-black/40" onClick={() => setShowMobileSidebar(false)} />
-                <div className="absolute inset-y-0 left-0">
-                  <Sidebar mobile={true} onClose={() => setShowMobileSidebar(false)} />
-                </div>
-              </div>
-            )}
+            {/* (mobile overlay moved out of modal for correct behavior) */}
                 <input
                   type="password"
                   value={passwordForm.currentPassword}
