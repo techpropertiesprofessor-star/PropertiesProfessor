@@ -509,11 +509,11 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
 
   if (permissionsLoading) {
     return (
-      <div className="flex h-screen bg-gray-50">
-        <Sidebar />
+      <div className="flex min-h-screen bg-gray-50">
+        <div className="hidden md:block"><Sidebar /></div>
         <div className="flex-1 flex flex-col">
           <Header user={user} newMessageCount={newMessageCount} resetNewMessageCount={resetNewMessageCount} />
-          <main className="flex-1 flex items-center justify-center p-8">
+          <main className="flex-1 flex items-center justify-center p-4 sm:p-8">
             <div className="text-gray-600 text-sm">Loading permissions...
             </div>
           </main>
@@ -524,12 +524,12 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
 
   if (!canViewAttendance) {
     return (
-      <div className="flex h-screen bg-gray-50">
-        <Sidebar />
+      <div className="flex min-h-screen bg-gray-50">
+        <div className="hidden md:block"><Sidebar /></div>
         <div className="flex-1 flex flex-col">
           <Header user={user} newMessageCount={newMessageCount} resetNewMessageCount={resetNewMessageCount} />
-          <main className="flex-1 flex items-center justify-center p-8">
-            <div className="bg-red-100 border border-red-400 text-red-700 px-8 py-6 rounded-lg text-center max-w-md">
+          <main className="flex-1 flex items-center justify-center p-4 sm:p-8">
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 sm:px-8 py-6 rounded-lg text-center max-w-md mx-4 sm:mx-0">
               <h2 className="text-2xl font-bold mb-2">Access Denied</h2>
               <p>You do not have permission to view attendance.</p>
               <p className="text-sm mt-3 text-red-600">Contact an administrator if you need access.</p>
@@ -541,11 +541,11 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
   }
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      <Sidebar />
+    <div className="flex min-h-screen bg-gray-100">
+      <div className="hidden md:block"><Sidebar /></div>
       <div className="flex-1 flex flex-col">
         <Header user={user} newMessageCount={newMessageCount} resetNewMessageCount={resetNewMessageCount} />
-        <main className="flex-1 overflow-auto p-8">
+        <main className="flex-1 overflow-auto p-4 sm:p-8">
           {/* Today's Check-in/Check-out */}
           <div className="mb-6 flex flex-col md:flex-row md:items-center md:space-x-8 justify-between">
             <div className="flex items-center space-x-2">

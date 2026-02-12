@@ -256,11 +256,11 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
   };
 
   return (
-    <div className="flex h-screen w-full bg-gradient-to-br from-blue-50 via-white to-indigo-100">
-      <Sidebar />
+    <div className="flex min-h-screen w-full bg-gradient-to-br from-blue-50 via-white to-indigo-100">
+      <div className="hidden md:block"><Sidebar /></div>
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header user={user} newMessageCount={newMessageCount} resetNewMessageCount={resetNewMessageCount} />
-        <main className="flex-1 p-0 md:p-8 relative overflow-y-auto">
+        <main className="flex-1 p-4 md:p-8 relative overflow-y-auto">
           {/* Modern Card Container */}
           <div className="max-w-7xl mx-auto">
             {/* Modern Header */}
@@ -327,10 +327,10 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
                         <option key={emp._id} value={emp._id}>{emp.name || (emp.first_name ? (emp.first_name + ' ' + (emp.last_name || '')) : emp.email || emp.phone)}</option>
                       ))}
                     </select>
-                    <div className="flex gap-2 justify-end">
-                      <button type="button" onClick={() => setShowAddLead(false)} className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">Cancel</button>
-                      <button type="submit" className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-blue-500 text-white rounded hover:from-indigo-600 hover:to-blue-600">Add Lead</button>
-                    </div>
+                      <div className="flex flex-col sm:flex-row gap-2 justify-end">
+                        <button type="button" onClick={() => setShowAddLead(false)} className="w-full sm:w-auto px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">Cancel</button>
+                        <button type="submit" className="w-full sm:w-auto px-4 py-2 bg-gradient-to-r from-indigo-500 to-blue-500 text-white rounded hover:from-indigo-600 hover:to-blue-600">Add Lead</button>
+                      </div>
                   </form>
                 </div>
               </div>

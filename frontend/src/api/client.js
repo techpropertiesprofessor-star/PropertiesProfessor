@@ -71,6 +71,8 @@ export const employeeAPI = {
   getBasic: () => api.get("/employees/basic"),
   getById: (id) => api.get(`/employees/${id}`),
   updateProfile: (id, data) => api.put(`/employees/${id}`, data),
+  // Update online status (socketId / isOnline)
+  updateOnlineStatus: (payload) => api.put('/employees/status/online', payload),
 };
 
 /**
@@ -146,17 +148,17 @@ createTower: (projectId, data) =>
 
   // Units
   createUnit: (data) =>
-  api.post("/inventory/units", data, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
-  }),
+    api.post("/inventory/units", data),
 
+  updateUnit: (id, data) =>
+    api.put(`/inventory/units/${id}`, data),
+
+  // Default listing (paginated/default) and separate advanced search
   getUnits: (params = {}) =>
     api.get("/inventory/units", { params }),
 
   searchUnits: (params = {}) =>
-    api.get("/inventory/units", { params }),
+    api.get("/inventory/search", { params }),
 
   // Stats
   getStats: () =>
@@ -234,6 +236,14 @@ export const chatAPI = {
     api.get("/chat/chats"),
   sendMessage: (data) =>
     api.post("/chat/message", data),
+  getMessages: (params = {}) =>
+    api.get('/chat/messages', { params }),
+  markChatAsSeen: (userId) =>
+    api.post('/chat/seen', { userId }),
+  markAsDelivered: (messageId) =>
+    api.post('/message/delivered', { messageId }),
+  markAsSeen: (messageId) =>
+    api.post('/message/seen', { messageId }),
 };
 
 /**

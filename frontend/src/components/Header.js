@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import io from 'socket.io-client';
+import Sidebar from './Sidebar';
 import { FiBell, FiZap, FiUser, FiLogOut, FiCheckCircle, FiCalendar, FiChevronDown, FiKey } from 'react-icons/fi';
 import { notificationAPI } from '../api/client';
 import { useTheme } from '../context/ThemeContext';
@@ -27,6 +28,7 @@ export default function Header({ user, onLogout, onSearch, notificationCount = 0
   
   const quickActionsRef = useRef(null);
   const profileMenuRef = useRef(null);
+  const [announcementBanner, setAnnouncementBanner] = useState(null); // {title, message}
 
   // Live clock with IST timezone
   useEffect(() => {
@@ -83,6 +85,7 @@ export default function Header({ user, onLogout, onSearch, notificationCount = 0
   }, []);
   
   const [showDropdown, setShowDropdown] = useState(false);
+  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [loading, setLoading] = useState(false);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
@@ -262,6 +265,77 @@ export default function Header({ user, onLogout, onSearch, notificationCount = 0
     };
   }, [showDropdown, clearNotificationsBadge, user, resetNewMessageCount]);
 
+  // Play a short beep using WebAudio
+  const playNotificationSound = (opts = {}) => {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = opts.type || 'sine';
+      o.frequency.value = opts.freq || 880; // A5
+      g.gain.value = opts.volume || 0.05;
+      o.connect(g);
+      g.connect(ctx.destination);
+      o.start();
+      setTimeout(() => {
+        o.stop();
+        try { ctx.close(); } catch (e) {}
+      }, opts.duration || 120);
+    } catch (e) {
+      console.warn('Audio play failed', e);
+    }
+  };
+
+  // Global socket for sounds and announcement banners
+  useEffect(() => {
+    if (!user) return;
+    const socketBase = process.env.REACT_APP_API_URL
+      ? process.env.REACT_APP_API_URL.replace('/api', '')
+      : window.location.origin;
+    const s = io(socketBase, { reconnection: true });
+    s.on('connect', () => {
+      const userId = user?.employeeId || user?._id || user?.id;
+      if (userId) s.emit('identify', userId);
+    });
+
+    s.on('chat-message', (data) => {
+      // Play distinct tone for chat
+      playNotificationSound({ freq: 900, duration: 140, volume: 0.06 });
+    });
+
+    s.on('private-message', (data) => {
+      playNotificationSound({ freq: 760, duration: 160, volume: 0.07 });
+    });
+
+    s.on('lead-assigned', (data) => {
+      playNotificationSound({ freq: 520, duration: 220, volume: 0.07 });
+    });
+
+    s.on('new-notification', async (payload) => {
+      // Generic notification sound
+      playNotificationSound({ freq: 640, duration: 140, volume: 0.06 });
+      // If it's an announcement, fetch latest and show banner
+      try {
+        const res = await notificationAPI.getAll();
+        const list = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+        const latestAnnouncement = list.find(n => n.type === 'announcement');
+        if (latestAnnouncement) {
+          setAnnouncementBanner({
+            title: latestAnnouncement.title || 'Announcement',
+            message: latestAnnouncement.message || latestAnnouncement.body || ''
+          });
+          setTimeout(() => setAnnouncementBanner(null), 7000);
+        }
+      } catch (e) {
+        // ignore
+      }
+    });
+
+    return () => s.disconnect();
+  }, [user]);
+
   // Calculate total unread count from internal notifications
   const totalUnreadCount = notifications.filter(n => !n.isRead && !n.read).length;
   useEffect(() => {
@@ -332,6 +406,12 @@ export default function Header({ user, onLogout, onSearch, notificationCount = 0
         </div>
         {/* Right side controls */}
         <div className="flex items-center space-x-3">
+          {/* Mobile hamburger for sidebar */}
+          <div className="md:hidden">
+            <button onClick={() => { console.log('mobile sidebar open clicked'); setShowMobileSidebar(true); }} className="p-2 rounded-md bg-white/50 hover:bg-white/80 text-gray-700">
+              ☰
+            </button>
+          </div>
           {/* Quick Actions Menu */}
           <div className="relative" ref={quickActionsRef}>
             <button
@@ -395,7 +475,7 @@ export default function Header({ user, onLogout, onSearch, notificationCount = 0
               )}
             </button>
             {showDropdown && (
-              <div className="absolute right-0 mt-3 w-80 bg-white rounded-xl shadow-xl z-50 max-h-[28rem] overflow-hidden border border-gray-200">
+              <div className="absolute right-0 mt-3 w-full sm:w-80 bg-white rounded-xl shadow-xl z-50 max-h-[28rem] overflow-hidden border border-gray-200">
                 {/* Header with categories */}
                 <div className="p-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50">
                   <div className="flex items-center justify-between mb-3">
@@ -604,11 +684,20 @@ export default function Header({ user, onLogout, onSearch, notificationCount = 0
         </div>
       </div>
     </header>
+    {/* Announcement banner under header, centered */}
+    {announcementBanner && (
+      <div className="fixed top-16 left-1/2 transform -translate-x-1/2 z-[70]">
+        <div className="bg-gradient-to-r from-indigo-600 to-blue-500 text-white px-6 py-3 rounded-xl shadow-lg max-w-3xl w-screen sm:w-auto mx-4 text-center">
+          <div className="font-semibold text-sm">{announcementBanner.title}</div>
+          {announcementBanner.message && <div className="text-xs opacity-90 mt-1">{announcementBanner.message}</div>}
+        </div>
+      </div>
+    )}
     
     {/* Change Password Modal */}
     {showPasswordModal && (
       <div className="fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-center justify-center">
-        <div className="bg-white rounded-lg shadow-xl w-96 max-w-md mx-4">
+        <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 sm:mx-0">
           <div className="p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">Change Password</h3>
@@ -623,6 +712,16 @@ export default function Header({ user, onLogout, onSearch, notificationCount = 0
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
+
+            {/* Mobile Sidebar Overlay */}
+            {showMobileSidebar && (
+              <div className="fixed inset-0 z-60">
+                <div className="absolute inset-0 bg-black/40" onClick={() => setShowMobileSidebar(false)} />
+                <div className="absolute inset-y-0 left-0">
+                  <Sidebar mobile={true} onClose={() => setShowMobileSidebar(false)} />
+                </div>
+              </div>
+            )}
                 <input
                   type="password"
                   value={passwordForm.currentPassword}

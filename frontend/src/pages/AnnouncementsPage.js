@@ -69,11 +69,11 @@ export default function AnnouncementsPage() {
   };
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-gray-100 to-blue-50">
-      <Sidebar />
+    <div className="flex min-h-screen bg-gradient-to-br from-gray-100 to-blue-50">
+      <div className="hidden md:block"><Sidebar /></div>
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header user={user} />
-        <div className="relative p-8 max-w-2xl mx-auto w-full overflow-y-auto">
+        <div className="relative p-4 sm:p-8 max-w-2xl mx-auto w-full overflow-y-auto">
           <div className="flex items-center justify-between mb-6">
             <button
               onClick={() => navigate(-1)}
@@ -95,7 +95,7 @@ export default function AnnouncementsPage() {
               onKeyDown={e => e.key === 'Enter' && handleAdd()}
             />
             <button
-              className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg shadow transition-transform duration-150 font-semibold text-base active:scale-95"
+              className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg shadow transition-transform duration-150 font-semibold text-base active:scale-95"
               onClick={handleAdd}
             >
               Add Announcement

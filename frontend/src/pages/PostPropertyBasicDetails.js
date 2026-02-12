@@ -15,7 +15,7 @@ function StepperSidebar({ progress }) {
           ← Return to dashboard
         </a>
         <h2 className="text-xl font-bold mb-1">Post your property</h2>
-        <p className="text-gray-500 text-sm mb-4">Sell or rent your property</p>
+        <p className="text-gray-500 text-sm mb-4">Post property for Sale or Rent</p>
         <div className="w-full bg-gray-200 rounded-full h-2 mb-4">
           <div
             className="bg-purple-600 h-2 rounded-full transition-all"
@@ -145,10 +145,12 @@ export default function PostPropertyBasicDetails() {
             onChange={(v) => handleChange("propertyCategory", v)}
             error={touched.propertyCategory && errors.propertyCategory}
             color="purple"
-            options={[
-              { label: "Residential", value: "residential" },
-              { label: "Commercial", value: "commercial" },
-            ]}
+            options={
+              [
+                { label: "Residential", value: "residential" },
+                { label: "Commercial", value: "commercial" },
+              ]
+            }
           />
           <ToggleGroup
             label="Looking to"
@@ -159,7 +161,7 @@ export default function PostPropertyBasicDetails() {
             color="purple"
             options={[
               { label: "Rent", value: "rent" },
-              { label: "Sell", value: "sell" },
+              { label: "Sale", value: "sale" },
             ]}
           />
           <div className="mb-6">

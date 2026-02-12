@@ -129,6 +129,10 @@ exports.createUnit = async (req, res, next) => {
       owner_name,
       owner_phone,
       owner_email,
+      tenant_name: req.body.tenant_name,
+      tenant_contact: req.body.tenant_contact,
+      tenant_start_date: req.body.tenant_start_date,
+      tenant_end_date: req.body.tenant_end_date,
       listing_type,
       availability_date,
       property_type,
@@ -166,6 +170,94 @@ exports.getUnitById = async (req, res, next) => {
   }
 };
 
+// List units with optional filters and pagination
+exports.listUnits = async (req, res, next) => {
+  try {
+    const {
+      page = 1,
+      limit = 20,
+      project_id,
+      status,
+      bhk,
+      listing_type,
+      budget_min,
+      budget_max,
+      area_min,
+      area_max,
+      location,
+      keys_location,
+      facing,
+      furnished_status,
+      query
+    } = req.query;
+
+    const filter = {};
+    if (project_id) filter.project = project_id;
+    if (status) filter.status = status;
+    if (bhk) {
+      // Accept both numeric bhk and string forms like '2bhk' or '2 BHK'.
+      const bhkStr = bhk.toString();
+      const digits = (bhkStr.match(/\d+/) || [])[0];
+      if (digits) {
+        // Match either the numeric value or any string containing the digits (e.g. '2bhk', '2 BHK')
+        filter.bhk = { $regex: `\\b${digits}\\b|${digits}`, $options: 'i' };
+      } else {
+        // No digits — match exact/normalized string
+        filter.bhk = { $regex: bhkStr.replace(/[-_]/g, ' '), $options: 'i' };
+      }
+    }
+    if (listing_type) filter.listing_type = listing_type;
+    if (budget_min || budget_max) {
+      filter.final_price = {};
+      if (budget_min) filter.final_price.$gte = Number(budget_min);
+      if (budget_max) filter.final_price.$lte = Number(budget_max);
+    }
+    if (area_min || area_max) {
+      filter.carpet_area = {};
+      if (area_min) filter.carpet_area.$gte = Number(area_min);
+      if (area_max) filter.carpet_area.$lte = Number(area_max);
+    }
+    if (location) filter.location = { $regex: location, $options: 'i' };
+    if (keys_location) filter.keys_location = keys_location;
+    if (facing) filter.facing = facing;
+    if (furnished_status) {
+      const trimmedValue = furnished_status.trim().toLowerCase();
+      if (trimmedValue === 'furnished') {
+        filter.furnished_status = { $regex: '(^furnished$|fully[_-]?furnished)', $options: 'i' };
+      } else {
+        const searchPattern = furnished_status.trim().replace(/-/g, '[_-]');
+        filter.furnished_status = { $regex: searchPattern, $options: 'i' };
+      }
+    }
+    if (query) {
+      filter.$or = [
+        { unitNumber: { $regex: query, $options: 'i' } },
+        { unit_number: { $regex: query, $options: 'i' } },
+        { location: { $regex: query, $options: 'i' } },
+      ];
+    }
+
+    const pg = Math.max(1, parseInt(page, 10) || 1);
+    const lim = Math.max(1, Math.min(100, parseInt(limit, 10) || 20));
+    const skip = (pg - 1) * lim;
+
+    const [units, total] = await Promise.all([
+      InventoryUnit.find(filter)
+        .populate('priceHistory')
+        .populate({ path: 'project', select: 'name location description' })
+        .populate({ path: 'tower', select: 'name description' })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(lim),
+      InventoryUnit.countDocuments(filter)
+    ]);
+
+    res.json({ units, total, page: pg, limit: lim });
+  } catch (err) {
+    next(err);
+  }
+};
+
 exports.updateUnit = async (req, res, next) => {
   try {
     const updateFields = {
@@ -192,6 +284,11 @@ exports.updateUnit = async (req, res, next) => {
       listing_type: req.body.listing_type,
       availability_date: req.body.availability_date,
       floor_number: req.body.floor_number,
+      // Tenant fields
+      tenant_name: req.body.tenant_name,
+      tenant_contact: req.body.tenant_contact,
+      tenant_start_date: req.body.tenant_start_date,
+      tenant_end_date: req.body.tenant_end_date,
       updatedAt: Date.now()
     };
     const unit = await InventoryUnit.findByIdAndUpdate(
@@ -200,6 +297,23 @@ exports.updateUnit = async (req, res, next) => {
       { new: true }
     );
     if (!unit) return res.status(404).json({ message: 'Unit not found' });
+    // Emit real-time update so other connected clients can refresh
+    try {
+      if (req && req.io && typeof req.io.emit === 'function') {
+        req.io.emit('unit-updated', {
+          unitId: unit._id,
+          listing_type: unit.listing_type,
+          status: unit.status,
+          project: unit.project,
+          tower: unit.tower,
+          updatedAt: unit.updatedAt,
+          unit: unit
+        });
+      }
+    } catch (emitErr) {
+      console.warn('Failed to emit unit-updated socket event:', emitErr);
+    }
+
     res.json(unit);
   } catch (err) {
     next(err);
@@ -661,6 +775,76 @@ exports.generateUnitPDF = async (req, res, next) => {
       yPos += 3;
     }
     
+    // Tenant Information Section
+    if (unit.tenant_name || unit.tenant_contact || unit.tenant_start_date || unit.tenant_end_date) {
+      yPos += 5;
+      if (yPos > 220) {
+        doc.addPage();
+        yPos = 20;
+      }
+
+      doc.setFillColor(52, 73, 94);
+      doc.rect(15, yPos, 180, 8, 'F');
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(255, 255, 255);
+      doc.text('TENANT INFORMATION', 20, yPos + 6);
+
+      yPos += 14;
+      doc.setFontSize(10);
+      doc.setTextColor(0, 0, 0);
+
+      if (unit.tenant_name) {
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(52, 73, 94);
+        doc.text('Name:', 20, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0, 0, 0);
+        doc.text(unit.tenant_name, 60, yPos);
+        yPos += 7;
+      }
+
+      if (unit.tenant_contact) {
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(52, 73, 94);
+        doc.text('Contact:', 20, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0, 0, 0);
+        doc.text(unit.tenant_contact, 60, yPos);
+        yPos += 7;
+      }
+
+      if (unit.tenant_start_date) {
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(52, 73, 94);
+        doc.text('Start Date:', 20, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0, 0, 0);
+        try {
+          doc.text(new Date(unit.tenant_start_date).toLocaleDateString('en-IN'), 60, yPos);
+        } catch (e) {
+          doc.text(unit.tenant_start_date.toString(), 60, yPos);
+        }
+        yPos += 7;
+      }
+
+      if (unit.tenant_end_date) {
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(52, 73, 94);
+        doc.text('End Date:', 20, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0, 0, 0);
+        try {
+          doc.text(new Date(unit.tenant_end_date).toLocaleDateString('en-IN'), 60, yPos);
+        } catch (e) {
+          doc.text(unit.tenant_end_date.toString(), 60, yPos);
+        }
+        yPos += 7;
+      }
+
+      yPos += 3;
+    }
+
     // Property Photos Section
     if (unit.media && unit.media.length > 0) {
       yPos += 5;

@@ -1,4 +1,5 @@
 import React, { useContext, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { FiHome, FiClock, FiCheckSquare, FiPhone, FiUser, FiUsers, FiTrendingUp, FiPackage, FiChevronLeft, FiChevronRight, FiMessageCircle, FiBook, FiCalendar, FiEdit3, FiBarChart2 } from 'react-icons/fi';
@@ -11,12 +12,21 @@ export default function Sidebar({
   tasksCount = 0,
   teamChatCount = 0,
   callersCount = 0,
-  calendarCount = 0
+  calendarCount = 0,
+  mobile = false,
+  onClose = null
 }) {
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    try {
+      console.log('Sidebar render debug:', { mobile, collapsed, hasOnClose: !!onClose });
+    } catch (e) {
+      /* ignore */
+    }
+  }, [mobile, collapsed, onClose]);
   // Clear badge when visiting /leads
   useEffect(() => {
     if (location.pathname === '/leads' && clearLeadsBadge) {
@@ -89,8 +99,22 @@ export default function Sidebar({
 
   const isActivePath = (path) => location.pathname === path;
 
-  return (
-    <div className={`${collapsed ? 'w-20' : 'w-64'} bg-slate-900 border-r border-slate-800 text-white flex flex-col h-screen transition-all duration-300 ease-in-out shadow-2xl`}>
+  // Outer wrapper reserves width in layout so main content stays offset
+  const wrapperWidthClass = collapsed ? 'md:w-20' : 'md:w-64';
+
+  const content = (
+    <div className={`w-full ${wrapperWidthClass} flex-shrink-0`}> 
+      {/* Desktop fixed sidebar */}
+      <aside
+        className={mobile ? `fixed inset-y-0 left-0 z-60 bg-slate-900 border-r border-slate-800 text-white flex flex-col transition-all duration-300 ease-in-out shadow-2xl ${collapsed ? 'w-20' : 'w-64'}` : `hidden md:block fixed left-0 top-0 h-screen bg-slate-900 border-r border-slate-800 text-white flex flex-col transition-all duration-300 ease-in-out shadow-2xl ${collapsed ? 'w-20' : 'w-64'}`}
+        style={mobile ? { width: collapsed ? '5rem' : '16rem' } : {}}
+      >
+        {mobile && (
+          <div className="px-3 py-2 border-b border-slate-800/50 flex items-center justify-between">
+            <div className="text-sm font-semibold">Menu</div>
+            <button onClick={() => onClose && onClose()} className="p-2 rounded-md bg-slate-800/30 hover:bg-slate-800/50">✕</button>
+          </div>
+        )}
       {/* Brand Header with Collapse Toggle */}
       <div className="px-4 py-4 border-b border-slate-800/50 flex items-center justify-between bg-gradient-to-br from-slate-800/50 to-slate-900/50">
         {!collapsed && (
@@ -118,7 +142,7 @@ export default function Sidebar({
       </div>
 
       {/* Menu Items with Modern Styling */}
-      <nav className={`${collapsed ? 'px-2' : 'px-3'} flex-1 py-4 space-y-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent`}>
+      <nav className={`${collapsed ? 'px-2' : 'px-3'} flex-1 py-4 space-y-1 overflow-hidden`}>
         {filteredItems.map((item) => {
           // Determine badge count for each menu item
           let badgeCount = 0;
@@ -207,6 +231,19 @@ export default function Sidebar({
         </div>
       )}
 
+      </aside>
     </div>
   );
+
+  if (mobile && typeof document !== 'undefined') {
+    try {
+      return createPortal(content, document.body);
+    } catch (e) {
+      console.error('Sidebar portal mount failed', e);
+      return content;
+    }
+  }
+
+  return content;
+
 }

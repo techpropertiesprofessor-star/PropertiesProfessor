@@ -4,7 +4,7 @@ import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import api from '../api/client';
 import { AuthContext } from '../context/AuthContext';
-import { FiUsers, FiCheckCircle, FiClock, FiAlertCircle, FiCalendar, FiUserCheck, FiUserX, FiPlus } from 'react-icons/fi';
+import { FiUsers, FiCheckCircle, FiClock, FiAlertCircle, FiCalendar, FiCheck, FiX } from 'react-icons/fi';
 import axios from 'axios';
 
 const ManagerDashboard = () => {
@@ -15,15 +15,10 @@ const ManagerDashboard = () => {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all'); // all, online, offline
-  const [notes, setNotes] = useState([]); // For own notes
   const [allNotes, setAllNotes] = useState({}); // For all notes grouped by userId
-  const [successMessage, setSuccessMessage] = useState('');
-  const [newNote, setNewNote] = useState('');
-  const [showAddNoteModal, setShowAddNoteModal] = useState(false);
 
   useEffect(() => {
     fetchEmployeesStatistics();
-    fetchNotes();
     fetchAllNotes();
   }, []);
 
@@ -44,20 +39,6 @@ const ManagerDashboard = () => {
     }
   };
 
-  const fetchNotes = async () => {
-    try {
-      const response = await axios.get('/api/personal-notes', {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-      });
-      setNotes(Array.isArray(response.data)
-  ? response.data
-  : response.data?.data || []);
-
-    } catch (err) {
-      console.error('Error fetching notes:', err);
-    }
-  };
-
   const fetchAllNotes = async () => {
     try {
       const response = await axios.get('/api/personal-notes/all', {
@@ -72,22 +53,7 @@ const ManagerDashboard = () => {
     }
   };
 
-  const addNote = async () => {
-    if (!newNote.trim()) return;
-    try {
-      await axios.post('/api/personal-notes', { note: newNote }, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-      });
-      setNewNote('');
-      setShowAddNoteModal(false);
-      setSuccessMessage('Note added successfully!');
-      fetchNotes(); // Refresh own notes
-      fetchAllNotes(); // Refresh all notes
-      setTimeout(() => setSuccessMessage(''), 3000); // Hide message after 3 seconds
-    } catch (err) {
-      console.error('Error adding note:', err);
-    }
-  };
+
 
   const safeEmployees = Array.isArray(employees) ? employees : [];
 
@@ -133,7 +99,7 @@ const filteredEmployees = safeEmployees.filter(emp => {
   if (loading) {
     return (
       <div className="flex min-h-screen bg-gray-50">
-        <Sidebar />
+        <div className="hidden md:block"><Sidebar /></div>
         <div className="flex-1 flex flex-col">
           <Header user={user} />
           <main className="flex-1 flex items-center justify-center p-4 sm:p-8">
@@ -147,7 +113,7 @@ const filteredEmployees = safeEmployees.filter(emp => {
   if (error) {
     return (
       <div className="flex min-h-screen bg-gray-50">
-        <Sidebar />
+        <div className="hidden md:block"><Sidebar /></div>
         <div className="flex-1 flex flex-col">
           <Header user={user} />
           <main className="flex-1 flex items-center justify-center p-4 sm:p-8">
@@ -160,7 +126,7 @@ const filteredEmployees = safeEmployees.filter(emp => {
 
   return (
     <div className="flex min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-      <Sidebar />
+      <div className="hidden md:block"><Sidebar /></div>
       <div className="flex-1 flex flex-col">
         <Header user={user} />
         <main className="flex-1 overflow-auto p-4 sm:p-6 max-w-7xl w-full mx-auto">
@@ -178,20 +144,10 @@ const filteredEmployees = safeEmployees.filter(emp => {
               <h1 className="text-2xl sm:text-4xl font-bold text-gray-800 mb-2 break-words">Employee Management Dashboard</h1>
               <p className="text-gray-600 break-words">Comprehensive view of all employee statistics and performance</p>
             </div>
-            <button
-              onClick={() => setShowAddNoteModal(true)}
-              className="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-            >
-              <FiPlus /> Add Personal Note
-            </button>
+            {/* Personal note action removed */}
           </div>
 
-          {/* Success Message */}
-          {successMessage && (
-            <div className="mb-4 p-4 bg-green-100 border border-green-400 text-green-700 rounded-lg break-words">
-              {successMessage}
-            </div>
-          )}
+          {/* success message removed */}
 
           {/* Overall Statistics Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -213,7 +169,7 @@ const filteredEmployees = safeEmployees.filter(emp => {
                   <p className="text-3xl font-bold text-gray-800">{overallStats.onlineEmployees}</p>
                 </div>
                 <div className="bg-green-100 rounded-full p-3">
-                  <FiUserCheck className="text-green-600 text-2xl" />
+                  <FiCheck className="text-green-600 text-2xl" />
                 </div>
               </div>
             </div>
@@ -243,25 +199,7 @@ const filteredEmployees = safeEmployees.filter(emp => {
             </div>
           </div>
 
-          {/* Personal Notes Section */}
-          <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
-            <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <span role="img" aria-label="note">📝</span>
-              My Personal Notes
-            </h2>
-            <div className="space-y-3">
-              {notes.length > 0 ? (
-                notes.map((note, idx) => (
-                  <div key={idx} className="bg-gradient-to-r from-blue-100 via-purple-100 to-pink-100 rounded-lg p-4 shadow break-words">
-                    <p className="text-gray-700 break-words">{note.note}</p>
-                    <span className="text-xs text-gray-500 whitespace-nowrap">{new Date(note.createdAt).toLocaleString()}</span>
-                  </div>
-                ))
-              ) : (
-                <p className="text-gray-500 italic">No personal notes yet. Add your first note!</p>
-              )}
-            </div>
-          </div>
+          {/* Personal Notes removed per request */}
 
           {/* Filters */}
           <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
@@ -440,14 +378,14 @@ const filteredEmployees = safeEmployees.filter(emp => {
                     </h4>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div className="bg-green-50 rounded-lg p-3 text-center">
-                        <FiUserCheck className="text-green-600 text-xl mx-auto mb-1" />
+                        <FiCheck className="text-green-600 text-xl mx-auto mb-1" />
                         <p className="text-xs text-gray-600 mb-1">Present</p>
                         <p className="text-xl font-bold text-green-600">
                           {employee.statistics?.attendance?.presentDays || 0}
                         </p>
                       </div>
                       <div className="bg-red-50 rounded-lg p-3 text-center">
-                        <FiUserX className="text-red-600 text-xl mx-auto mb-1" />
+                        <FiX className="text-red-600 text-xl mx-auto mb-1" />
                         <p className="text-xs text-gray-600 mb-1">Absent</p>
                         <p className="text-xl font-bold text-red-600">
                           {employee.statistics?.attendance?.absentDays || 0}
@@ -488,35 +426,7 @@ const filteredEmployees = safeEmployees.filter(emp => {
         </main>
       </div>
 
-      {/* Add Note Modal */}
-      {showAddNoteModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2">
-          <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-xl font-bold mb-4 break-words">Add Personal Note</h3>
-            <textarea
-              value={newNote}
-              onChange={(e) => setNewNote(e.target.value)}
-              placeholder="Enter your note..."
-              className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 break-words"
-              rows="4"
-            />
-            <div className="flex flex-col sm:flex-row gap-3 mt-4">
-              <button
-                onClick={addNote}
-                className="flex-1 w-full sm:w-auto bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700"
-              >
-                Add Note
-              </button>
-              <button
-                onClick={() => setShowAddNoteModal(false)}
-                className="flex-1 w-full sm:w-auto bg-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-400"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* add-note modal removed */}
     </div>
   );
 };

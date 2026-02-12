@@ -230,11 +230,11 @@ export default function TasksPage({ newMessageCount = 0, resetNewMessageCount })
 
   if (permissionsLoading) {
     return (
-      <div className="flex h-screen bg-gray-50">
-        <Sidebar />
+      <div className="flex min-h-screen bg-gray-50">
+        <div className="hidden md:block"><Sidebar /></div>
         <div className="flex-1 flex flex-col">
           <Header user={user} newMessageCount={newMessageCount} resetNewMessageCount={resetNewMessageCount} />
-          <main className="flex-1 flex items-center justify-center p-8">
+          <main className="flex-1 flex items-center justify-center p-4 sm:p-8">
             <div className="text-gray-600 text-sm">Loading permissions...</div>
           </main>
         </div>
@@ -244,12 +244,12 @@ export default function TasksPage({ newMessageCount = 0, resetNewMessageCount })
 
   if (!canViewTasks) {
     return (
-      <div className="flex h-screen bg-gray-50">
-        <Sidebar />
+      <div className="flex min-h-screen bg-gray-50">
+        <div className="hidden md:block"><Sidebar /></div>
         <div className="flex-1 flex flex-col">
           <Header user={user} newMessageCount={newMessageCount} resetNewMessageCount={resetNewMessageCount} />
-          <main className="flex-1 flex items-center justify-center p-8">
-            <div className="bg-red-100 border border-red-400 text-red-700 px-8 py-6 rounded-lg text-center max-w-md">
+          <main className="flex-1 flex items-center justify-center p-4 sm:p-8">
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 sm:px-8 py-6 rounded-lg text-center max-w-md mx-4 sm:mx-0">
               <h2 className="text-2xl font-bold mb-2">Access Denied</h2>
               <p>You do not have permission to view tasks.</p>
               <p className="text-sm mt-3 text-red-600">Contact an administrator if you need access.</p>
@@ -261,13 +261,13 @@ export default function TasksPage({ newMessageCount = 0, resetNewMessageCount })
   }
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      <Sidebar />
+    <div className="flex min-h-screen bg-gray-50">
+      <div className="hidden md:block"><Sidebar /></div>
       
       <div className="flex-1 flex flex-col">
         <Header user={user} newMessageCount={newMessageCount} resetNewMessageCount={resetNewMessageCount} />
         
-        <main className="flex-1 overflow-auto p-0 md:p-8 bg-gradient-to-tr from-blue-50 via-indigo-50 to-yellow-50">
+        <main className="flex-1 overflow-auto p-4 md:p-8 bg-gradient-to-tr from-blue-50 via-indigo-50 to-yellow-50">
           <div className="max-w-5xl mx-auto py-8">
             <div className="mb-8 flex flex-col md:flex-row justify-between items-center gap-4">
               <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight drop-shadow-lg flex items-center gap-3">

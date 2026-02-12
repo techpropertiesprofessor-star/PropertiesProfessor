@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useContext, useCallback } from 'react';
+import io from 'socket.io-client';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api, { inventoryAPI } from '../api/client';
 import { AuthContext } from '../context/AuthContext';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import AddInventoryForm from '../components/AddInventoryForm';
+import InventoryCard from '../components/InventoryCard';
 
 function InventoryPage() {
   const navigate = useNavigate();
@@ -49,6 +51,7 @@ function InventoryPage() {
     facing: '',
     furnished_status: ''
   });
+  const [hasSearched, setHasSearched] = useState(false);
 
   // Fetch projects
   const fetchProjects = async () => {
@@ -78,12 +81,102 @@ function InventoryPage() {
     try {
       const params = {};
       Object.keys(filters).forEach((key) => {
-        if (filters[key]) params[key] = filters[key];
+        if (!filters[key]) return;
+        // Normalize BHK filter: send digits or '5+' so backend matching is reliable
+        if (key === 'bhk') {
+          const raw = filters.bhk.toString();
+          const digits = (raw.match(/(\d+)/) || [])[0];
+          if (digits) {
+            params.bhk = raw.includes('+') ? `${digits}+` : digits;
+          } else {
+            params.bhk = raw.replace(/\s+/g, '').toLowerCase();
+          }
+          return;
+        }
+        params[key] = filters[key];
       });
+      // If the backend stores `bhk` in mixed string formats (e.g. '3bhk'),
+      // some serverside filters may not match reliably. To ensure searches
+      // always work, omit `bhk` when requesting from server and apply a
+      // tolerant client-side filter afterwards.
+      const bhkFilterForClient = params.bhk || null;
+      if (bhkFilterForClient) delete params.bhk;
+
       const res = await inventoryAPI.getUnits(params);
 
-      // assume API returns an array in res.data
-      setUnits(Array.isArray(res.data) ? res.data : res.data?.units || []);
+      // normalize unit fields (support snake_case and camelCase from backend)
+      const raw = Array.isArray(res.data) ? res.data : (res.data?.units || res.data || []);
+      const normalize = (u) => ({
+        _id: u._id || u.id || u._id,
+        id: u._id || u.id,
+        unit_number: u.unit_number || u.unitNumber || u.name || '',
+        name: u.name || u.unit_number || u.unitNumber || '',
+        location: u.location || u.address || '',
+        bhk: u.bhk || (u.bhk && String(u.bhk)) || '',
+        status: u.status || u.state || 'available',
+        built_up_area: u.built_up_area || u.builtUpArea || u.carpet_area || '',
+        super_area: u.super_area || u.superArea || '',
+        base_price: u.base_price || u.basePrice || u.price || 0,
+        final_price: u.final_price || u.finalPrice || u.price || 0,
+        price_per_sqft: u.price_per_sqft || u.pricePerSqft || u.price_per_sqft || 0,
+        parking_slots: u.parking_slots || u.parking || u.parkingSlots || 0,
+        listing_type: u.listing_type || u.listingType || u.looking_to || '',
+        keys_location: u.keys_location || u.keysLocation || '',
+        furnished_status: u.furnished_status || u.furnishedStatus || '',
+        owner_name: u.owner_name || (u.ownerDetails && u.ownerDetails.name) || '',
+        owner_phone: u.owner_phone || (u.ownerDetails && u.ownerDetails.phone) || '',
+        availability_date: u.availability_date || u.availabilityDate || '',
+        remarks: u.remarks || u.keys_remarks || '',
+        // Thumbnail: prefer media array (image) or photos field from backend
+        thumbnail: (() => {
+          try {
+            if (Array.isArray(u.media) && u.media.length > 0) return buildMediaUrl(u.media[0].url || u.media[0].filename || u.media[0]);
+            if (Array.isArray(u.photos) && u.photos.length > 0) return buildMediaUrl(u.photos[0].url || u.photos[0].filename || u.photos[0].name || u.photos[0]);
+            if (u.thumbnail) return buildMediaUrl(u.thumbnail);
+            if (u.cover_image) return buildMediaUrl(u.cover_image);
+          } catch (e) { /* ignore */ }
+          return null;
+        })(),
+        building_name: u.building_name || u.buildingName || u.tower || '',
+        project_name: (u.project && (u.project.name || u.project.title)) || u.project_name || (u.project && u.projectId) || '',
+        tower: u.tower || '',
+        amenities: (function(){
+          try{
+            if (Array.isArray(u.amenities)) return u.amenities.map(a => typeof a === 'string' ? a : (a.name || a.title || JSON.stringify(a)));
+            if (typeof u.amenities === 'string') return u.amenities.split(',').map(s => s.trim()).filter(Boolean);
+            if (Array.isArray(u.features)) return u.features.map(a => typeof a === 'string' ? a : (a.name || a.title || JSON.stringify(a)));
+            if (Array.isArray(u.facilities)) return u.facilities.map(a => typeof a === 'string' ? a : (a.name || a.title || JSON.stringify(a)));
+          }catch(e){}
+          return [];
+        })(),
+        raw: u
+      });
+
+      let normalized = raw.map(normalize);
+
+      // Apply tolerant client-side BHK filtering if requested
+      if (bhkFilterForClient) {
+        const filterBhkRaw = bhkFilterForClient.toString().toLowerCase();
+        const filterNum = (filterBhkRaw.match(/(\d+)/) || [])[0];
+        normalized = normalized.filter((u) => {
+          const unitBhkRaw = (u.bhk || '').toString().toLowerCase();
+          const unitNum = (unitBhkRaw.match(/(\d+)/) || [])[0];
+          if (filterNum) {
+            const fN = Number(filterNum);
+            if (filterBhkRaw.includes('+')) {
+              const uN = unitNum ? Number(unitNum) : NaN;
+              return !isNaN(uN) && uN >= fN;
+            }
+            if (unitNum) return Number(unitNum) === fN;
+            return unitBhkRaw.includes(filterNum);
+          }
+          // fallback to substring match (normalize spaces/underscores)
+          const norm = (s) => (s || '').toString().toLowerCase().replace(/[_-]/g, ' ').replace(/\s+/g, ' ').trim();
+          return norm(unitBhkRaw).includes(norm(filterBhkRaw));
+        });
+      }
+
+      setUnits(normalized);
 
     } catch (err) {
       console.error('Failed to fetch units:', err);
@@ -97,6 +190,56 @@ function InventoryPage() {
     fetchProjects();
     fetchUnits();
     fetchStats();
+    // Setup Socket.IO listener for inventory updates
+    let socket;
+    try {
+      // Determine socket URL: prefer API baseURL, otherwise derive from window with backend port 5001
+      const apiBase = (api && api.defaults && api.defaults.baseURL) ? api.defaults.baseURL : null;
+      let socketUrl = apiBase;
+      if (!socketUrl && typeof window !== 'undefined') {
+        const host = window.location.hostname || 'localhost';
+        // Use backend port 5001 (dev) unless REACT_APP_API_URL points elsewhere
+        socketUrl = `http://${host}:5001`;
+      }
+      socket = io(socketUrl, { transports: ['websocket'] });
+      socket.on('connect', () => {
+        if (user && user._id) socket.emit('identify', user._id);
+      });
+
+      socket.on('unit-updated', (payload) => {
+        try {
+          const unitId = payload && (payload.unitId || (payload.unit && (payload.unit._id || payload.unit.id)));
+          const updatedUnit = payload.unit || payload;
+          if (!unitId) return;
+          setUnits((prev) => {
+            let found = false;
+            const next = prev.map((u) => {
+              if ((u._id || u.id) == unitId) {
+                found = true;
+                // merge updated fields (keep raw copy)
+                const merged = { ...u, ...updatedUnit, raw: updatedUnit };
+                return merged;
+              }
+              return u;
+            });
+            // if unit not in current page and payload contains unit, prepend it
+            if (!found && updatedUnit) {
+              const norm = (uu) => ({ _id: uu._id || uu.id, id: uu._id || uu.id, unit_number: uu.unit_number || uu.unitNumber || uu.name || '', name: uu.name || uu.unit_number || uu.unitNumber || '', location: uu.location || uu.address || '', bhk: uu.bhk || '', status: uu.status || 'available', base_price: uu.base_price || uu.basePrice || uu.price || 0, final_price: uu.final_price || uu.finalPrice || uu.price || 0, price_per_sqft: uu.price_per_sqft || uu.pricePerSqft || 0, parking_slots: uu.parking_slots || uu.parking || uu.parkingSlots || 0, listing_type: uu.listing_type || uu.listingType || uu.looking_to || '', keys_location: uu.keys_location || uu.keysLocation || '', furnished_status: uu.furnished_status || uu.furnishedStatus || '', owner_name: uu.owner_name || (uu.ownerDetails && uu.ownerDetails.name) || '', owner_phone: uu.owner_phone || (uu.ownerDetails && uu.ownerDetails.phone) || '', availability_date: uu.availability_date || uu.availabilityDate || '', remarks: uu.remarks || uu.keys_remarks || '', thumbnail: (Array.isArray(uu.media) && uu.media[0]) ? (uu.media[0].url || uu.media[0].filename || uu.media[0]) : (uu.thumbnail || uu.cover_image || null), building_name: uu.building_name || uu.buildingName || uu.tower || '', project_name: (uu.project && (uu.project.name || uu.project.title)) || uu.project_name || '', amenities: Array.isArray(uu.amenities) ? uu.amenities : (uu.amenities ? uu.amenities.split(',').map(s=>s.trim()) : []), raw: uu });
+              return [norm(updatedUnit), ...prev];
+            }
+            return next;
+          });
+        } catch (e) {
+          console.error('Error applying unit-updated payload', e);
+        }
+      });
+    } catch (e) {
+      console.warn('Socket setup failed in InventoryPage:', e.message || e);
+    }
+
+    return () => {
+      try { if (socket && socket.disconnect) socket.disconnect(); } catch (e) {}
+    };
   }, [fetchUnits]);
 
   // Helpers
@@ -106,12 +249,87 @@ function InventoryPage() {
     return `${api.defaults.baseURL || ''}/${url}`.replace(/([^:]\/\/)\//g, '$1');
   };
 
+  const formatCurrency = (val) => {
+    const n = Number(val);
+    if (!Number.isFinite(n) || isNaN(n)) return '-';
+    return `₹${n.toLocaleString()}`;
+  };
+
+  const resolveListingKind = (u) => {
+    const candidates = [
+      u.listing_type,
+      u.listingType,
+      (u.raw && u.raw.listing_type),
+      (u.raw && u.raw.listingType),
+      u.looking_to,
+      u.lookingTo,
+      (u.raw && u.raw.looking_to),
+      (u.raw && u.raw.lookingTo),
+      u.transaction_type,
+      (u.raw && u.raw.transaction_type),
+    ];
+    for (let c of candidates) {
+      if (!c && typeof c !== 'number') continue;
+      const s = String(c).toLowerCase();
+      if (s.includes('rent')) return 'rent';
+      if (s.includes('sale') || s.includes('sell')) return 'sale';
+      if (s.includes('lease')) return 'rent';
+    }
+    return '';
+  };
+
   const viewUnit = async (unitId) => {
     try {
       const res = await inventoryAPI.getUnit(unitId);
-      setSelectedUnit(res.data || null);
+      const u = res.data || null;
+      if (u) {
+        const normalized = {
+          _id: u._id || u.id,
+          id: u._id || u.id,
+          unit_number: u.unit_number || u.unitNumber || u.name || '',
+          name: u.name || u.unit_number || u.unitNumber || '',
+          location: u.location || u.address || '',
+          bhk: u.bhk || '',
+          status: u.status || 'available',
+          built_up_area: u.built_up_area || u.builtUpArea || '',
+          super_area: u.super_area || u.superArea || '',
+          base_price: u.base_price || u.basePrice || 0,
+          final_price: u.final_price || u.finalPrice || 0,
+          price_per_sqft: u.price_per_sqft || u.pricePerSqft || 0,
+          parking_slots: u.parking_slots || u.parking || 0,
+          keys_location: u.keys_location || u.keysLocation || '',
+          furnished_status: u.furnished_status || u.furnishedStatus || '',
+          owner_name: u.owner_name || (u.ownerDetails && u.ownerDetails.name) || '',
+          owner_phone: u.owner_phone || (u.ownerDetails && u.ownerDetails.phone) || '',
+          availability_date: u.availability_date || u.availabilityDate || '',
+          listing_type: u.listing_type || u.listingType || u.looking_to || '',
+          remarks: u.remarks || u.keys_remarks || '',
+          building_name: u.building_name || u.buildingName || u.tower || '',
+          project_name: (u.project && (u.project.name || u.project.title)) || u.project_name || (u.project && u.projectId) || '',
+          tower: u.tower || '',
+          amenities: (function(){
+            try{
+              if (Array.isArray(u.amenities)) return u.amenities.map(a => typeof a === 'string' ? a : (a.name || a.title || JSON.stringify(a)));
+              if (typeof u.amenities === 'string') return u.amenities.split(',').map(s => s.trim()).filter(Boolean);
+              if (Array.isArray(u.features)) return u.features.map(a => typeof a === 'string' ? a : (a.name || a.title || JSON.stringify(a)));
+              if (Array.isArray(u.facilities)) return u.facilities.map(a => typeof a === 'string' ? a : (a.name || a.title || JSON.stringify(a)));
+            }catch(e){}
+            return [];
+          })(),
+          tenant_name: u.tenant_name || u.raw?.tenant_name || u.tenantName || '',
+          tenant_contact: u.tenant_contact || u.raw?.tenant_contact || u.tenantContact || '',
+          tenant_start_date: u.tenant_start_date || u.raw?.tenant_start_date || u.tenantStartDate || '',
+          tenant_end_date: u.tenant_end_date || u.raw?.tenant_end_date || u.tenantEndDate || '',
+          raw: u
+        };
+        setSelectedUnit(normalized);
+      } else {
+        setSelectedUnit(null);
+      }
       const mediaRes = await inventoryAPI.listUnitMedia(unitId);
-      setUnitMedia(mediaRes.data || []);
+      // backend may return { media: [] } or an array directly
+      const mediaData = mediaRes?.data;
+      setUnitMedia(Array.isArray(mediaData) ? mediaData : (mediaData?.media || []));
     } catch (err) {
       console.error('Failed to view unit:', err);
     }
@@ -148,9 +366,10 @@ function InventoryPage() {
     if (!selectedUnit) return;
     try {
       const res = await inventoryAPI.generatePDF(selectedUnit.id || selectedUnit._id);
-      if (res.data && res.data.url) {
-        window.open(res.data.url, '_blank');
-      }
+      // inventoryAPI.generatePDF returns a blob (responseType: 'blob')
+      const blob = new Blob([res.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, '_blank');
     } catch (err) {
       console.error('Generate PDF failed:', err);
     }
@@ -171,7 +390,39 @@ function InventoryPage() {
     setEditLoading(true);
     setEditError('');
     try {
-      await inventoryAPI.updateUnit(editingUnitId, editUnit);
+      // Basic client-side validation for tenant info when status is booked or sold
+      const status = (editUnit.status || '').toString().toLowerCase();
+      if (status === 'booked' || status === 'sold') {
+        const name = (editUnit.tenant_name || '').toString().trim();
+        const contact = (editUnit.tenant_contact || '').toString().trim();
+        const start = (editUnit.tenant_start_date || '').toString().trim();
+        const end = (editUnit.tenant_end_date || '').toString().trim();
+        if (!name) {
+          setEditError('Tenant Name is required when unit is Booked or Sold');
+          setEditLoading(false);
+          return;
+        }
+        if (!contact) {
+          setEditError('Tenant Contact Number is required when unit is Booked or Sold');
+          setEditLoading(false);
+          return;
+        }
+        if (!start) {
+          setEditError('Tenant Start Date is required when unit is Booked or Sold');
+          setEditLoading(false);
+          return;
+        }
+        if (status === 'booked' && !end) {
+          setEditError('Tenant End Date is required when unit status is Booked');
+          setEditLoading(false);
+          return;
+        }
+      }
+
+      // Safe payload: include tenant fields if present
+      const payload = { ...editUnit };
+      // Send update
+      await inventoryAPI.updateUnit(editingUnitId, payload);
       setEditingUnitId(null);
       setEditUnit(null);
       await fetchUnits();
@@ -186,6 +437,7 @@ function InventoryPage() {
 
   const searchUnits = async () => {
     // uses filters state
+    setHasSearched(true);
     await fetchUnits();
   };
 
@@ -205,15 +457,139 @@ function InventoryPage() {
       facing: '',
       furnished_status: ''
     });
+    setHasSearched(false);
+    setUnits([]);
   };
+
+  // Client-side displayed units (real-time, case-insensitive filtering)
+  const displayedUnits = units.filter((u) => {
+    // start with true then apply filters
+    try {
+      const q = (filters.query || '').toString().trim().toLowerCase();
+
+      if (q) {
+        const fields = [
+          (u.unit_number || u.name || '').toString().toLowerCase(),
+          (u.owner_name || '').toString().toLowerCase(),
+          (u.owner_phone || '').toString().toLowerCase(),
+          (u.bhk || '').toString().toLowerCase(),
+          ((u.raw && (u.raw.property_type || u.raw.propertyType)) || '').toString().toLowerCase()
+        ];
+        const matchesQuery = fields.some((f) => f && f.includes(q));
+        if (!matchesQuery) return false;
+      }
+
+      if (filters.status && filters.status !== '' && (u.status || '').toString().toLowerCase() !== filters.status.toString().toLowerCase()) return false;
+      if (filters.bhk && filters.bhk !== '') {
+        const filterBhkRaw = filters.bhk.toString().toLowerCase();
+        const unitBhkRaw = (u.bhk || '').toString().toLowerCase();
+        const filterNum = (filterBhkRaw.match(/(\d+)/) || [])[0];
+        const unitNum = (unitBhkRaw.match(/(\d+)/) || [])[0];
+
+        if (filterNum) {
+          const fN = Number(filterNum);
+          if (filterBhkRaw.includes('+')) {
+            // 5+ BHK means unitNum must be >=5
+            const uN = unitNum ? Number(unitNum) : NaN;
+            if (isNaN(uN) || uN < fN) return false;
+          } else {
+            // Exact numeric match when possible
+            if (unitNum) {
+              if (Number(unitNum) !== fN) return false;
+            } else {
+              // fallback: compare normalized strings
+              if (!unitBhkRaw.includes(filterBhkRaw.replace(/\s+/g, ' ').trim()) && !unitBhkRaw.includes(filterNum)) return false;
+            }
+          }
+        } else {
+          // No number in filter — do a normalized substring match
+          const norm = (s) => (s || '').toString().toLowerCase().replace(/[_-]/g, ' ').replace(/\s+/g, ' ').trim();
+          if (!norm(unitBhkRaw).includes(norm(filterBhkRaw))) return false;
+        }
+      }
+      if (filters.listing_type && filters.listing_type !== '' && ((u.listing_type || (u.raw && u.raw.listing_type)) || '').toString().toLowerCase() !== filters.listing_type.toString().toLowerCase()) return false;
+      // Furnished matching: make 'furnished' match both 'furnished' and 'fully_furnished'
+      const matchesFurnished = (filterVal, unitVal) => {
+        const norm = (s) => (s || '').toString().toLowerCase().replace(/[_-]/g, ' ').trim();
+        const f = norm(filterVal);
+        const v = norm(unitVal);
+        if (!f) return true;
+        if (f === 'furnished') {
+          return v === 'furnished' || v.includes('fully') || v === 'fully furnished' || v === 'fully_furnished';
+        }
+        if (f.includes('semi')) {
+          return v.includes('semi');
+        }
+        if (f.includes('un')) {
+          return v.includes('unfurn') || v === 'unfurnished';
+        }
+        return v === f;
+      };
+
+      if (filters.furnished_status && filters.furnished_status !== '' && !matchesFurnished(filters.furnished_status, u.furnished_status)) return false;
+      if (filters.location && filters.location !== '' && !((u.location || '').toString().toLowerCase().includes(filters.location.toString().toLowerCase()))) return false;
+
+      // numeric ranges
+      const basePrice = Number(u.base_price || u.final_price || 0);
+      if (filters.budget_min && Number(filters.budget_min) > 0 && basePrice < Number(filters.budget_min)) return false;
+      if (filters.budget_max && Number(filters.budget_max) > 0 && basePrice > Number(filters.budget_max)) return false;
+
+      const areaVal = Number(u.built_up_area || u.super_area || 0);
+      if (filters.area_min && Number(filters.area_min) > 0 && areaVal < Number(filters.area_min)) return false;
+      if (filters.area_max && Number(filters.area_max) > 0 && areaVal > Number(filters.area_max)) return false;
+
+      return true;
+    } catch (e) {
+      return true;
+    }
+  });
+
+  // Live stats computed from current units (either filtered or full list)
+  const computeCounts = (arr) => {
+    const res = {
+      total_units: 0,
+      for_sale: 0,
+      for_rent: 0,
+      available: 0,
+      on_hold: 0,
+      booked: 0,
+      sold: 0,
+      unspecified_listing: 0,
+      unspecified_status: 0,
+    };
+    if (!Array.isArray(arr)) return res;
+    res.total_units = arr.length;
+    arr.forEach((u) => {
+      const ltRaw = ((u.listing_type || (u.raw && u.raw.listing_type)) || '').toString();
+      const lt = ltRaw.toLowerCase();
+      let countedLt = false;
+      if (lt.includes('sale') || lt.includes('sell') || lt === 'sell') { res.for_sale += 1; countedLt = true; }
+      if (lt.includes('rent')) { res.for_rent += 1; countedLt = true; }
+      if (!countedLt) res.unspecified_listing += 1;
+
+      const stRaw = (u.status || u.state || '') || '';
+      const st = stRaw.toString().toLowerCase();
+      let countedSt = false;
+      if (st.includes('available')) { res.available += 1; countedSt = true; }
+      if (st.includes('hold') || st.includes('on hold')) { res.on_hold += 1; countedSt = true; }
+      if (st.includes('book')) { res.booked += 1; countedSt = true; }
+      if (st.includes('sold')) { res.sold += 1; countedSt = true; }
+      if (!countedSt) res.unspecified_status += 1;
+    });
+    return res;
+  };
+
+  const liveStats = computeCounts(hasSearched ? displayedUnits : units);
 
   // Render UI (kept the original structure / classes)
   return (
-    <div className="flex h-screen w-full bg-gradient-to-br from-emerald-50 via-white to-teal-100">
-      <Sidebar />
+    <div className="flex min-h-screen w-full bg-gradient-to-br from-emerald-50 via-white to-teal-100">
+      <div className="hidden md:block">
+        <Sidebar />
+      </div>
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header user={user} />
-        <main className="flex-1 p-6 overflow-y-auto">
+        <main className="flex-1 p-4 sm:p-6 overflow-y-auto">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
             <div className="flex items-center gap-3">
               <button
@@ -233,39 +609,46 @@ function InventoryPage() {
             </button>
           </div>
 
-          {/* Stats Cards */}
-          {stats && (
-            <div className="grid grid-cols-1 md:grid-cols-7 gap-4 mb-6">
-              <div className="bg-white rounded-lg shadow p-4">
-                <p className="text-sm text-gray-500">Total Units</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.total_units}</p>
+          {/* Stats Cards (live computed from current units) */}
+          {(liveStats || stats) && (() => {
+            const displayStats = liveStats || stats || {};
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-8 gap-4 mb-6">
+                <div className="bg-white rounded-lg shadow p-4">
+                  <p className="text-sm text-gray-500">Total Units</p>
+                  <p className="text-2xl font-bold text-gray-900">{displayStats.total_units || 0}</p>
+                </div>
+                <div className="bg-blue-50 rounded-lg shadow p-4">
+                  <p className="text-sm text-blue-600">For Sale</p>
+                  <p className="text-2xl font-bold text-blue-700">{displayStats.for_sale || 0}</p>
+                </div>
+                <div className="bg-orange-50 rounded-lg shadow p-4">
+                  <p className="text-sm text-orange-600">For Rent</p>
+                  <p className="text-2xl font-bold text-orange-700">{displayStats.for_rent || 0}</p>
+                </div>
+                <div className="bg-gray-50 rounded-lg shadow p-4">
+                  <p className="text-sm text-gray-600">Unspecified</p>
+                  <p className="text-2xl font-bold text-gray-700">{displayStats.unspecified_listing || 0}</p>
+                </div>
+                <div className="bg-green-50 rounded-lg shadow p-4">
+                  <p className="text-sm text-green-600">Available</p>
+                  <p className="text-2xl font-bold text-green-700">{displayStats.available || 0}</p>
+                </div>
+                <div className="bg-yellow-50 rounded-lg shadow p-4">
+                  <p className="text-sm text-yellow-600">On Hold</p>
+                  <p className="text-2xl font-bold text-yellow-700">{displayStats.on_hold || 0}</p>
+                </div>
+                <div className="bg-purple-50 rounded-lg shadow p-4">
+                  <p className="text-sm text-purple-600">Booked</p>
+                  <p className="text-2xl font-bold text-purple-700">{displayStats.booked || 0}</p>
+                </div>
+                <div className="bg-gray-50 rounded-lg shadow p-4">
+                  <p className="text-sm text-gray-600">Sold</p>
+                  <p className="text-2xl font-bold text-gray-700">{displayStats.sold || 0}</p>
+                </div>
               </div>
-              <div className="bg-blue-50 rounded-lg shadow p-4">
-                <p className="text-sm text-blue-600">For Sale</p>
-                <p className="text-2xl font-bold text-blue-700">{stats.for_sale || 0}</p>
-              </div>
-              <div className="bg-orange-50 rounded-lg shadow p-4">
-                <p className="text-sm text-orange-600">For Rent</p>
-                <p className="text-2xl font-bold text-orange-700">{stats.for_rent || 0}</p>
-              </div>
-              <div className="bg-green-50 rounded-lg shadow p-4">
-                <p className="text-sm text-green-600">Available</p>
-                <p className="text-2xl font-bold text-green-700">{stats.available}</p>
-              </div>
-              <div className="bg-yellow-50 rounded-lg shadow p-4">
-                <p className="text-sm text-yellow-600">On Hold</p>
-                <p className="text-2xl font-bold text-yellow-700">{stats.on_hold}</p>
-              </div>
-              <div className="bg-purple-50 rounded-lg shadow p-4">
-                <p className="text-sm text-purple-600">Booked</p>
-                <p className="text-2xl font-bold text-purple-700">{stats.booked}</p>
-              </div>
-              <div className="bg-gray-50 rounded-lg shadow p-4">
-                <p className="text-sm text-gray-600">Sold</p>
-                <p className="text-2xl font-bold text-gray-700">{stats.sold}</p>
-              </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Search Filters */}
           <div className="bg-white rounded-lg shadow p-4 mb-6">
@@ -362,9 +745,9 @@ function InventoryPage() {
                 <option value="unfurnished">Unfurnished</option>
               </select>
             </div>
-            <div className="flex gap-3 mt-4">
-              <button onClick={searchUnits} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-semibold">🔍 Search</button>
-              <button onClick={resetFilters} className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300">Reset</button>
+            <div className="flex flex-col sm:flex-row gap-3 mt-4">
+              <button onClick={searchUnits} className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-semibold">🔍 Search</button>
+              <button onClick={resetFilters} className="w-full sm:w-auto px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300">Reset</button>
             </div>
           </div>
 
@@ -372,100 +755,156 @@ function InventoryPage() {
           <div className="bg-white rounded-lg shadow overflow-hidden">
             {loading ? (
               <div className="p-8 text-center text-gray-500">Searching...</div>
-            ) : units.length === 0 ? (
+            ) : !hasSearched ? (
+              <div className="p-8 text-center text-gray-500">Use filters and click Search to view inventory units.</div>
+            ) : displayedUnits.length === 0 ? (
               <div className="p-8 text-center text-gray-500">No units found matching filters.</div>
             ) : (
               <div className="p-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {units.map((u) => (
-                    <div key={u._id || u.id} className="bg-white border rounded-lg p-4 shadow-sm">
-                      <h4 className="font-semibold text-lg">{u.unit_number || u.name || 'Unit'}</h4>
-                      <p className="text-sm text-gray-500">{u.location || ''}</p>
-                      <div className="mt-3 flex gap-2">
-                        <button onClick={() => viewUnit(u._id || u.id)} className="px-3 py-1 bg-emerald-600 text-white rounded">View</button>
-                        {user && (user.role === 'admin' || user.role === 'manager') && (
-                          <button onClick={() => startEditUnit(u._id || u.id)} className="px-3 py-1 bg-green-600 text-white rounded">Edit</button>
-                        )}
-                      </div>
-                    </div>
+                  {displayedUnits.map((u) => (
+                    <InventoryCard
+                      key={u._id || u.id}
+                      data={u}
+                      user={user}
+                      onView={() => viewUnit(u._id || u.id)}
+                      onEdit={() => startEditUnit(u._id || u.id)}
+                    />
                   ))}
                 </div>
               </div>
             )}
           </div>
 
-          {/* Unit Detail / Media / Upload area */}
+          {/* Unit Detail Modal */}
           {selectedUnit && (
-            <div className="mt-6 bg-white rounded-lg shadow p-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="md:col-span-2">
-                  <h3 className="font-semibold text-lg">Unit: {selectedUnit.unit_number || selectedUnit.name}</h3>
-                  <div className="mt-3">
-                    <p className="text-sm text-gray-500">Status: {selectedUnit.status}</p>
-                    <p className="text-sm text-gray-500">BHK: {selectedUnit.bhk}</p>
-                    <p className="text-sm text-gray-500">Built-up: {selectedUnit.built_up_area}</p>
-                  </div>
-                </div>
-                <div className="flex flex-col gap-3 items-end">
-                  <div className="text-right">
-                    <p className="text-sm text-gray-500">Owner: {selectedUnit.owner_name || '-'}</p>
-                    <p className="text-sm text-gray-500">Phone: {selectedUnit.owner_phone || '-'}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Media Gallery */}
-              <div className="mt-4">
-                <h4 className="font-semibold mb-2">Media</h4>
-                {unitMedia.length === 0 ? (
-                  <p className="text-gray-500">No media uploaded yet.</p>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-6">
-                    {unitMedia.map((m) => (
-                      <div key={m.id} className="border rounded-md overflow-hidden">
-                        {m.media_type === 'image' ? (
-                          <img src={buildMediaUrl(m.url)} alt={m.caption || ''} className="w-full h-40 object-cover" />
-                        ) : (
-                          <video controls className="w-full h-40">
-                            <source src={buildMediaUrl(m.url)} />
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-auto">
+              <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto relative">
+                <button onClick={() => setSelectedUnit(null)} className="absolute top-3 right-3 text-gray-600 text-xl p-2">✕</button>
+                <div className="p-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="w-full h-64 bg-gray-100 rounded-md overflow-hidden">
+                        {unitMedia && unitMedia.length > 0 && unitMedia[0].media_type === 'image' ? (
+                          <img src={buildMediaUrl(unitMedia[0].url)} alt={unitMedia[0].caption || ''} className="w-full h-64 object-cover" />
+                        ) : unitMedia && unitMedia.length > 0 && unitMedia[0].media_type !== 'image' ? (
+                          <video controls className="w-full h-64 object-cover">
+                            <source src={buildMediaUrl(unitMedia[0].url)} />
                           </video>
+                        ) : (
+                          selectedUnit.thumbnail ? (
+                            <img src={selectedUnit.thumbnail} alt={selectedUnit.name || ''} className="w-full h-64 object-cover" />
+                          ) : (
+                            <div className="w-full h-64 flex items-center justify-center text-gray-400">No image</div>
+                          )
                         )}
-                        <div className="p-2 flex items-center justify-between text-sm">
-                          <span className="text-gray-600 truncate">{m.caption || ''}</span>
-                          {user && (user.role === 'admin' || user.role === 'manager') && (
-                            <button onClick={() => handleDeleteMedia(m.id)} className="text-red-600 hover:text-red-800">Delete</button>
-                          )}
+                      </div>
+                      {/* Thumbnails */}
+                      <div className="grid grid-cols-4 gap-3 mt-4">
+                        {unitMedia.map((m) => (
+                          <div key={m.id} className="h-20 overflow-hidden rounded-md border">
+                            {m.media_type === 'image' ? (
+                              <img src={buildMediaUrl(m.url)} alt={m.caption || ''} className="w-full h-full object-cover" />
+                            ) : (
+                              <video className="w-full h-full">
+                                <source src={buildMediaUrl(m.url)} />
+                              </video>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="w-80">
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-semibold text-lg">Unit Details</h3>
+                        <div className="flex items-center gap-2">
+                          {(() => {
+                            const kind = resolveListingKind(selectedUnit || {});
+                            if (kind === 'rent') return <div className="text-xs font-semibold px-2 py-1 rounded bg-blue-600 text-white">FOR RENT</div>;
+                            if (kind === 'sale') return <div className="text-xs font-semibold px-2 py-1 rounded bg-blue-600 text-white">FOR SALE</div>;
+                            const rawLabel = ((selectedUnit.raw && selectedUnit.raw.listing_type) || selectedUnit.listing_type || '').toString();
+                            return rawLabel ? <div className="text-xs font-semibold px-2 py-1 rounded bg-blue-600 text-white">{rawLabel.toUpperCase()}</div> : null;
+                          })()}
+                          {/* status color */}
+                          {selectedUnit && selectedUnit.status && (() => {
+                            const s = selectedUnit.status.toString().toLowerCase();
+                            if (s.includes('sold')) return <div className="text-xs font-semibold px-2 py-1 rounded bg-red-600 text-white">SOLD</div>;
+                            if (s.includes('book')) return <div className="text-xs font-semibold px-2 py-1 rounded bg-yellow-400 text-black">BOOKED</div>;
+                            if (s.includes('hold') || s.includes('on hold')) return <div className="text-xs font-semibold px-2 py-1 rounded bg-green-600 text-white">ON HOLD</div>;
+                            if (s.includes('available')) return <div className="text-xs font-semibold px-2 py-1 rounded bg-green-50 text-gray-800">AVAILABLE</div>;
+                            return null;
+                          })()}
                         </div>
                       </div>
-                    ))}
+
+                      <div className="mt-3 space-y-2 text-sm text-gray-700">
+                        <div><strong className="text-gray-800">Property Type:</strong> {selectedUnit.bhk || '-'}</div>
+                        <div><strong className="text-gray-800">Unit Number:</strong> {selectedUnit.unit_number || '-'}</div>
+                        <div><strong className="text-gray-800">Floor:</strong> {selectedUnit.floor_number || '-'}</div>
+                        <div><strong className="text-gray-800">Building / Apartment / Society:</strong> {selectedUnit.building_name || selectedUnit.project_name || '-'}</div>
+                        <div><strong className="text-gray-800">Area:</strong> {selectedUnit.area || selectedUnit.carpet_area || '-'}</div>
+                        <div><strong className="text-gray-800">Super Area:</strong> {selectedUnit.super_area || '-'}</div>
+                        <div><strong className="text-gray-800">Built-up Area:</strong> {selectedUnit.built_up_area || '-'}</div>
+                        <div><strong className="text-gray-800">Price:</strong> {formatCurrency(selectedUnit.base_price || selectedUnit.final_price)} {selectedUnit.price_per_sqft ? (<span className="text-xs text-gray-500"> • ₹{selectedUnit.price_per_sqft}/sqft</span>) : null}</div>
+                        <div><strong className="text-gray-800">Status:</strong> <span className="ml-1 font-semibold">{(selectedUnit.status || '-').toString().toUpperCase()}</span></div>
+                        <div><strong className="text-gray-800">Keys:</strong> {selectedUnit.keys_location || '-'}</div>
+                        <div><strong className="text-gray-800">Facing:</strong> {selectedUnit.facing || '-'}</div>
+                        <div><strong className="text-gray-800">Furnished:</strong> {selectedUnit.furnished_status || '-'}</div>
+                        <div><strong className="text-gray-800">Parking:</strong> {selectedUnit.parking_slots || '-'}</div>
+                        <div><strong className="text-gray-800">Owner Name:</strong> {selectedUnit.owner_name || '-'}</div>
+                        <div><strong className="text-gray-800">Phone:</strong> {selectedUnit.owner_phone || '-'}</div>
+                        <div><strong className="text-gray-800">Available:</strong> {selectedUnit.availability_date ? new Date(selectedUnit.availability_date).toLocaleDateString() : '-'}</div>
+                        <div><strong className="text-gray-800">Remarks:</strong> {selectedUnit.remarks || '-'}</div>
+
+                        </div>
+
+                      {/* action buttons moved to fixed footer */}
+
+                      {/* Amenities */}
+                      <div className="mt-4">
+                        <h4 className="text-sm font-semibold mb-2">Amenities</h4>
+                        {selectedUnit.amenities && selectedUnit.amenities.length > 0 ? (
+                          <div className="flex flex-wrap gap-2">
+                            {selectedUnit.amenities.map((a, idx) => (
+                              <span key={idx} className="inline-block bg-gray-100 text-xs px-2 py-1 rounded">{a}</span>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-sm text-gray-500">-</div>
+                        )}
+                      </div>
+
+                      {/* Tenant Information (always shown) */}
+                      <div className="mt-4 border-t pt-4">
+                        <h4 className="text-sm font-semibold mb-2">Tenant Information</h4>
+                        <div className="space-y-2 text-sm text-gray-700">
+                          <div><strong className="text-gray-800">Tenant Name:</strong> {selectedUnit.tenant_name || '-'}</div>
+                          <div><strong className="text-gray-800">Contact:</strong> {selectedUnit.tenant_contact || '-'}</div>
+                          <div><strong className="text-gray-800">Start Date:</strong> {selectedUnit.tenant_start_date ? new Date(selectedUnit.tenant_start_date).toLocaleDateString() : '-'}</div>
+                          <div><strong className="text-gray-800">End Date:</strong> {selectedUnit.tenant_end_date ? new Date(selectedUnit.tenant_end_date).toLocaleDateString() : '-'}</div>
+                        </div>
+                      </div>
+                      
+                      {/* Action buttons placed at bottom of details column */}
+                      <div className="mt-4 flex gap-2 justify-center">
+                        <button onClick={() => viewUnit(selectedUnit.id || selectedUnit._id)} className="px-3 py-2 bg-blue-600 text-white rounded">View</button>
+                        <button onClick={() => startEditUnit(selectedUnit.id || selectedUnit._id)} className="px-3 py-2 bg-green-600 text-white rounded">Edit</button>
+                        <button onClick={handleGeneratePDF} className="px-3 py-2 bg-red-600 text-white rounded">Generate PDF</button>
+                      </div>
+                    </div>
                   </div>
-                )}
-              </div>
-
-              {/* Upload Media */}
-              <div className="bg-gray-50 rounded-md p-4">
-                <h4 className="font-semibold mb-2">Upload Photos/Videos</h4>
-                <div className="flex items-center gap-3">
-                  <input type="file" accept="image/*,video/*" multiple onChange={(e) => handleUploadMedia(e.target.files)} />
-                  <input type="text" placeholder="Caption (optional)" value={caption} onChange={(e) => setCaption(e.target.value)} className="px-3 py-2 border rounded-md flex-1" />
                 </div>
-                {uploading && <p className="text-xs text-gray-500 mt-2">Uploading...</p>}
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t">
-                <button onClick={handleGeneratePDF} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 font-semibold flex items-center gap-2">📄 Generate PDF</button>
-                <button onClick={() => setSelectedUnit(null)} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 font-semibold">Close</button>
-                {user && (
-                  <button onClick={() => startEditUnit(selectedUnit.id || selectedUnit._id)} className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-semibold">Edit Unit</button>
-                )}
               </div>
             </div>
           )}
 
+          {/* Fixed footer action buttons for selected unit removed — actions are inside details column now */}
+
           {/* Create Inventory Modal */}
           {createModalOpen && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div className="bg-white rounded-lg p-0 max-w-2xl w-full max-h-[95vh] overflow-y-auto">
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2">
+              <div className="bg-white rounded-lg p-0 w-full max-w-2xl mx-4 sm:mx-0 max-h-[95vh] overflow-y-auto">
                 <div className="p-0">
                   <AddInventoryForm
                     onSubmit={async (form) => {
@@ -541,17 +980,20 @@ function InventoryPage() {
 
                         };
 
-                        // Convert payload + photos to FormData
-                        const formData = new FormData();
-                        Object.keys(payload).forEach((key) => {
-                          if (payload[key] !== undefined && payload[key] !== null) formData.append(key, payload[key]);
-                        });
-                        if (form.photos && form.photos.length > 0) {
-                          form.photos.forEach((file) => formData.append('photos', file));
-                        }
+                        // Create unit with JSON payload
+                        const res = await inventoryAPI.createUnit(payload);
+                        const unitId = res.data?._id || res.data?.id || res.data?.id;
 
-                        const res = await inventoryAPI.createUnit(formData);
-                        const unitId = res.data?._id || res.data?.id;
+                        // If photos were provided, upload them separately to the media endpoint
+                        if (unitId && form.photos && form.photos.length > 0) {
+                          try {
+                            const mediaForm = new FormData();
+                            form.photos.forEach((file) => mediaForm.append('files', file));
+                            await inventoryAPI.uploadUnitMedia(unitId, mediaForm);
+                          } catch (mediaErr) {
+                            console.warn('Failed to upload photos after unit creation', mediaErr);
+                          }
+                        }
 
                         setCreateModalOpen(false);
                         await fetchProjects();
@@ -575,8 +1017,8 @@ function InventoryPage() {
 
           {/* Edit Unit Modal */}
           {editingUnitId && editUnit && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div className="bg-white rounded-lg p-5 max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2">
+              <div className="bg-white rounded-lg p-5 w-full max-w-3xl mx-4 sm:mx-0 max-h-[90vh] overflow-y-auto">
                 <div className="flex justify-between items-start mb-4">
                   <h2 className="text-xl font-bold">Edit Unit (Unit: {editUnit.unit_number})</h2>
                   <button
@@ -690,7 +1132,24 @@ function InventoryPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className="text-sm font-medium text-gray-600">Status *</label>
-                        <select value={editUnit.status || 'available'} onChange={(e) => setEditUnit((p) => ({ ...p, status: e.target.value }))} className="w-full px-3 py-2 border rounded-md">
+                        <select
+                          value={editUnit.status || 'available'}
+                          onChange={(e) => {
+                            const v = (e.target.value || '').toString().toLowerCase();
+                            setEditUnit((p) => {
+                              const next = { ...p, status: e.target.value };
+                              // If status set back to available, clear tenant fields
+                              if (v === 'available') {
+                                next.tenant_name = '';
+                                next.tenant_contact = '';
+                                next.tenant_start_date = '';
+                                next.tenant_end_date = '';
+                              }
+                              return next;
+                            });
+                          }}
+                          className="w-full px-3 py-2 border rounded-md"
+                        >
                           <option value="available">Available</option>
                           <option value="hold">On Hold</option>
                           <option value="booked">Booked</option>
@@ -712,6 +1171,34 @@ function InventoryPage() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Tenant Information: show when status is booked or sold */}
+                  {((editUnit.status || '').toString().toLowerCase() === 'booked' || (editUnit.status || '').toString().toLowerCase() === 'sold') && (
+                    <div className="border-b pb-4">
+                      <h3 className="font-semibold mb-3">Tenant Information</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-sm font-medium text-gray-600">Tenant Name *</label>
+                          <input type="text" value={editUnit.tenant_name || ''} onChange={(e) => setEditUnit((p) => ({ ...p, tenant_name: e.target.value }))} className="w-full px-3 py-2 border rounded-md" />
+                        </div>
+
+                        <div>
+                          <label className="text-sm font-medium text-gray-600">Contact Number *</label>
+                          <input type="text" value={editUnit.tenant_contact || ''} onChange={(e) => setEditUnit((p) => ({ ...p, tenant_contact: e.target.value }))} className="w-full px-3 py-2 border rounded-md" maxLength="15" />
+                        </div>
+
+                        <div>
+                          <label className="text-sm font-medium text-gray-600">Start Date *</label>
+                          <input type="date" value={editUnit.tenant_start_date ? editUnit.tenant_start_date.split('T')[0] : ''} onChange={(e) => setEditUnit((p) => ({ ...p, tenant_start_date: e.target.value }))} className="w-full px-3 py-2 border rounded-md" />
+                        </div>
+
+                        <div>
+                          <label className="text-sm font-medium text-gray-600">End Date {((editUnit.status || '').toString().toLowerCase() === 'booked') ? '*' : ''}</label>
+                          <input type="date" value={editUnit.tenant_end_date ? editUnit.tenant_end_date.split('T')[0] : ''} onChange={(e) => setEditUnit((p) => ({ ...p, tenant_end_date: e.target.value }))} className="w-full px-3 py-2 border rounded-md" />
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="border-b pb-4">
                     <h3 className="font-semibold mb-3">Owner Information</h3>

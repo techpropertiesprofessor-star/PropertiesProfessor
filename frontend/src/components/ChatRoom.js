@@ -117,15 +117,30 @@ export default function ChatRoom({ chatType = 'team', userId = null, userName = 
         params.userId = userId;
       }
       const res = await chatAPI.getMessages(params);
-      setMessages(res.data);
-      scrollToBottom();
+      console.log('📨 getMessages response:', res);
+      // Support both direct array and wrapped responses
+      const msgs = Array.isArray(res.data) ? res.data : (res.data && (res.data.messages || res.data.msgs || res.data.data)) || [];
+      console.log('📨 Parsed messages count:', Array.isArray(msgs) ? msgs.length : 0, msgs);
+      setMessages(msgs || []);
+      if ((msgs || []).length > 0) scrollToBottom();
       
       // Mark all messages as seen when opening private chat
       if (chatType === 'private' && userId) {
-        await chatAPI.markChatAsSeen(userId).catch(err => console.error('Failed to mark as seen:', err));
+        try {
+          const seenRes = await chatAPI.markChatAsSeen(userId);
+          console.log('📘 markChatAsSeen response:', seenRes && seenRes.data);
+          // Notify other components (ChatList) to update unread counts
+          try {
+            window.dispatchEvent(new CustomEvent('chatSeen', { detail: { userId, count: seenRes.data?.count || 0 } }));
+          } catch (evErr) {
+            console.warn('Failed to dispatch chatSeen event', evErr);
+          }
+        } catch (err) {
+          console.error('Failed to mark as seen:', err);
+        }
       }
     } catch {
-      console.error('Failed to load messages');
+      console.error('Failed to load messages', arguments);
     }
   }, [chatType, userId, scrollToBottom]);
 
@@ -152,6 +167,12 @@ export default function ChatRoom({ chatType = 'team', userId = null, userName = 
           isOnline: true,
           socketId: socket.id
         }).catch(err => console.error('Failed to update socketId:', err));
+        // Identify with server so it can map socket -> employee
+        try {
+          socket.emit('identify', user.employeeId || user.id);
+        } catch (err) {
+          console.warn('Failed to emit identify from ChatRoom:', err);
+        }
       }
     });
 

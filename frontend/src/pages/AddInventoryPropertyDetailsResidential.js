@@ -227,7 +227,7 @@ export default function AddInventoryPropertyDetailsResidential() {
             color="purple"
             options={[
               { label: "Rent", value: "rent" },
-              { label: "Sell", value: "sell" },
+              { label: "Sale", value: "sale" },
               { label: "PG / Co-living", value: "pg" },
             ]}
           />

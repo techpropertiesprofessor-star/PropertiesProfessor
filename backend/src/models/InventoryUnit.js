@@ -26,6 +26,11 @@ const InventoryUnitSchema = new mongoose.Schema({
   owner_name: { type: String },
   owner_phone: { type: String },
   owner_email: { type: String },
+  // Tenant information
+  tenant_name: { type: String },
+  tenant_contact: { type: String },
+  tenant_start_date: { type: Date },
+  tenant_end_date: { type: Date },
   listing_type: { type: String },
   availability_date: { type: Date },
   priceHistory: [{ type: mongoose.Schema.Types.ObjectId, ref: 'InventoryPriceHistory' }],

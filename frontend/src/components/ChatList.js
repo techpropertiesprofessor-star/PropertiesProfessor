@@ -73,6 +73,12 @@ const ChatList = ({ onSelectChat, activeChat }) => {
           isOnline: true,
           socketId: socket.id
         }).catch(err => console.error('Failed to update socketId:', err));
+        // Identify with server so it can map socket -> employee
+        try {
+          socket.emit('identify', currentUserId);
+        } catch (err) {
+          console.warn('Failed to emit identify:', err);
+        }
       }
     });
 
@@ -99,6 +105,25 @@ const ChatList = ({ onSelectChat, activeChat }) => {
       socket.disconnect();
     };
   }, [user?.employeeId, user?._id, loadChats]);
+
+  // Listen for chatSeen events dispatched by ChatRoom to update unread counts immediately
+  useEffect(() => {
+    const handleChatSeen = (e) => {
+      const detail = e?.detail || {};
+      const seenUserId = detail.userId;
+      if (!seenUserId) return;
+      setChats(prev => prev.map(c => {
+        const otherId = c?.otherParticipant?._id || c?.otherParticipant;
+        if (!otherId) return c;
+        if (String(otherId) === String(seenUserId)) {
+          return { ...c, unreadCount: 0 };
+        }
+        return c;
+      }));
+    };
+    window.addEventListener('chatSeen', handleChatSeen);
+    return () => window.removeEventListener('chatSeen', handleChatSeen);
+  }, []);
 
   const loadEmployees = async () => {
     try {

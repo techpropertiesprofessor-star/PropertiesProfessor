@@ -582,11 +582,11 @@ export default function DashboardPage() {
 
   if (!canViewDashboard) {
     return (
-      <div className="flex h-screen bg-gray-50">
-        <Sidebar />
+      <div className="flex min-h-screen bg-gray-50">
+        <div className="hidden md:block"><Sidebar /></div>
         <div className="flex-1 flex flex-col">
           <Header user={user} onLogout={logout} />
-          <main className="flex-1 flex items-center justify-center p-8">
+          <main className="flex-1 flex items-center justify-center p-4 sm:p-8">
             <div className="bg-red-100 border border-red-400 text-red-700 px-8 py-6 rounded-lg text-center max-w-md">
               <h2 className="text-2xl font-bold mb-2">Access Denied</h2>
               <p>You do not have permission to view the dashboard.</p>
@@ -599,8 +599,8 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="flex h-screen bg-gradient-to-tr from-blue-50 via-indigo-50 to-yellow-50">
-      <Sidebar 
+    <div className="flex min-h-screen bg-gradient-to-tr from-blue-50 via-indigo-50 to-yellow-50">
+      <div className="hidden md:block"><Sidebar 
         notificationCount={notificationCount} 
         clearLeadsBadge={clearLeadsBadge}
         leadsCount={leadsCount}
@@ -608,7 +608,7 @@ export default function DashboardPage() {
         teamChatCount={teamChatCount}
         callersCount={callersCount}
         calendarCount={calendarCount}
-      />
+      /></div>
       <div className="flex-1 flex flex-col">
         <Header
           user={user}
@@ -623,7 +623,7 @@ export default function DashboardPage() {
           resetNewMessageCount={resetNewMessageCount}
           onNotificationClick={() => {}}
         />
-        <main className="flex-1 overflow-auto p-0 md:p-6">
+        <main className="flex-1 overflow-auto p-4 md:p-6">
           {/* Modern User Banner */}
           <div className="backdrop-blur-md bg-white/70 rounded-2xl shadow-xl p-6 flex flex-col md:flex-row md:items-center md:justify-between border-b border-indigo-100 mb-8 mt-4 mx-2 md:mx-0">
             <div className="flex items-center gap-4">
@@ -880,7 +880,7 @@ export default function DashboardPage() {
               {/* Confirmation Dialog */}
               {confirmDialog.open && (
                 <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
-                  <div className="bg-white rounded-lg shadow-lg p-6 min-w-[300px]">
+                  <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-sm mx-4 sm:mx-0">
                     <h3 className="font-bold mb-2 text-gray-900 text-lg">Confirm {confirmDialog.action === 'approve' ? 'Approval' : 'Rejection'}</h3>
                     <p className="mb-4 text-gray-700 text-sm">Are you sure you want to <span className="font-semibold">{confirmDialog.action}</span> this leave{confirmDialog.name ? ` for ${confirmDialog.name}` : ''}?</p>
                     <div className="flex justify-end space-x-2">

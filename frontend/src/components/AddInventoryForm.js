@@ -234,7 +234,16 @@ export default function AddInventoryForm({ onSubmit }) {
   function handleSubmit(e) {
     e.preventDefault();
     if (validate(step)) {
-      onSubmit(form);
+      // Normalize some fields before submitting
+      const normalized = { ...form };
+      // Normalize lookingTo/sale value: map 'sell' to 'sale' for consistency
+      if (normalized.lookingTo && normalized.lookingTo.toString().toLowerCase() === 'sell') {
+        normalized.lookingTo = 'sale';
+      }
+      // Also set listing_type for backend compatibility
+      normalized.listing_type = normalized.listing_type || normalized.lookingTo || '';
+
+      onSubmit(normalized);
     }
   }
 
@@ -296,7 +305,7 @@ export default function AddInventoryForm({ onSubmit }) {
             onChange={v => handleChange('lookingTo', v)}
             options={[
               { label: 'Rent', value: 'rent' },
-              { label: 'Sell', value: 'sell' },
+              { label: 'Sale', value: 'sale' },
               { label: 'PG/Co-living', value: 'pg' },
             ]}
           />
@@ -816,33 +825,36 @@ export default function AddInventoryForm({ onSubmit }) {
       )}
 
       {/* Navigation Buttons */}
-      <div className="sticky bottom-0 bg-white/95 p-6 border-t flex justify-between z-10 rounded-b-2xl shadow-inner backdrop-blur">
-        {step > 1 ? (
-          <button
-            type="button"
-            onClick={handleBack}
-            className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold shadow"
-          >
-            Back
-          </button>
-        ) : <div />}
-        {step < 6 ? (
-          <button
-            type="button"
-            onClick={handleNext}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg font-semibold shadow"
-          >
-            Next
-          </button>
-        ) : (
-          <button
-            type="submit"
-            onClick={handleSubmit}
-            className="px-6 py-2 bg-green-600 text-white rounded-lg font-semibold shadow"
-          >
-            Submit
-          </button>
-        )}
+      <div className="sticky bottom-0 bg-white/95 p-4 sm:p-6 border-t z-10 rounded-b-2xl shadow-inner backdrop-blur">
+        <div className="flex flex-col sm:flex-row justify-between gap-3">
+          {step > 1 ? (
+            <button
+              type="button"
+              onClick={handleBack}
+              className="w-full sm:w-auto px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold shadow"
+            >
+              Back
+            </button>
+          ) : <div />}
+
+          {step < 6 ? (
+            <button
+              type="button"
+              onClick={handleNext}
+              className="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold shadow"
+            >
+              Next
+            </button>
+          ) : (
+            <button
+              type="submit"
+              onClick={handleSubmit}
+              className="w-full sm:w-auto px-6 py-3 bg-green-600 text-white rounded-lg font-semibold shadow"
+            >
+              Submit
+            </button>
+          )}
+        </div>
       </div>
     </form>
   );

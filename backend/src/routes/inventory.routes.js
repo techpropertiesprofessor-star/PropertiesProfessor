@@ -29,6 +29,7 @@ router.get('/projects/:projectId/towers', inventoryController.getTowers);
 router.post('/projects/:projectId/towers', role(['ADMIN', 'MANAGER', 'EMPLOYEE']), inventoryController.createTower);
 
 // Inventory unit routes
+router.get('/units', inventoryController.listUnits);
 router.get('/units/:id', inventoryController.getUnitById);
 router.post('/units', role(['ADMIN', 'MANAGER', 'EMPLOYEE']), inventoryController.createUnit);
 router.put('/units/:id', role(['ADMIN', 'MANAGER', 'EMPLOYEE']), inventoryController.updateUnit);
