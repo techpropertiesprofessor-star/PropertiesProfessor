@@ -369,7 +369,15 @@ function InventoryPage() {
       // inventoryAPI.generatePDF returns a blob (responseType: 'blob')
       const blob = new Blob([res.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
-      window.open(url, '_blank');
+      const a = document.createElement('a');
+      a.href = url;
+      const id = selectedUnit.id || selectedUnit._id || 'unit';
+      a.download = `unit_${id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // Revoke URL after short delay
+      setTimeout(() => window.URL.revokeObjectURL(url), 1000);
     } catch (err) {
       console.error('Generate PDF failed:', err);
     }

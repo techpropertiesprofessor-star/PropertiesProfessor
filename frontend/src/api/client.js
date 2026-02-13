@@ -191,6 +191,14 @@ export const leadAPI = {
     api.get("/leads", { params }),
   getById: (id) =>
     api.get(`/leads/${id}`),
+  create: (data) =>
+    api.post("/leads", data),
+  assign: (leadId, assignedTo) =>
+    api.post(`/leads/${leadId}/assign`, { assignedTo }),
+  updateRemarks: (leadId, remarks) =>
+    api.put(`/leads/${leadId}/remarks`, { remarks }),
+  download: ({ start, end }) =>
+    api.get("/leads/download", { params: { start, end }, responseType: 'blob' })
 };
 
 /**

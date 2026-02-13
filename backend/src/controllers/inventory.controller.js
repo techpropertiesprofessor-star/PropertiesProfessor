@@ -174,67 +174,53 @@ exports.getUnitById = async (req, res, next) => {
 exports.listUnits = async (req, res, next) => {
   try {
     const {
-      page = 1,
-      limit = 20,
-      project_id,
-      status,
-      bhk,
-      listing_type,
-      budget_min,
-      budget_max,
-      area_min,
-      area_max,
-      location,
-      keys_location,
-      facing,
-      furnished_status,
-      query
-    } = req.query;
+      page, limit,
+      listing_type, budget_min, budget_max,
+      area_min, area_max, location, keys_location,
+      facing, furnished_status, query, bhk
+    } = req.query || {};
 
     const filter = {};
-    if (project_id) filter.project = project_id;
-    if (status) filter.status = status;
-    if (bhk) {
-      // Accept both numeric bhk and string forms like '2bhk' or '2 BHK'.
-      const bhkStr = bhk.toString();
-      const digits = (bhkStr.match(/\d+/) || [])[0];
-      if (digits) {
-        // Match either the numeric value or any string containing the digits (e.g. '2bhk', '2 BHK')
-        filter.bhk = { $regex: `\\b${digits}\\b|${digits}`, $options: 'i' };
-      } else {
-        // No digits — match exact/normalized string
-        filter.bhk = { $regex: bhkStr.replace(/[-_]/g, ' '), $options: 'i' };
-      }
-    }
+
     if (listing_type) filter.listing_type = listing_type;
+
     if (budget_min || budget_max) {
       filter.final_price = {};
       if (budget_min) filter.final_price.$gte = Number(budget_min);
       if (budget_max) filter.final_price.$lte = Number(budget_max);
     }
+
     if (area_min || area_max) {
       filter.carpet_area = {};
       if (area_min) filter.carpet_area.$gte = Number(area_min);
       if (area_max) filter.carpet_area.$lte = Number(area_max);
     }
+
     if (location) filter.location = { $regex: location, $options: 'i' };
     if (keys_location) filter.keys_location = keys_location;
     if (facing) filter.facing = facing;
+
     if (furnished_status) {
-      const trimmedValue = furnished_status.trim().toLowerCase();
-      if (trimmedValue === 'furnished') {
-        filter.furnished_status = { $regex: '(^furnished$|fully[_-]?furnished)', $options: 'i' };
-      } else {
-        const searchPattern = furnished_status.trim().replace(/-/g, '[_-]');
-        filter.furnished_status = { $regex: searchPattern, $options: 'i' };
-      }
+      const searchPattern = String(furnished_status).trim().replace(/[-\s]+/g, '[_-]');
+      filter.furnished_status = { $regex: searchPattern, $options: 'i' };
     }
+
     if (query) {
       filter.$or = [
         { unitNumber: { $regex: query, $options: 'i' } },
         { unit_number: { $regex: query, $options: 'i' } },
         { location: { $regex: query, $options: 'i' } },
       ];
+    }
+
+    if (bhk) {
+      const bhkStr = String(bhk).trim();
+      // If it's numeric-like (e.g. '2' or '2 BHK') allow simple match, otherwise normalize separators
+      if (/^\d/.test(bhkStr)) {
+        filter.bhk = { $regex: bhkStr, $options: 'i' };
+      } else {
+        filter.bhk = { $regex: bhkStr.replace(/[-_]/g, ' '), $options: 'i' };
+      }
     }
 
     const pg = Math.max(1, parseInt(page, 10) || 1);
@@ -775,75 +761,7 @@ exports.generateUnitPDF = async (req, res, next) => {
       yPos += 3;
     }
     
-    // Tenant Information Section
-    if (unit.tenant_name || unit.tenant_contact || unit.tenant_start_date || unit.tenant_end_date) {
-      yPos += 5;
-      if (yPos > 220) {
-        doc.addPage();
-        yPos = 20;
-      }
-
-      doc.setFillColor(52, 73, 94);
-      doc.rect(15, yPos, 180, 8, 'F');
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(255, 255, 255);
-      doc.text('TENANT INFORMATION', 20, yPos + 6);
-
-      yPos += 14;
-      doc.setFontSize(10);
-      doc.setTextColor(0, 0, 0);
-
-      if (unit.tenant_name) {
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(52, 73, 94);
-        doc.text('Name:', 20, yPos);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(0, 0, 0);
-        doc.text(unit.tenant_name, 60, yPos);
-        yPos += 7;
-      }
-
-      if (unit.tenant_contact) {
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(52, 73, 94);
-        doc.text('Contact:', 20, yPos);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(0, 0, 0);
-        doc.text(unit.tenant_contact, 60, yPos);
-        yPos += 7;
-      }
-
-      if (unit.tenant_start_date) {
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(52, 73, 94);
-        doc.text('Start Date:', 20, yPos);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(0, 0, 0);
-        try {
-          doc.text(new Date(unit.tenant_start_date).toLocaleDateString('en-IN'), 60, yPos);
-        } catch (e) {
-          doc.text(unit.tenant_start_date.toString(), 60, yPos);
-        }
-        yPos += 7;
-      }
-
-      if (unit.tenant_end_date) {
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(52, 73, 94);
-        doc.text('End Date:', 20, yPos);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(0, 0, 0);
-        try {
-          doc.text(new Date(unit.tenant_end_date).toLocaleDateString('en-IN'), 60, yPos);
-        } catch (e) {
-          doc.text(unit.tenant_end_date.toString(), 60, yPos);
-        }
-        yPos += 7;
-      }
-
-      yPos += 3;
-    }
+    
 
     // Property Photos Section
     if (unit.media && unit.media.length > 0) {
@@ -940,29 +858,113 @@ exports.generateUnitPDF = async (req, res, next) => {
         amenitiesList = unit.amenities.split(/[\n,]/).map(a => formatAmenityName(a.trim())).filter(a => a);
       }
       
+      // Modernized amenities layout: 4-column x 5-row grid with clean spacing
+      doc.setFontSize(10);
+      // Header already rendered; use normal Helvetica for amenity items
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(32, 32, 32);
+      const cols = 4;
+      const rows = 5;
+      const gap = 10; // slightly larger gap for readability
+      const contentWidth = 180;
+      const colWidth = (contentWidth - (cols - 1) * gap) / cols;
+      const startX = 20;
+      const lineHeight = 8;
+
+      // Ensure 'Light' appears at the start of 4th row (row index 3)
+      const lightIdx = amenitiesList.findIndex(a => /\blight\b/i.test(a));
+      if (lightIdx !== -1) {
+        const lightItem = amenitiesList.splice(lightIdx, 1)[0];
+        const targetPos = 3 * cols; // start of row 4 (0-based)
+        if (targetPos <= amenitiesList.length) amenitiesList.splice(targetPos, 0, lightItem);
+        else amenitiesList.push(lightItem);
+      }
+
+      let maxY = yPos;
+      for (let i = 0; i < amenitiesList.length; i++) {
+        const row = Math.floor(i / cols);
+        const col = i % cols;
+        const x = startX + col * (colWidth + gap);
+        const y = yPos + row * lineHeight;
+
+        // If Y would overflow the content area, create a new page and reset positions
+        if (y > 250) {
+          doc.addPage();
+          yPos = 20;
+        }
+
+        const amenityText = String(amenitiesList[i] || '').trim();
+        const bullet = '- ';
+        const lines = doc.splitTextToSize(bullet + amenityText, colWidth - 4);
+        doc.text(lines, x, y);
+        const used = lines.length * (lineHeight - 1);
+        maxY = Math.max(maxY, y + used);
+      }
+
+      yPos = maxY + 10;
+
+      // Tenant Information section (always placed on the next page)
+      // Move Tenant Information to a fresh page regardless of presence
+      doc.addPage();
+      yPos = 20;
+
+      doc.setFillColor(52, 73, 94);
+      doc.rect(15, yPos, 180, 8, 'F');
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(255, 255, 255);
+      doc.text('TENANT INFORMATION', 20, yPos + 6);
+
+      yPos += 14;
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(0, 0, 0);
-      
-      // Display amenities in 2 columns
-      let amenityX = 20;
-      let amenityY = yPos;
-      const colWidth = 90;
-      
-      amenitiesList.forEach((amenity, idx) => {
-        if (idx > 0 && idx % 2 === 0) {
-          amenityY += 7;
-          amenityX = 20;
-          if (amenityY > 250) {
-            doc.addPage();
-            amenityY = 20;
-          }
+
+      const tColsX = [20, 110];
+
+      // Name (leave blank if missing)
+      doc.setFont('helvetica', 'bold');
+      doc.text('Name:', tColsX[0], yPos);
+      doc.setFont('helvetica', 'normal');
+      if (unit.tenant_name) {
+        doc.text(String(unit.tenant_name), tColsX[0] + 30, yPos);
+      }
+
+      // Contact (leave blank if missing)
+      doc.setFont('helvetica', 'bold');
+      doc.text('Phone:', tColsX[1], yPos);
+      doc.setFont('helvetica', 'normal');
+      if (unit.tenant_contact) {
+        doc.text(String(unit.tenant_contact), tColsX[1] + 28, yPos);
+      }
+
+      yPos += 8;
+
+      // Start Date (leave blank if missing)
+      doc.setFont('helvetica', 'bold');
+      doc.text('Start Date:', tColsX[0], yPos);
+      doc.setFont('helvetica', 'normal');
+      if (unit.tenant_start_date) {
+        try {
+          doc.text(new Date(unit.tenant_start_date).toLocaleDateString('en-IN'), tColsX[0] + 36, yPos);
+        } catch (e) {
+          doc.text(String(unit.tenant_start_date), tColsX[0] + 36, yPos);
         }
-        doc.text(`✓ ${amenity}`, amenityX, amenityY);
-        if (idx % 2 === 0) amenityX += colWidth;
-      });
-      
-      yPos = amenityY + 10;
+      }
+
+      // End Date (leave blank if missing)
+      doc.setFont('helvetica', 'bold');
+      doc.text('End Date:', tColsX[1], yPos);
+      doc.setFont('helvetica', 'normal');
+      if (unit.tenant_end_date) {
+        try {
+          doc.text(new Date(unit.tenant_end_date).toLocaleDateString('en-IN'), tColsX[1] + 30, yPos);
+        } catch (e) {
+          doc.text(String(unit.tenant_end_date), tColsX[1] + 30, yPos);
+        }
+      }
+
+      yPos += 10;
     }
     
     // ADDITIONAL INFORMATION
@@ -1033,43 +1035,42 @@ exports.generateUnitPDF = async (req, res, next) => {
         doc.setLineWidth(0.5);
         doc.line(15, footerStartY, 195, footerStartY);
         
-        // Company details - center aligned
+        // Company details - center aligned (use Times New Roman for a classic look)
         doc.setFontSize(9);
-        doc.setFont('helvetica', 'bold');
+        doc.setFont('times', 'bold');
         doc.setTextColor(52, 73, 94);
         doc.text('Properties Professor, ATS, BOUQUET, B-307, Block B, Sector 132, Noida, Uttar Pradesh, 201304 (INDIA)', 105, footerStartY + 6, { align: 'center' });
         
-        // Contact line with bold labels
+        // Contact line with bold labels (Times)
         doc.setFontSize(8);
         doc.setTextColor(60, 60, 60);
         
-        // Calculate positions for center alignment with mixed fonts
         const line1 = 'E-mail: admin@propertiesprofessor.com   Website:  propertiesprofessor.com';
         const line2 = 'Tel.: 01204454649   Phone No.: +91 8228000068';
         
         // Line 1: Email and Website
-        doc.setFont('helvetica', 'bold');
+        doc.setFont('times', 'bold');
         doc.text('E-mail:', 105 - doc.getTextWidth(line1) / 2, footerStartY + 11);
-        doc.setFont('helvetica', 'normal');
+        doc.setFont('times', 'normal');
         doc.text(' admin@propertiesprofessor.com   ', 105 - doc.getTextWidth(line1) / 2 + doc.getStringUnitWidth('E-mail:') * 8 / doc.internal.scaleFactor, footerStartY + 11);
-        doc.setFont('helvetica', 'bold');
+        doc.setFont('times', 'bold');
         doc.text('Website:', 105 - doc.getTextWidth(line1) / 2 + doc.getStringUnitWidth('E-mail: admin@propertiesprofessor.com   ') * 8 / doc.internal.scaleFactor, footerStartY + 11);
-        doc.setFont('helvetica', 'normal');
+        doc.setFont('times', 'normal');
         doc.text(' propertiesprofessor.com', 105 - doc.getTextWidth(line1) / 2 + doc.getStringUnitWidth('E-mail: admin@propertiesprofessor.com   Website:') * 8 / doc.internal.scaleFactor, footerStartY + 11);
         
         // Line 2: Tel and Phone
-        doc.setFont('helvetica', 'bold');
+        doc.setFont('times', 'bold');
         doc.text('Tel.:', 105 - doc.getTextWidth(line2) / 2, footerStartY + 16);
-        doc.setFont('helvetica', 'normal');
+        doc.setFont('times', 'normal');
         doc.text(' 01204454649   ', 105 - doc.getTextWidth(line2) / 2 + doc.getStringUnitWidth('Tel.:') * 8 / doc.internal.scaleFactor, footerStartY + 16);
-        doc.setFont('helvetica', 'bold');
+        doc.setFont('times', 'bold');
         doc.text('Phone No.:', 105 - doc.getTextWidth(line2) / 2 + doc.getStringUnitWidth('Tel.: 01204454649   ') * 8 / doc.internal.scaleFactor, footerStartY + 16);
-        doc.setFont('helvetica', 'normal');
+        doc.setFont('times', 'normal');
         doc.text(' +91 8228000068', 105 - doc.getTextWidth(line2) / 2 + doc.getStringUnitWidth('Tel.: 01204454649   Phone No.:') * 8 / doc.internal.scaleFactor, footerStartY + 16);
         
-        // Generation info
+        // Generation info (Times italic)
         doc.setFontSize(7);
-        doc.setFont('helvetica', 'italic');
+        doc.setFont('times', 'italic');
         doc.setTextColor(100, 100, 100);
         doc.text(`Generated: ${new Date().toLocaleDateString('en-IN')} ${new Date().toLocaleTimeString('en-IN', {hour: '2-digit', minute: '2-digit'})}`, 105, footerStartY + 22, { align: 'center' });
         doc.text(`Page ${i} of ${pageCount}`, 190, footerStartY + 22, { align: 'right' });

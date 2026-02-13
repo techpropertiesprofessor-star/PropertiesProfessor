@@ -64,36 +64,35 @@ export default function DashboardPage() {
 
   // Assign lead (same as LeadsPage)
   const assignLead = async (lead, employeeId) => {
-    // If this is a normalized contact/website lead, auto-convert to Lead collection and assign
-    if (lead.createdBy === 'website' && !lead.assignedTo) {
-      try {
-        const allowedSources = ['contact_form','schedule_visit','whatsapp','chatbot','manual','Friend'];
-        let validSource = allowedSources.includes(lead.source) ? lead.source : 'contact_form';
-        const newLeadRes = await leadAPI.create({
-          name: lead.name,
-          phone: lead.phone,
-          email: lead.email,
-          source: validSource,
-          remarks: lead.remarks,
-          assignedTo: employeeId,
-          status: 'assigned',
-          createdBy: 'dashboard'
-        });
-        await leadAPI.assign(newLeadRes.data._id, employeeId);
-        // Refresh leads
-        window.location.reload();
-      } catch (err) {
-        alert('Failed to convert and assign lead');
-      }
-      return;
-    }
+  // If this is a normalized contact/website lead, auto-convert to Lead collection and assign
+  if (lead.createdBy === 'website' && !lead.assignedTo) {
     try {
-      await leadAPI.assign(lead._id, employeeId);
-      window.location.reload();
+      const allowedSources = ['contact_form','schedule_visit','whatsapp','chatbot','manual','Friend'];
+      let validSource = allowedSources.includes(lead.source) ? lead.source : 'contact_form';
+      const newLeadRes = await leadAPI.create({
+        name: lead.name,
+        phone: lead.phone,
+        email: lead.email,
+        source: validSource,
+        remarks: lead.remarks,
+        assignedTo: employeeId,
+        status: 'assigned',
+        createdBy: 'dashboard'
+      });
+      await leadAPI.assign(newLeadRes.data._id, employeeId);
+      if (typeof fetchAssignedLeads === 'function') await fetchAssignedLeads();
     } catch (err) {
-      alert('Failed to assign lead');
+      alert('Failed to convert and assign lead');
     }
-  };
+    return;
+  }
+  try {
+    await leadAPI.assign(lead._id, employeeId);
+    if (typeof fetchAssignedLeads === 'function') await fetchAssignedLeads();
+  } catch (err) {
+    alert('Failed to assign lead');
+  }
+};
   // Announcements state
   const [announcements, setAnnouncements] = useState([]);
   // Notifications panel state
@@ -226,23 +225,33 @@ export default function DashboardPage() {
     return leadsArr;
   };
 
-  useEffect(() => {
-    const fetchAssignedLeads = async () => {
-      try {
-        const response = await leadAPI.getAll();
-        let leads = response.data || [];
-        // Sort by createdAt descending (recent first)
-        leads = leads.sort((a, b) => new Date(b.createdAt || b.created_at || 0) - new Date(a.createdAt || a.created_at || 0));
-        setAllLeads(leads); // Store all leads for manager
-        leads = filterLeadsForEmployee(leads, user);
-        setAssignedLeads(leads);
-      } catch (err) {
-        setAssignedLeads([]);
-        setAllLeads([]);
-      }
-    };
-    fetchAssignedLeads();
-  }, [user]);
+// Fetch assigned leads + include website contacts for manager/employee views
+const fetchAssignedLeads = useCallback(async () => {
+  try {
+    const response = await leadAPI.getAll({ page: 1, limit: 50 });
+
+    // Normalize possible response shapes
+    let leadsArr = [];
+    if (Array.isArray(response.data)) leadsArr = response.data;
+    else if (Array.isArray(response.data.leads)) leadsArr = response.data.leads;
+    else if (Array.isArray(response.data.data)) leadsArr = response.data.data;
+
+    // Normalize createdAt and sort newest first
+    leadsArr = leadsArr.map(l => ({ ...l, createdAt: l.createdAt || l.created_at || null }));
+    leadsArr.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+
+    setAllLeads(leadsArr);
+    setAssignedLeads(filterLeadsForEmployee(leadsArr, user));
+  } catch (err) {
+    console.error('Failed to fetch leads for dashboard:', err);
+    setAssignedLeads([]);
+    setAllLeads([]);
+  }
+}, [user]);
+
+useEffect(() => {
+  fetchAssignedLeads();
+}, [fetchAssignedLeads]);
 
   // Fetch attendance data for employee dashboard
   const loadAttendanceData = useCallback(async () => {
