@@ -425,18 +425,18 @@ export default function ChatRoom({ chatType = 'team', userId = null, userName = 
                     key={msg.id || `msg-${msgIndex}-${msg.created_at}`}
                     className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'}`}
                   >
-                    <div className={`flex items-end ${isMe ? 'flex-row-reverse' : ''} w-fit max-w-[85%] sm:max-w-[75%]`} style={{marginLeft: isMe ? 'auto' : 0, marginRight: isMe ? 0 : 'auto'}}>
+                    <div className={`flex items-end ${isMe ? 'flex-row-reverse' : ''} max-w-[85%] sm:max-w-[75%]`} style={{marginLeft: isMe ? 'auto' : 0, marginRight: isMe ? 0 : 'auto'}}>
                       {/* Avatar for others */}
                       {!isMe && (
                         <div
                           className={`w-8 h-8 rounded-full ${getAvatarColor(
                             avatarUserId
-                          )} flex items-center justify-center text-white text-sm font-bold shadow mr-2 border-2 border-white`}
+                          )} flex items-center justify-center text-white text-sm font-bold shadow mr-2 border-2 border-white flex-shrink-0`}
                         >
                           {getInitials(displayName)}
                         </div>
                       )}
-                      <div className={`max-w-[calc(100%-2.5rem)] ${isMe ? 'ml-2' : 'mr-2'}`}> 
+                      <div className={`min-w-0 ${isMe ? '' : 'mr-2'}`}> 
                         <div className={`flex items-center gap-2 mb-1 ${isMe ? 'justify-end flex-row-reverse' : ''}`}>
                           <span className="text-xs font-semibold text-gray-700">
                             {isMe ? 'You' : displayName}

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useContext } from 'react';
 import { reminderAPI } from '../api/client';
 import { AuthContext } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
 
 const POLL_INTERVAL = 5 * 60 * 1000; // 5 minutes
 const DISMISSED_STORAGE_KEY = 'dismissed_reminders';
@@ -42,6 +43,7 @@ const saveDismissAll = (allIds) => {
 
 export default function useReminderPopups() {
   const { user } = useContext(AuthContext);
+  const { on, off, connected } = useSocket() || {};
   const [reminders, setReminders] = useState([]);
   const [showPopup, setShowPopup] = useState(false);
   const [allReminders, setAllReminders] = useState([]); // unfiltered for badge
@@ -94,6 +96,25 @@ export default function useReminderPopups() {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [user, fetchReminders]);
+
+  // Auto-update on socket events (task/lead status changes)
+  useEffect(() => {
+    if (!on || !off || !connected) return;
+
+    const autoRefresh = () => {
+      // Small delay to let backend finish updating
+      setTimeout(() => fetchReminders(), 1000);
+    };
+
+    const events = [
+      'task-updated', 'task-created',
+      'lead-updated', 'lead-created', 'lead-remarks-updated',
+      'new-notification'
+    ];
+
+    events.forEach(event => on(event, autoRefresh));
+    return () => events.forEach(event => off(event, autoRefresh));
+  }, [on, off, connected, fetchReminders]);
 
   const dismissReminder = useCallback((id) => {
     saveDismissedId(id);

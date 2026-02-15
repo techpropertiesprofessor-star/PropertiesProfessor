@@ -3,9 +3,11 @@ const router = express.Router();
 const attendanceController = require('../controllers/attendance.controller');
 const auth = require('../middlewares/auth.middleware');
 const role = require('../middlewares/role.middleware');
+const requirePermission = require('../middlewares/permission.middleware');
 
-// All routes require authentication
+// All routes require authentication + Attendance permission
 router.use(auth);
+router.use(requirePermission('Attendance'));
 
 // Check-in / Check-out
 router.post('/check-in', attendanceController.checkIn);

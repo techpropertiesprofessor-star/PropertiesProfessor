@@ -348,7 +348,7 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
             <div className="flex flex-wrap gap-2 mb-4">
               {['All', 'Interested', 'Not Interested', 'Busy', 'Invalid Number'].map((tab) => {
                 const count = tab === 'All'
-                  ? leads.length
+                  ? leads.filter(l => !l.remarks || l.remarks === '' || !l.assignedTo).length
                   : leads.filter(l => l.remarks === tab).length;
                 const isActive = remarkFilter === tab;
                 const colorMap = {
@@ -391,10 +391,23 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
                   </thead>
                   <tbody>
                     {[...leads]
-                      .filter(l => remarkFilter === 'All' ? true : l.remarks === remarkFilter)
+                      .filter(l => {
+                        if (remarkFilter === 'All') {
+                          // Show only fresh (no remark) and unassigned leads
+                          return !l.remarks || l.remarks === '' || !l.assignedTo;
+                        }
+                        return l.remarks === remarkFilter;
+                      })
                       .sort((a, b) => {
-                      const remarkOrder = (r) => r === 'Interested' ? 0 : r === 'Busy' ? 1 : r === 'Invalid Number' ? 2 : r === 'Not Interested' ? 3 : 1;
-                      return remarkOrder(a.remarks) - remarkOrder(b.remarks);
+                        if (remarkFilter === 'All') {
+                          // Fresh/new leads first, then unassigned
+                          const aFresh = !a.remarks || a.remarks === '' ? 0 : 1;
+                          const bFresh = !b.remarks || b.remarks === '' ? 0 : 1;
+                          if (aFresh !== bFresh) return aFresh - bFresh;
+                          // Within same group, newer first
+                          return new Date(b.createdAt) - new Date(a.createdAt);
+                        }
+                        return 0;
                     }).map((lead, idx) => (
                       <tr key={lead._id} className={idx % 2 === 0 ? 'bg-white hover:bg-indigo-50 transition' : 'bg-indigo-50 hover:bg-indigo-100 transition'}>
                         <td className="px-4 py-3 align-middle whitespace-nowrap font-semibold text-gray-900">{lead.name || '-'}</td>

@@ -3,9 +3,11 @@ const router = express.Router();
 const chatController = require('../controllers/chat.controller');
 const auth = require('../middlewares/auth.middleware');
 const chatUpload = require('../middlewares/chatUpload.middleware');
+const requirePermission = require('../middlewares/permission.middleware');
 
-// All chat routes require authentication
+// All chat routes require authentication + Team Chat permission
 router.use(auth);
+router.use(requirePermission('Team Chat'));
 
 // Chat list and messages
 router.get('/chats', chatController.getChatList);

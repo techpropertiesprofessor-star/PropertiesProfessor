@@ -98,10 +98,10 @@ router.get('/today', async (req, res) => {
       console.error('Reminder: Tasks error:', err.message);
     }
 
-    // ========== 3. LEADS (assigned, not closed) ==========
+    // ========== 3. LEADS (assigned, pending action only) ==========
     try {
       const leadFilter = {
-        status: { $nin: ['closed'] }
+        status: { $in: ['new', 'assigned'] } // Only show actionable/pending leads
       };
       // EMPLOYEE sees only assigned leads
       if (userRole === 'EMPLOYEE') {

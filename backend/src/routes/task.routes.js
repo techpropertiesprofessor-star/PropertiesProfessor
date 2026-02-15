@@ -5,9 +5,11 @@ const router = express.Router();
 const taskController = require('../controllers/task.controller');
 const auth = require('../middlewares/auth.middleware');
 const role = require('../middlewares/role.middleware');
+const requirePermission = require('../middlewares/permission.middleware');
 
-// All routes require authentication FIRST
+// All routes require authentication + Tasks permission
 router.use(auth);
+router.use(requirePermission('Tasks'));
 
 // Employee can update their own assigned task status
 router.put('/:id/update-status', role(['EMPLOYEE']), taskController.updateTaskStatusByEmployee);

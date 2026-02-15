@@ -73,10 +73,9 @@ export default function ContentCalendarPage() {
 
   const handleEventClick = (event, e) => {
     e.stopPropagation();
-    const isOwnEvent = event.createdBy._id === user.id || event.createdBy === user.id;
     setSelectedDate(new Date(event.date));
     setEditingEvent(event);
-    setViewOnlyMode(!isOwnEvent);
+    setViewOnlyMode(true); // Always show view first when clicking existing event
     setEventForm({
       title: event.title,
       description: event.description || '',
@@ -420,7 +419,90 @@ export default function ContentCalendarPage() {
             </div>
 
             {/* Modal Content */}
-            <form onSubmit={viewOnlyMode ? (e) => e.preventDefault() : handleSubmit} className="p-6 pt-8 space-y-5 overflow-y-auto max-h-[calc(92vh-120px)]">
+            {viewOnlyMode ? (
+              /* ===== READ-ONLY DETAIL VIEW ===== */
+              <div className="p-6 pt-8 space-y-5 overflow-y-auto max-h-[calc(92vh-120px)]">
+                {/* Title */}
+                <div>
+                  <label className="flex items-center gap-1.5 text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">
+                    <FiFlag className="text-indigo-400" /> Event Title
+                  </label>
+                  <h3 className="text-lg font-bold text-gray-900">{eventForm.title}</h3>
+                </div>
+
+                {/* Description */}
+                {eventForm.description && (
+                  <div>
+                    <label className="flex items-center gap-1.5 text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">
+                      <FiInfo className="text-indigo-400" /> Description
+                    </label>
+                    <p className="text-sm text-gray-700 bg-gray-50 rounded-xl px-4 py-3 border border-gray-100 whitespace-pre-wrap">{eventForm.description}</p>
+                  </div>
+                )}
+
+                {/* Priority & Status Row */}
+                <div className="flex flex-wrap gap-3">
+                  <div className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold border ${
+                    eventForm.priority === 'high' ? 'bg-red-50 text-red-700 border-red-200' :
+                    eventForm.priority === 'medium' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                    'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  }`}>
+                    {eventForm.priority === 'high' ? '🔴 High Priority' : eventForm.priority === 'medium' ? '🔵 Medium Priority' : '🟢 Low Priority'}
+                  </div>
+                  <div className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold border ${
+                    eventForm.isPublished ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-gray-50 text-gray-600 border-gray-200'
+                  }`}>
+                    {eventForm.isPublished ? <><FiGlobe className="text-xs" /> Published</> : <><FiLock className="text-xs" /> Personal</>}
+                  </div>
+                </div>
+
+                {/* Color Tag */}
+                {editingEvent?.color && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Color Tag</span>
+                    <div className="w-6 h-6 rounded-lg shadow-sm border border-white" style={{ backgroundColor: editingEvent.color }} />
+                  </div>
+                )}
+
+                {/* Creator Info */}
+                {editingEvent && (
+                  <div className="flex items-center gap-3 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100">
+                    <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                      <FiUser className="text-white" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-blue-500 uppercase tracking-wider">Created by</div>
+                      <div className="text-sm font-semibold text-gray-800 truncate">
+                        {editingEvent.createdBy?.username || editingEvent.createdBy?.email || 'Unknown'}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex gap-2.5 pt-3 border-t border-gray-100">
+                  {/* Edit button for own events */}
+                  {editingEvent && (editingEvent.createdBy?._id === user.id || editingEvent.createdBy === user.id) && (
+                    <button
+                      type="button"
+                      onClick={() => setViewOnlyMode(false)}
+                      className="flex-1 px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold rounded-xl transition-all shadow-lg shadow-amber-200 hover:shadow-xl hover:-translate-y-0.5 flex items-center justify-center gap-2"
+                    >
+                      <FiEdit2 className="text-sm" /> Edit Event
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowEventModal(false)}
+                    className="flex-1 px-6 py-3 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-semibold rounded-xl transition-all shadow-lg shadow-indigo-200 hover:shadow-xl hover:-translate-y-0.5"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            ) : (
+            /* ===== EDIT / CREATE FORM ===== */
+            <form onSubmit={handleSubmit} className="p-6 pt-8 space-y-5 overflow-y-auto max-h-[calc(92vh-120px)]">
               {/* Title */}
               <div>
                 <label className="flex items-center gap-1.5 text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
@@ -430,12 +512,7 @@ export default function ContentCalendarPage() {
                   type="text"
                   value={eventForm.title}
                   onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })}
-                  disabled={viewOnlyMode}
-                  className={`w-full px-4 py-3 rounded-xl text-sm transition-all ${
-                    viewOnlyMode
-                      ? 'bg-gray-50 border border-gray-200 text-gray-700 cursor-default'
-                      : 'border-2 border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 hover:border-gray-300'
-                  }`}
+                  className="w-full px-4 py-3 rounded-xl text-sm transition-all border-2 border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 hover:border-gray-300"
                   placeholder="What's the event about?"
                   required
                 />
@@ -449,12 +526,7 @@ export default function ContentCalendarPage() {
                 <textarea
                   value={eventForm.description}
                   onChange={(e) => setEventForm({ ...eventForm, description: e.target.value })}
-                  disabled={viewOnlyMode}
-                  className={`w-full px-4 py-3 rounded-xl text-sm transition-all resize-none ${
-                    viewOnlyMode
-                      ? 'bg-gray-50 border border-gray-200 text-gray-700 cursor-default'
-                      : 'border-2 border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 hover:border-gray-300'
-                  }`}
+                  className="w-full px-4 py-3 rounded-xl text-sm transition-all resize-none border-2 border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 hover:border-gray-300"
                   placeholder="Add details about this event..."
                   rows="3"
                 />
@@ -467,40 +539,30 @@ export default function ContentCalendarPage() {
                   <label className="flex items-center gap-1.5 text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
                     <FiAlertCircle className="text-indigo-400" /> Priority
                   </label>
-                  {viewOnlyMode ? (
-                    <div className={`px-4 py-3 rounded-xl text-sm font-semibold border ${
-                      eventForm.priority === 'high' ? 'bg-red-50 text-red-700 border-red-200' :
-                      eventForm.priority === 'medium' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                      'bg-emerald-50 text-emerald-700 border-emerald-200'
-                    }`}>
-                      {eventForm.priority === 'high' ? '🔴 High' : eventForm.priority === 'medium' ? '🔵 Medium' : '🟢 Low'}
-                    </div>
-                  ) : (
-                    <div className="flex gap-1.5">
-                      {[
-                        { value: 'low', label: 'Low', color: 'emerald', emoji: '🟢' },
-                        { value: 'medium', label: 'Med', color: 'blue', emoji: '🔵' },
-                        { value: 'high', label: 'High', color: 'red', emoji: '🔴' },
-                      ].map(p => (
-                        <button
-                          key={p.value}
-                          type="button"
-                          onClick={() => setEventForm({ ...eventForm, priority: p.value })}
-                          className={`flex-1 px-2 py-2.5 rounded-xl text-xs font-bold transition-all border-2 ${
-                            eventForm.priority === p.value
-                              ? p.color === 'red'
-                                ? 'bg-red-50 border-red-400 text-red-700 shadow-sm'
-                                : p.color === 'blue'
-                                  ? 'bg-blue-50 border-blue-400 text-blue-700 shadow-sm'
-                                  : 'bg-emerald-50 border-emerald-400 text-emerald-700 shadow-sm'
-                              : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'
-                          }`}
-                        >
-                          {p.emoji} {p.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  <div className="flex gap-1.5">
+                    {[
+                      { value: 'low', label: 'Low', color: 'emerald', emoji: '🟢' },
+                      { value: 'medium', label: 'Med', color: 'blue', emoji: '🔵' },
+                      { value: 'high', label: 'High', color: 'red', emoji: '🔴' },
+                    ].map(p => (
+                      <button
+                        key={p.value}
+                        type="button"
+                        onClick={() => setEventForm({ ...eventForm, priority: p.value })}
+                        className={`flex-1 px-2 py-2.5 rounded-xl text-xs font-bold transition-all border-2 ${
+                          eventForm.priority === p.value
+                            ? p.color === 'red'
+                              ? 'bg-red-50 border-red-400 text-red-700 shadow-sm'
+                              : p.color === 'blue'
+                                ? 'bg-blue-50 border-blue-400 text-blue-700 shadow-sm'
+                                : 'bg-emerald-50 border-emerald-400 text-emerald-700 shadow-sm'
+                            : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'
+                        }`}
+                      >
+                        {p.emoji} {p.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Color Picker */}
@@ -513,14 +575,11 @@ export default function ContentCalendarPage() {
                       <button
                         key={color}
                         type="button"
-                        onClick={() => !viewOnlyMode && setEventForm({ ...eventForm, color })}
-                        disabled={viewOnlyMode}
+                        onClick={() => setEventForm({ ...eventForm, color })}
                         className={`w-8 h-8 rounded-lg transition-all flex-shrink-0 ${
-                          viewOnlyMode
-                            ? 'cursor-default opacity-50'
-                            : eventForm.color === color
-                              ? 'ring-2 ring-offset-2 ring-indigo-400 scale-110 shadow-md'
-                              : 'hover:scale-110 opacity-70 hover:opacity-100'
+                          eventForm.color === color
+                            ? 'ring-2 ring-offset-2 ring-indigo-400 scale-110 shadow-md'
+                            : 'hover:scale-110 opacity-70 hover:opacity-100'
                         }`}
                         style={{ backgroundColor: color }}
                       />
@@ -531,14 +590,12 @@ export default function ContentCalendarPage() {
 
               {/* Publish Checkbox (Manager Only) */}
               {isManager && (
-                <div className={`rounded-xl overflow-hidden transition-all ${
-                  viewOnlyMode ? 'opacity-70' : ''
-                }`}>
+                <div className="rounded-xl overflow-hidden transition-all">
                   <label className={`flex items-center gap-3.5 p-4 cursor-pointer border-2 rounded-xl transition-all ${
                     eventForm.isPublished
                       ? 'bg-purple-50 border-purple-300'
                       : 'bg-gray-50 border-gray-200 hover:border-gray-300'
-                  } ${viewOnlyMode ? 'cursor-default' : ''}`}>
+                  }`}>
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ${
                       eventForm.isPublished ? 'bg-purple-500' : 'bg-gray-300'
                     }`}>
@@ -560,12 +617,11 @@ export default function ContentCalendarPage() {
                       type="checkbox"
                       checked={eventForm.isPublished}
                       onChange={(e) => setEventForm({ ...eventForm, isPublished: e.target.checked })}
-                      disabled={viewOnlyMode}
                       className="sr-only"
                     />
                     <div className={`w-11 h-6 rounded-full transition-colors relative flex-shrink-0 ${
                       eventForm.isPublished ? 'bg-purple-500' : 'bg-gray-300'
-                    } ${viewOnlyMode ? 'opacity-60' : ''}`}>
+                    }`}>
                       <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-transform ${
                         eventForm.isPublished ? 'translate-x-[22px]' : 'translate-x-0.5'
                       }`} />
@@ -574,75 +630,38 @@ export default function ContentCalendarPage() {
                 </div>
               )}
 
-              {/* Event Creator Info (View-only mode) */}
-              {viewOnlyMode && editingEvent && (
-                <div className="flex items-center gap-3 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100">
-                  <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
-                    <FiUser className="text-white" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-bold text-blue-500 uppercase tracking-wider">Created by</div>
-                    <div className="text-sm font-semibold text-gray-800 truncate">
-                      {editingEvent.createdBy.username || editingEvent.createdBy.email}
-                    </div>
-                    <div className="flex items-center gap-1 mt-0.5">
-                      {eventForm.isPublished ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-purple-600 bg-purple-100 px-2 py-0.5 rounded-full">
-                          <FiGlobe className="text-[9px]" /> Published
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
-                          <FiLock className="text-[9px]" /> Personal
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {/* Action Buttons */}
               <div className="flex gap-2.5 pt-3 border-t border-gray-100">
-                {viewOnlyMode ? (
+                {editingEvent && (
                   <button
                     type="button"
-                    onClick={() => setShowEventModal(false)}
-                    className="w-full px-6 py-3 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-semibold rounded-xl transition-all shadow-lg shadow-indigo-200 hover:shadow-xl hover:-translate-y-0.5"
+                    onClick={handleDelete}
+                    className="px-4 py-3 bg-red-50 hover:bg-red-100 text-red-600 font-semibold rounded-xl transition-all border border-red-200 flex items-center gap-1.5"
                   >
-                    Close
+                    <FiTrash2 className="text-sm" />
+                    Delete
                   </button>
-                ) : (
-                  <>
-                    {editingEvent && (
-                      <button
-                        type="button"
-                        onClick={handleDelete}
-                        className="px-4 py-3 bg-red-50 hover:bg-red-100 text-red-600 font-semibold rounded-xl transition-all border border-red-200 flex items-center gap-1.5"
-                      >
-                        <FiTrash2 className="text-sm" />
-                        Delete
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setShowEventModal(false)}
-                      className="flex-1 px-6 py-3 border-2 border-gray-200 hover:bg-gray-50 text-gray-600 font-semibold rounded-xl transition-all"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="flex-1 px-6 py-3 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-semibold rounded-xl transition-all shadow-lg shadow-indigo-200 hover:shadow-xl hover:-translate-y-0.5 flex items-center justify-center gap-2"
-                    >
-                      {editingEvent ? (
-                        <><FiCheck /> Update</>
-                      ) : (
-                        <><FiPlus /> Create</>
-                      )}
-                    </button>
-                  </>
                 )}
+                <button
+                  type="button"
+                  onClick={() => setShowEventModal(false)}
+                  className="flex-1 px-6 py-3 border-2 border-gray-200 hover:bg-gray-50 text-gray-600 font-semibold rounded-xl transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-6 py-3 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-semibold rounded-xl transition-all shadow-lg shadow-indigo-200 hover:shadow-xl hover:-translate-y-0.5 flex items-center justify-center gap-2"
+                >
+                  {editingEvent ? (
+                    <><FiCheck /> Update</>
+                  ) : (
+                    <><FiPlus /> Create</>
+                  )}
+                </button>
               </div>
             </form>
+            )}
           </div>
         </div>
       )}

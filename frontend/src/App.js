@@ -35,6 +35,7 @@ import LeaveRequestFormPage from './pages/LeaveRequestFormPage';
 import InventoryPage from './pages/InventoryPage';
 import ContentCalendarPage from './pages/ContentCalendarPage';
 import PermissionsPage from './pages/PermissionsPage';
+import { PermissionRoute } from './context/PermissionRoute';
 import NotificationsPage from './pages/NotificationsPage';
 
 function App() {
@@ -87,25 +88,25 @@ function AppContent() {
       {!showPopup && <ReminderBadge count={reminderCount} onClick={openPopup} />}
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-        <Route path="/attendance" element={<ProtectedRoute><AttendancePage /></ProtectedRoute>} />
-        <Route path="/tasks" element={<ProtectedRoute><TasksPage /></ProtectedRoute>} />
-        <Route path="/tasks/:id" element={<ProtectedRoute><TaskDetailsPage /></ProtectedRoute>} />
-        <Route path="/chat" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
-        <Route path="/callers" element={<ProtectedRoute><CallersPage /></ProtectedRoute>} />
-        <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-        <Route path="/employees" element={<ProtectedRoute><EmployeesPage /></ProtectedRoute>} />
-        <Route path="/manager-dashboard" element={<ProtectedRoute><ManagerDashboard /></ProtectedRoute>} />
-        <Route path="/leads" element={<ProtectedRoute><LeadsPage /></ProtectedRoute>} />
-        <Route path="/leaves" element={<ProtectedRoute><LeaveRequestsPage /></ProtectedRoute>} />
-        <Route path="/leaves/new" element={<ProtectedRoute><LeaveRequestFormPage /></ProtectedRoute>} />
-        <Route path="/inventory" element={<ProtectedRoute><InventoryPage /></ProtectedRoute>} />
-        <Route path="/calendar" element={<ProtectedRoute><ContentCalendarPage /></ProtectedRoute>} />
-        <Route path="/permissions" element={<ProtectedRoute><PermissionsPage /></ProtectedRoute>} />
+        <Route path="/dashboard" element={<ProtectedRoute><PermissionRoute permission="Dashboard"><DashboardPage /></PermissionRoute></ProtectedRoute>} />
+        <Route path="/attendance" element={<ProtectedRoute><PermissionRoute permission="Attendance"><AttendancePage /></PermissionRoute></ProtectedRoute>} />
+        <Route path="/tasks" element={<ProtectedRoute><PermissionRoute permission="Tasks"><TasksPage /></PermissionRoute></ProtectedRoute>} />
+        <Route path="/tasks/:id" element={<ProtectedRoute><PermissionRoute permission="Tasks"><TaskDetailsPage /></PermissionRoute></ProtectedRoute>} />
+        <Route path="/chat" element={<ProtectedRoute><PermissionRoute permission="Team Chat"><ChatPage /></PermissionRoute></ProtectedRoute>} />
+        <Route path="/callers" element={<ProtectedRoute><PermissionRoute permission="Caller"><CallersPage /></PermissionRoute></ProtectedRoute>} />
+        <Route path="/profile" element={<ProtectedRoute><PermissionRoute permission="Profile"><ProfilePage /></PermissionRoute></ProtectedRoute>} />
+        <Route path="/employees" element={<ProtectedRoute><PermissionRoute permission="Employees"><EmployeesPage /></PermissionRoute></ProtectedRoute>} />
+        <Route path="/manager-dashboard" element={<ProtectedRoute><PermissionRoute permission="Dashboard"><ManagerDashboard /></PermissionRoute></ProtectedRoute>} />
+        <Route path="/leads" element={<ProtectedRoute><PermissionRoute permission="Leads"><LeadsPage /></PermissionRoute></ProtectedRoute>} />
+        <Route path="/leaves" element={<ProtectedRoute><PermissionRoute permission="Leave Request"><LeaveRequestsPage /></PermissionRoute></ProtectedRoute>} />
+        <Route path="/leaves/new" element={<ProtectedRoute><PermissionRoute permission="Leave Request"><LeaveRequestFormPage /></PermissionRoute></ProtectedRoute>} />
+        <Route path="/inventory" element={<ProtectedRoute><PermissionRoute permission="Inventory"><InventoryPage /></PermissionRoute></ProtectedRoute>} />
+        <Route path="/calendar" element={<ProtectedRoute><PermissionRoute permission="Calendar"><ContentCalendarPage /></PermissionRoute></ProtectedRoute>} />
+        <Route path="/permissions" element={<ProtectedRoute><PermissionRoute permission="Employees"><PermissionsPage /></PermissionRoute></ProtectedRoute>} />
         <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
-        <Route path="/notes" element={<ProtectedRoute><NotesPage /></ProtectedRoute>} />
-        <Route path="/announcements" element={<ProtectedRoute><AnnouncementsPage /></ProtectedRoute>} />
-        <Route path="/manager/analytics" element={<ProtectedRoute><ManagerAnalyticsDashboard /></ProtectedRoute>} />
+        <Route path="/notes" element={<ProtectedRoute><PermissionRoute permission="Notes"><NotesPage /></PermissionRoute></ProtectedRoute>} />
+        <Route path="/announcements" element={<ProtectedRoute><PermissionRoute permission="Announcements"><AnnouncementsPage /></PermissionRoute></ProtectedRoute>} />
+        <Route path="/manager/analytics" element={<ProtectedRoute><PermissionRoute permission="Dashboard"><ManagerAnalyticsDashboard /></PermissionRoute></ProtectedRoute>} />
         <Route path="/" element={<Navigate to="/dashboard" />} />
       </Routes>
     </>

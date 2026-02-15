@@ -4,6 +4,7 @@ const router = express.Router();
 const leadController = require('../controllers/lead.controller');
 const auth = require('../middlewares/auth.middleware');
 const role = require('../middlewares/role.middleware');
+const requirePermission = require('../middlewares/permission.middleware');
 const multer = require('multer');
 const path = require('path');
 
@@ -38,8 +39,8 @@ router.get('/uploads/history', leadController.getUploadHistory);
 // Leads download (MANAGER/ADMIN only)
 router.get('/download', auth, role(['MANAGER', 'ADMIN']), leadController.downloadLeadsCSV);
 
-// GET /api/leads should be public for dashboard listing
-router.get('/', auth, leadController.getLeads);
+// GET /api/leads - requires Leads permission
+router.get('/', auth, requirePermission('Leads'), leadController.getLeads);
 
 router.post('/:id/assign', auth, role(['MANAGER', 'ADMIN']), leadController.assignLead);
 
@@ -48,7 +49,7 @@ router.post('/:id/comments', leadController.addComment);
 router.get('/:id/comments', leadController.getComments);
 
 // Remarks update (both EMPLOYEE and MANAGER can update)
-router.put('/:id/remarks', auth, leadController.updateRemarks);
+router.put('/:id/remarks', auth, requirePermission('Leads'), leadController.updateRemarks);
 
 // CRUD
 router.post('/', leadController.createLead); // <-- Add this line for manual lead creation

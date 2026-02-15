@@ -17,8 +17,11 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// All routes require authentication
+const requirePermission = require('../middlewares/permission.middleware');
+
+// All routes require authentication + Inventory permission
 router.use(auth);
+router.use(requirePermission('Inventory'));
 
 // Project routes
 router.get('/projects', inventoryController.getProjects);
