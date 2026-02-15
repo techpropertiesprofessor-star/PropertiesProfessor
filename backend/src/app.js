@@ -31,6 +31,16 @@ app.use(trackApiRequest);
 /* ========================
    ROUTES
 ======================== */
+
+// Pre-load models so they are registered with Mongoose before analytics uses them
+require('./models/Task');
+require('./models/Lead');
+require('./models/InventoryUnit');
+require('./models/Caller');
+require('./models/Attendance');
+require('./models/User');
+require('./models/Employee');
+
 app.use('/api/auth', require('./routes/auth.routes'));
 app.use('/api/users', require('./routes/user.routes'));
 app.use('/api/employees', require('./routes/employee.routes'));
