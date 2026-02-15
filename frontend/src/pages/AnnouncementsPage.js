@@ -68,7 +68,7 @@ export default function AnnouncementsPage() {
   };
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-gray-100 to-blue-50">
+    <div className="flex h-screen overflow-hidden bg-gradient-to-br from-gray-100 to-blue-50">
       <div className="hidden md:block"><Sidebar /></div>
       <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
         <Header user={user} />

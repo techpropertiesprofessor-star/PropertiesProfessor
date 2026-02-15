@@ -257,7 +257,7 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
   };
 
   return (
-    <div className="flex h-screen w-full bg-gradient-to-br from-blue-50 via-white to-indigo-100">
+    <div className="flex h-screen w-full overflow-hidden bg-gradient-to-br from-blue-50 via-white to-indigo-100">
       <div className="hidden md:block"><Sidebar /></div>
       <div className={`flex-1 flex flex-col overflow-hidden ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
         <Header user={user} newMessageCount={newMessageCount} resetNewMessageCount={resetNewMessageCount} />

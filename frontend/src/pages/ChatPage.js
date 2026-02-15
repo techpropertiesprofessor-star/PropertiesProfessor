@@ -42,7 +42,7 @@ export default function ChatPage({ newMessageCount = 0, resetNewMessageCount }) 
 
   if (loading) {
     return (
-      <div className="flex h-screen bg-gray-50">
+      <div className="flex h-screen overflow-hidden bg-gray-50">
         <div className="hidden md:block"><Sidebar /></div>
         <div className={`flex-1 flex flex-col overflow-hidden ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
           <Header user={user} onLogout={logout} newMessageCount={newMessageCount} resetNewMessageCount={resetNewMessageCount} />
@@ -56,7 +56,7 @@ export default function ChatPage({ newMessageCount = 0, resetNewMessageCount }) 
 
   if (!canViewChat) {
     return (
-      <div className="flex h-screen bg-gray-50">
+      <div className="flex h-screen overflow-hidden bg-gray-50">
         <div className="hidden md:block"><Sidebar /></div>
         <div className={`flex-1 flex flex-col overflow-hidden ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
           <Header user={user} onLogout={logout} newMessageCount={newMessageCount} resetNewMessageCount={resetNewMessageCount} />
@@ -72,7 +72,7 @@ export default function ChatPage({ newMessageCount = 0, resetNewMessageCount }) 
     );
   }
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen overflow-hidden bg-gray-50">
       <div className="hidden md:block"><Sidebar /></div>
       
       <div className={`flex-1 flex flex-col overflow-hidden ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>

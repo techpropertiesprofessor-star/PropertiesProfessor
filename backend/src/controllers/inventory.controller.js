@@ -525,23 +525,57 @@ exports.generateUnitPDF = async (req, res, next) => {
       ).join(' ');
     };
     
-    // Load header image if exists
-    let headerImageData = null;
-    let headerHeight = 0;
-    const headerPath = path.join(__dirname, '../../uploads/pdf-header.png');
-    if (fs.existsSync(headerPath)) {
-      const headerBuffer = fs.readFileSync(headerPath);
-      headerImageData = `data:image/png;base64,${headerBuffer.toString('base64')}`;
-      headerHeight = 35;
-      doc.addImage(headerImageData, 'PNG', 0, 0, 210, headerHeight);
-      
-      // Add line below header
-      doc.setDrawColor(52, 73, 94);
-      doc.setLineWidth(0.5);
-      doc.line(15, headerHeight + 2, 195, headerHeight + 2);
+    // ===== NEW HEADER: Logo on left + "PROPERTIES PROFESSOR" in center =====
+    let headerHeight = 30;
+    
+    // Load company logo
+    const logoPath = path.join(__dirname, '../../uploads/logo.png');
+    if (fs.existsSync(logoPath)) {
+      const logoBuffer = fs.readFileSync(logoPath);
+      const logoData = `data:image/png;base64,${logoBuffer.toString('base64')}`;
+      doc.addImage(logoData, 'PNG', 15, 5, 22, 22);
     }
     
-    let yPos = headerHeight > 0 ? headerHeight + 8 : 15;
+    // Company name in center of header - two colors, Times Roman font
+    doc.setFontSize(22);
+    doc.setFont('times', 'bold');
+    
+    // Calculate positions for two-color text centered at 105
+    const propText = 'PROPERTIES ';
+    const profText = 'PROFESSOR';
+    const propWidth = doc.getTextWidth(propText);
+    const profWidth = doc.getTextWidth(profText);
+    const totalWidth = propWidth + profWidth;
+    const startX_header = 105 - totalWidth / 2;
+    
+    // PROPERTIES in #fb8500 (orange)
+    doc.setTextColor(251, 133, 0);
+    doc.text(propText, startX_header, 16);
+    
+    // PROFESSOR in #005f73 (teal)
+    doc.setTextColor(0, 95, 115);
+    doc.text(profText, startX_header + propWidth, 16);
+    
+    // Tagline
+    doc.setFontSize(9);
+    doc.setFont('times', 'normal');
+    doc.setTextColor(100, 100, 100);
+    doc.text('Your Trusted Real Estate Partner', 105, 23, { align: 'center' });
+    
+    // Header separator line
+    doc.setDrawColor(25, 25, 112);
+    doc.setLineWidth(0.8);
+    doc.line(15, headerHeight, 195, headerHeight);
+    
+    // Load director signature image for footer (will be used on every page)
+    let signatureImageData = null;
+    const signaturePath = path.join(__dirname, '../../uploads/directorsignature.png');
+    if (fs.existsSync(signaturePath)) {
+      const sigBuffer = fs.readFileSync(signaturePath);
+      signatureImageData = `data:image/png;base64,${sigBuffer.toString('base64')}`;
+    }
+    
+    let yPos = headerHeight + 8;
     
     // Property Highlight Box
     doc.setFillColor(41, 128, 185); // Professional blue
@@ -648,8 +682,8 @@ exports.generateUnitPDF = async (req, res, next) => {
     
     yPos = Math.max(yPos, startY + 63);
     
-    // Pricing Section
-    if (unit.price || unit.rent) {
+    // Pricing Section - Only Final Price, Price per Sq.ft, BHK
+    if (unit.price || unit.rent || unit.bhk_type) {
       yPos += 5;
       doc.setFillColor(52, 73, 94);
       doc.rect(15, yPos, 180, 8, 'F');
@@ -662,108 +696,50 @@ exports.generateUnitPDF = async (req, res, next) => {
       doc.setFontSize(10);
       doc.setTextColor(0, 0, 0);
       
-      if (unit.listing_type === 'sale') {
-        if (unit.base_price) {
-          doc.setFont('helvetica', 'bold');
-          doc.setTextColor(52, 73, 94);
-          doc.text('Base Price:', 20, yPos);
-          doc.setFont('helvetica', 'normal');
-          doc.setTextColor(0, 0, 0);
-          doc.text(`Rs ${(unit.base_price / 100000).toFixed(2)} Lac`, 60, yPos);
-          yPos += 7;
-        }
-        if (unit.price) {
-          doc.setFont('helvetica', 'bold');
-          doc.setTextColor(52, 73, 94);
-          doc.text('Final Price:', 20, yPos);
-          doc.setFont('helvetica', 'normal');
-          doc.setTextColor(0, 0, 0);
-          doc.text(`Rs ${(unit.price / 100000).toFixed(2)} Lac`, 60, yPos);
-          yPos += 7;
-        }
-        if (unit.price_per_sqft) {
-          doc.setFont('helvetica', 'bold');
-          doc.setTextColor(52, 73, 94);
-          doc.text('Price per Sq.ft:', 20, yPos);
-          doc.setFont('helvetica', 'normal');
-          doc.setTextColor(0, 0, 0);
-          doc.text(`Rs ${unit.price_per_sqft.toLocaleString('en-IN')}`, 60, yPos);
-          yPos += 7;
-        }
-      } else if (unit.listing_type === 'rent') {
-        if (unit.rent) {
-          doc.setFont('helvetica', 'bold');
-          doc.setTextColor(52, 73, 94);
-          doc.text('Monthly Rent:', 20, yPos);
-          doc.setFont('helvetica', 'normal');
-          doc.setTextColor(0, 0, 0);
-          doc.text(`Rs ${unit.rent.toLocaleString('en-IN')}`, 60, yPos);
-          yPos += 7;
-        }
-        if (unit.security_deposit) {
-          doc.setFont('helvetica', 'bold');
-          doc.setTextColor(52, 73, 94);
-          doc.text('Security Deposit:', 20, yPos);
-          doc.setFont('helvetica', 'normal');
-          doc.setTextColor(0, 0, 0);
-          doc.text(`Rs ${unit.security_deposit.toLocaleString('en-IN')}`, 60, yPos);
-          yPos += 7;
-        }
+      // BHK
+      if (unit.bhk_type) {
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(52, 73, 94);
+        doc.text('BHK:', 20, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0, 0, 0);
+        doc.text(unit.bhk_type, 60, yPos);
+        yPos += 7;
       }
+      
+      // Final Price
+      if (unit.price) {
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(52, 73, 94);
+        doc.text('Final Price:', 20, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0, 0, 0);
+        doc.text(`Rs ${(unit.price / 100000).toFixed(2)} Lac`, 60, yPos);
+        yPos += 7;
+      } else if (unit.rent) {
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(52, 73, 94);
+        doc.text('Monthly Rent:', 20, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0, 0, 0);
+        doc.text(`Rs ${unit.rent.toLocaleString('en-IN')}`, 60, yPos);
+        yPos += 7;
+      }
+      
+      // Price per Sq.ft
+      if (unit.price_per_sqft) {
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(52, 73, 94);
+        doc.text('Price per Sq.ft:', 20, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0, 0, 0);
+        doc.text(`Rs ${unit.price_per_sqft.toLocaleString('en-IN')}`, 60, yPos);
+        yPos += 7;
+      }
+      
       yPos += 5;
     }
     
-    // Owner Information Section
-    if (unit.owner_name || unit.owner_phone || unit.owner_email) {
-      yPos += 5;
-      if (yPos > 220) {
-        doc.addPage();
-        yPos = 20;
-      }
-      
-      doc.setFillColor(52, 73, 94);
-      doc.rect(15, yPos, 180, 8, 'F');
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(255, 255, 255);
-      doc.text('OWNER INFORMATION', 20, yPos + 6);
-      
-      yPos += 14;
-      doc.setFontSize(10);
-      doc.setTextColor(0, 0, 0);
-      
-      if (unit.owner_name) {
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(52, 73, 94);
-        doc.text('Name:', 20, yPos);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(0, 0, 0);
-        doc.text(unit.owner_name, 60, yPos);
-        yPos += 7;
-      }
-      
-      if (unit.owner_phone) {
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(52, 73, 94);
-        doc.text('Phone:', 20, yPos);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(0, 0, 0);
-        doc.text(unit.owner_phone, 60, yPos);
-        yPos += 7;
-      }
-      
-      if (unit.owner_email) {
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(52, 73, 94);
-        doc.text('Email:', 20, yPos);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(0, 0, 0);
-        doc.text(unit.owner_email, 60, yPos);
-        yPos += 7;
-      }
-      
-      yPos += 3;
-    }
     
     
 
@@ -906,69 +882,6 @@ exports.generateUnitPDF = async (req, res, next) => {
       }
 
       yPos = maxY + 10;
-
-      // Tenant Information section (always placed on the next page)
-      // Move Tenant Information to a fresh page regardless of presence
-      doc.addPage();
-      yPos = 20;
-
-      doc.setFillColor(52, 73, 94);
-      doc.rect(15, yPos, 180, 8, 'F');
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(255, 255, 255);
-      doc.text('TENANT INFORMATION', 20, yPos + 6);
-
-      yPos += 14;
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(0, 0, 0);
-
-      const tColsX = [20, 110];
-
-      // Name (leave blank if missing)
-      doc.setFont('helvetica', 'bold');
-      doc.text('Name:', tColsX[0], yPos);
-      doc.setFont('helvetica', 'normal');
-      if (unit.tenant_name) {
-        doc.text(String(unit.tenant_name), tColsX[0] + 30, yPos);
-      }
-
-      // Contact (leave blank if missing)
-      doc.setFont('helvetica', 'bold');
-      doc.text('Phone:', tColsX[1], yPos);
-      doc.setFont('helvetica', 'normal');
-      if (unit.tenant_contact) {
-        doc.text(String(unit.tenant_contact), tColsX[1] + 28, yPos);
-      }
-
-      yPos += 8;
-
-      // Start Date (leave blank if missing)
-      doc.setFont('helvetica', 'bold');
-      doc.text('Start Date:', tColsX[0], yPos);
-      doc.setFont('helvetica', 'normal');
-      if (unit.tenant_start_date) {
-        try {
-          doc.text(new Date(unit.tenant_start_date).toLocaleDateString('en-IN'), tColsX[0] + 36, yPos);
-        } catch (e) {
-          doc.text(String(unit.tenant_start_date), tColsX[0] + 36, yPos);
-        }
-      }
-
-      // End Date (leave blank if missing)
-      doc.setFont('helvetica', 'bold');
-      doc.text('End Date:', tColsX[1], yPos);
-      doc.setFont('helvetica', 'normal');
-      if (unit.tenant_end_date) {
-        try {
-          doc.text(new Date(unit.tenant_end_date).toLocaleDateString('en-IN'), tColsX[1] + 30, yPos);
-        } catch (e) {
-          doc.text(String(unit.tenant_end_date), tColsX[1] + 30, yPos);
-        }
-      }
-
-      yPos += 10;
     }
     
     // ADDITIONAL INFORMATION
@@ -1003,82 +916,70 @@ exports.generateUnitPDF = async (req, res, next) => {
       }
     }
     
-    // Footer with company branding
+    // Footer with company branding + signature on every page
     const pageCount = doc.internal.getNumberOfPages();
-    
-    // Load footer image if exists
-    let footerImageData = null;
-    let footerHeight = 0;
-    const footerPath = path.join(__dirname, '../../uploads/pdf-footer.png');
-    if (fs.existsSync(footerPath)) {
-      const footerBuffer = fs.readFileSync(footerPath);
-      footerImageData = `data:image/png;base64,${footerBuffer.toString('base64')}`;
-      footerHeight = 25; // Footer height
-    }
     
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i);
       
-      if (footerImageData) {
-        // Add footer image at bottom of page - clearly visible
-        const footerY = 297 - footerHeight; // A4 height is 297mm
-        doc.addImage(footerImageData, 'PNG', 0, footerY, 210, footerHeight); // Full width
+      // Add header on pages after page 1
+      if (i > 1) {
+        // Logo on left
+        if (fs.existsSync(logoPath)) {
+          const logoBuffer2 = fs.readFileSync(logoPath);
+          const logoData2 = `data:image/png;base64,${logoBuffer2.toString('base64')}`;
+          doc.addImage(logoData2, 'PNG', 15, 5, 22, 22);
+        }
         
-        // Add generation info on top of footer if needed
-        doc.setFontSize(7);
-        doc.setFont('helvetica', 'italic');
-        doc.setTextColor(60, 60, 60);
-        doc.text(`Generated: ${new Date().toLocaleDateString('en-IN')} ${new Date().toLocaleTimeString('en-IN', {hour: '2-digit', minute: '2-digit'})}`, 105, footerY - 2, { align: 'center' });
-        doc.text(`Page ${i} of ${pageCount}`, 190, footerY - 2, { align: 'right' });
-      } else {
-        // Fallback text footer with company details
-        const footerStartY = 260;
+        // Company name in center - two colors, Times Roman
+        doc.setFontSize(22);
+        doc.setFont('times', 'bold');
+        const propW2 = doc.getTextWidth('PROPERTIES ');
+        const profW2 = doc.getTextWidth('PROFESSOR');
+        const totalW2 = propW2 + profW2;
+        const startX2 = 105 - totalW2 / 2;
         
-        // Line at top of footer
-        doc.setDrawColor(52, 73, 94);
-        doc.setLineWidth(0.5);
-        doc.line(15, footerStartY, 195, footerStartY);
+        doc.setTextColor(251, 133, 0);
+        doc.text('PROPERTIES ', startX2, 16);
+        doc.setTextColor(0, 95, 115);
+        doc.text('PROFESSOR', startX2 + propW2, 16);
         
-        // Company details - center aligned (use Times New Roman for a classic look)
         doc.setFontSize(9);
-        doc.setFont('times', 'bold');
-        doc.setTextColor(52, 73, 94);
-        doc.text('Properties Professor, ATS, BOUQUET, B-307, Block B, Sector 132, Noida, Uttar Pradesh, 201304 (INDIA)', 105, footerStartY + 6, { align: 'center' });
-        
-        // Contact line with bold labels (Times)
-        doc.setFontSize(8);
-        doc.setTextColor(60, 60, 60);
-        
-        const line1 = 'E-mail: admin@propertiesprofessor.com   Website:  propertiesprofessor.com';
-        const line2 = 'Tel.: 01204454649   Phone No.: +91 8228000068';
-        
-        // Line 1: Email and Website
-        doc.setFont('times', 'bold');
-        doc.text('E-mail:', 105 - doc.getTextWidth(line1) / 2, footerStartY + 11);
         doc.setFont('times', 'normal');
-        doc.text(' admin@propertiesprofessor.com   ', 105 - doc.getTextWidth(line1) / 2 + doc.getStringUnitWidth('E-mail:') * 8 / doc.internal.scaleFactor, footerStartY + 11);
-        doc.setFont('times', 'bold');
-        doc.text('Website:', 105 - doc.getTextWidth(line1) / 2 + doc.getStringUnitWidth('E-mail: admin@propertiesprofessor.com   ') * 8 / doc.internal.scaleFactor, footerStartY + 11);
-        doc.setFont('times', 'normal');
-        doc.text(' propertiesprofessor.com', 105 - doc.getTextWidth(line1) / 2 + doc.getStringUnitWidth('E-mail: admin@propertiesprofessor.com   Website:') * 8 / doc.internal.scaleFactor, footerStartY + 11);
-        
-        // Line 2: Tel and Phone
-        doc.setFont('times', 'bold');
-        doc.text('Tel.:', 105 - doc.getTextWidth(line2) / 2, footerStartY + 16);
-        doc.setFont('times', 'normal');
-        doc.text(' 01204454649   ', 105 - doc.getTextWidth(line2) / 2 + doc.getStringUnitWidth('Tel.:') * 8 / doc.internal.scaleFactor, footerStartY + 16);
-        doc.setFont('times', 'bold');
-        doc.text('Phone No.:', 105 - doc.getTextWidth(line2) / 2 + doc.getStringUnitWidth('Tel.: 01204454649   ') * 8 / doc.internal.scaleFactor, footerStartY + 16);
-        doc.setFont('times', 'normal');
-        doc.text(' +91 8228000068', 105 - doc.getTextWidth(line2) / 2 + doc.getStringUnitWidth('Tel.: 01204454649   Phone No.:') * 8 / doc.internal.scaleFactor, footerStartY + 16);
-        
-        // Generation info (Times italic)
-        doc.setFontSize(7);
-        doc.setFont('times', 'italic');
         doc.setTextColor(100, 100, 100);
-        doc.text(`Generated: ${new Date().toLocaleDateString('en-IN')} ${new Date().toLocaleTimeString('en-IN', {hour: '2-digit', minute: '2-digit'})}`, 105, footerStartY + 22, { align: 'center' });
-        doc.text(`Page ${i} of ${pageCount}`, 190, footerStartY + 22, { align: 'right' });
+        doc.text('Your Trusted Real Estate Partner', 105, 23, { align: 'center' });
+        
+        doc.setDrawColor(25, 25, 112);
+        doc.setLineWidth(0.8);
+        doc.line(15, 30, 195, 30);
       }
+      
+      // Director signature image at bottom-right, above footer line
+      if (signatureImageData) {
+        doc.addImage(signatureImageData, 'PNG', 145, 222, 50, 28);
+      }
+      
+      // Footer line
+      const footerLineY = 250;
+      doc.setDrawColor(25, 25, 112);
+      doc.setLineWidth(0.5);
+      doc.line(15, footerLineY, 195, footerLineY);
+      
+      // Company address - center aligned
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(80, 80, 80);
+      doc.text('Properties Professor, ATS BOUQUET, B-307, Block B, Sector 132, Noida, UP 201304', 105, footerLineY + 5, { align: 'center' });
+      doc.text('Email: admin@propertiesprofessor.com  |  Tel: 01204454649  |  Phone: +91 8228000068', 105, footerLineY + 10, { align: 'center' });
+      
+      // Page number on left
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'italic');
+      doc.setTextColor(120, 120, 120);
+      doc.text(`Page ${i} of ${pageCount}`, 20, footerLineY + 15);
+      
+      // Generation date
+      doc.text(`Generated: ${new Date().toLocaleDateString('en-IN')}`, 20, footerLineY + 19);
     }
     
     const pdfBuffer = Buffer.from(doc.output('arraybuffer'));

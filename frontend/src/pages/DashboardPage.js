@@ -534,7 +534,7 @@ useEffect(() => {
   }
 
   return (
-    <div className="flex h-screen bg-gradient-to-tr from-blue-50 via-indigo-50 to-yellow-50">
+    <div className="flex h-screen overflow-hidden bg-gradient-to-tr from-blue-50 via-indigo-50 to-yellow-50">
       <div className="hidden md:block"><Sidebar /></div>
       <div className={`flex-1 flex flex-col overflow-hidden ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
         <Header

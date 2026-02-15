@@ -279,6 +279,9 @@ export const calendarAPI = {
     api.get("/calendar/events", {
       params: { year, month },
     }),
+  createEvent: (data) => api.post("/calendar/events", data),
+  updateEvent: (id, data) => api.put(`/calendar/events/${id}`, data),
+  deleteEvent: (id) => api.delete(`/calendar/events/${id}`),
 };
 
 export default api;

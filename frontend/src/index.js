@@ -11,5 +11,5 @@ root.render(
   </React.StrictMode>
 );
 
-// Register service worker for PWA capabilities
-serviceWorkerRegistration.register();
+// Register service worker for PWA capabilities (only works in production builds)
+serviceWorkerRegistration.unregister();

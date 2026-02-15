@@ -1,7 +1,7 @@
 /* eslint-disable no-restricted-globals */
 
-const CACHE_NAME = 'pp-crm-v1';
-const API_CACHE_NAME = 'pp-crm-api-v1';
+const CACHE_NAME = 'pp-crm-v2';
+const API_CACHE_NAME = 'pp-crm-api-v2';
 
 // Static assets to pre-cache on install
 const STATIC_ASSETS = [

@@ -575,7 +575,7 @@ function InventoryPage() {
 
   // Render UI (kept the original structure / classes)
   return (
-    <div className="flex h-screen w-full bg-gradient-to-br from-emerald-50 via-white to-teal-100">
+    <div className="flex h-screen w-full overflow-hidden bg-gradient-to-br from-emerald-50 via-white to-teal-100">
       <div className="hidden md:block">
         <Sidebar />
       </div>

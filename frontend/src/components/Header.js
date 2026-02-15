@@ -368,7 +368,7 @@ export default function Header({ user, onLogout, onSearch, notificationCount = 0
 
   return (
     <>
-      <header className="z-40 flex-shrink-0 bg-gradient-to-r from-yellow-100 via-yellow-200 to-yellow-100 shadow-sm border-b border-yellow-300">
+      <header className="sticky top-0 z-40 flex-shrink-0 bg-gradient-to-r from-yellow-100 via-yellow-200 to-yellow-100 shadow-sm border-b border-yellow-300">
         <div className="flex items-center justify-between px-2 sm:px-4 md:px-6 py-2 sm:py-2.5">
         {/* Brand section with role badge */}
         <div className="flex items-center space-x-2 sm:space-x-3 overflow-hidden">
