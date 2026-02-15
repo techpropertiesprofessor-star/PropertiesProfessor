@@ -82,8 +82,8 @@ export default function Sidebar({
   const hasPermission = (item) => {
     const userRole = user?.role?.toUpperCase();
     
-    // Manager Analytics - only for managers
-    if (item.managerOnly && userRole !== 'MANAGER') {
+    // Manager Analytics - only for managers and admins
+    if (item.managerOnly && userRole !== 'MANAGER' && userRole !== 'ADMIN') {
       return false;
     }
     

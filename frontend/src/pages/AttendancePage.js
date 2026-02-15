@@ -78,6 +78,8 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
   const [distanceFromOffice, setDistanceFromOffice] = useState(null);
   const [withinRadius, setWithinRadius] = useState(false);
   const [checkedInToday, setCheckedInToday] = useState(false);
+  const [checkedOutToday, setCheckedOutToday] = useState(false);
+  const [isAfterNoon, setIsAfterNoon] = useState(new Date().getHours() >= 12);
   const [markedLocation, setMarkedLocation] = useState(null);
   const [locationError, setLocationError] = useState('');
   
@@ -145,6 +147,14 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
   }, [user]);
   useRealtimeData(['attendance-updated', 'team-attendance-updated'], refreshAttendance);
 
+  // Update isAfterNoon every minute to auto-enable checkout button at 12PM
+  useEffect(() => {
+    const noonTimer = setInterval(() => {
+      setIsAfterNoon(new Date().getHours() >= 12);
+    }, 60000);
+    return () => clearInterval(noonTimer);
+  }, []);
+
   useEffect(() => {
     if (!permissionsLoading && !canViewAttendance) {
       navigate('/');
@@ -171,7 +181,9 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
     try {
       const response = await attendanceAPI.getHistory();
       const today = response.data.find(a => isToday(new Date(a.date)));
-      if (today && today.check_in) setCheckedInToday(true);
+      if (today && (today.check_in || today.checkIn)) setCheckedInToday(true);
+      if (today && (today.check_out || today.checkOut)) setCheckedOutToday(true);
+      setIsAfterNoon(new Date().getHours() >= 12);
     } catch (err) {
       console.error('Failed to check today attendance:', err);
     }
@@ -295,6 +307,24 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
     }
   };
 
+  const handleCheckOut = async () => {
+    if (!canMarkAttendance) {
+      alert('You do not have permission.');
+      return;
+    }
+    setLoading(true);
+    try {
+      await attendanceAPI.checkOut();
+      setCheckedOutToday(true);
+      await loadAttendance();
+      alert('✓ Checked out successfully!');
+    } catch (err) {
+      alert(err?.response?.data?.message || err?.response?.data?.error || 'Failed to check out');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const loadAttendance = async () => {
     try {
       const response = await attendanceAPI.getHistory();
@@ -386,7 +416,9 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
   const todayCheckIn = (todayRecord && todayRecord.check_in && !isNaN(new Date(todayRecord.check_in)))
     ? format(new Date(todayRecord.check_in), 'HH:mm')
     : '-';
-  // Removed todayCheckOut logic
+  const todayCheckOut = (todayRecord && (todayRecord.check_out || todayRecord.checkOut) && !isNaN(new Date(todayRecord.check_out || todayRecord.checkOut)))
+    ? format(new Date(todayRecord.check_out || todayRecord.checkOut), 'HH:mm')
+    : '-';
 
   // Calculate attendance status with business rules
   const getAttendanceStatus = (record) => {
@@ -651,9 +683,15 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
         <main className="flex-1 overflow-auto p-4 sm:p-8">
           {/* Today's Check-in/Check-out */}
           <div className="mb-6 flex flex-col md:flex-row md:items-center md:space-x-8 justify-between">
-            <div className="flex items-center space-x-2">
-              <span className="text-base font-semibold text-gray-700">Today's Check-in:</span>
-              <span className="text-lg font-bold text-green-700">{todayCheckIn}</span>
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2">
+                <span className="text-base font-semibold text-gray-700">Check-in:</span>
+                <span className="text-lg font-bold text-green-700">{todayCheckIn}</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="text-base font-semibold text-gray-700">Check-out:</span>
+                <span className="text-lg font-bold text-orange-600">{todayCheckOut}</span>
+              </div>
             </div>
             {user && user.role === 'MANAGER' && (
               <div className="flex justify-end mt-3 md:mt-0">
@@ -1242,17 +1280,43 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                 )}
                 
                 <button
-                  onClick={() => { checkUserLocation(); handleMark(); }}
-                  disabled={checkedInToday || loading || !isWithinOfficeGeofence || locationPermissionDenied || isCheckingLocation}
+                  onClick={() => {
+                    checkUserLocation();
+                    if (checkedInToday && isAfterNoon && !checkedOutToday) {
+                      handleCheckOut();
+                    } else {
+                      handleMark();
+                    }
+                  }}
+                  disabled={
+                    loading || !isWithinOfficeGeofence || locationPermissionDenied || isCheckingLocation ||
+                    (!checkedInToday ? false : // Not checked in yet → enabled
+                      checkedOutToday ? true : // Already checked out → disabled
+                        !isAfterNoon // Checked in but before 12PM → disabled
+                    )
+                  }
                   className={`w-full py-3 px-4 rounded-lg font-bold text-white text-base transition-all duration-150 ${
-                    checkedInToday
+                    checkedOutToday
                       ? 'bg-gray-400 cursor-not-allowed'
+                      : (checkedInToday && !isAfterNoon)
+                      ? 'bg-gray-400 cursor-not-allowed'
+                      : (checkedInToday && isAfterNoon && !checkedOutToday)
+                      ? 'bg-orange-500 hover:bg-orange-600 active:scale-95'
                       : (!isWithinOfficeGeofence || locationPermissionDenied || isCheckingLocation)
                       ? 'bg-gray-400 cursor-not-allowed'
                       : 'bg-blue-600 hover:bg-blue-700 active:scale-95'
                   }`}
                 >
-                  {checkedInToday ? '✓ Marked Today' : isCheckingLocation ? 'Checking Location...' : '📍 Mark Attendance'}
+                  {checkedOutToday
+                    ? '✓ Done for Today'
+                    : checkedInToday && isAfterNoon
+                    ? '🏠 Check Out'
+                    : checkedInToday
+                    ? '✓ Checked In (Check-out after 12 PM)'
+                    : isCheckingLocation
+                    ? 'Checking Location...'
+                    : '📍 Mark Attendance'
+                  }
                 </button>
               </div>
             </div>

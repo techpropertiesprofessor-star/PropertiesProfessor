@@ -83,6 +83,8 @@ export const employeeAPI = {
 export const attendanceAPI = {
   checkIn: (payload = {}) =>
     api.post("/attendance/check-in", payload),
+  checkOut: () =>
+    api.post("/attendance/check-out"),
   getHistory: () =>
     api.get("/attendance/history/mine"),
 };

@@ -34,6 +34,9 @@ export default function ContentCalendarPage() {
 
   const isManager = user?.role === 'MANAGER' || user?.role === 'ADMIN';
 
+  // Mobile: track last tap for simulating double-tap on date cells
+  const lastTapRef = React.useRef({ date: null, time: 0 });
+
   useEffect(() => {
     loadEvents();
   }, [currentDate]);
@@ -69,6 +72,24 @@ export default function ContentCalendarPage() {
       isPublished: isManager ? false : false // EMPLOYEE cannot publish
     });
     setShowEventModal(true);
+  };
+
+  // Mobile: handle tap on date cell (double-tap to create event)
+  const handleDateTap = (date) => {
+    const now = Date.now();
+    const last = lastTapRef.current;
+    if (last.date && isSameDay(last.date, date) && now - last.time < 400) {
+      // Double-tap detected
+      handleDateDoubleClick(date);
+      lastTapRef.current = { date: null, time: 0 };
+    } else {
+      lastTapRef.current = { date, time: now };
+    }
+  };
+
+  // Mobile: create event for today via FAB
+  const handleMobileCreateEvent = () => {
+    handleDateDoubleClick(new Date());
   };
 
   const handleEventClick = (event, e) => {
@@ -290,6 +311,7 @@ export default function ContentCalendarPage() {
                     <div
                       key={date.toString()}
                       onDoubleClick={() => handleDateDoubleClick(date)}
+                      onClick={() => handleDateTap(date)}
                       className={`aspect-square rounded-xl p-1.5 md:p-2 cursor-pointer transition-all group relative ${
                         isCurrentDay
                           ? 'bg-indigo-50 ring-2 ring-indigo-500 ring-offset-1 shadow-md shadow-indigo-100'
@@ -344,7 +366,8 @@ export default function ContentCalendarPage() {
 
                       {/* Hover hint */}
                       <div className="absolute inset-x-0 bottom-0.5 text-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <span className="text-[9px] text-gray-400">double-click</span>
+                        <span className="text-[9px] text-gray-400 hidden md:inline">double-click</span>
+                        <span className="text-[9px] text-gray-400 md:hidden">double-tap</span>
                       </div>
                     </div>
                   );
@@ -677,6 +700,14 @@ export default function ContentCalendarPage() {
         }
         .animate-slide-in { animation: slideIn 0.3s ease-out; }
       `}</style>
+
+      {/* Mobile FAB to create new event */}
+      <button
+        onClick={handleMobileCreateEvent}
+        className="md:hidden fixed bottom-6 right-6 w-14 h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg flex items-center justify-center z-30 active:scale-95 transition-transform"
+      >
+        <FiPlus size={24} />
+      </button>
     </div>
   );
 }

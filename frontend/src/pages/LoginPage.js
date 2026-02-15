@@ -83,6 +83,8 @@ export default function LoginPage() {
           }}
         >
           <div className="text-center mb-8">
+            {/* Logo visible on mobile only */}
+            <img src={logo} alt="Company Logo" className="h-20 w-20 mx-auto mb-3 drop-shadow-xl md:hidden" />
             <h2 className="text-3xl font-bold text-white mb-2 drop-shadow-lg" style={{ letterSpacing: '-0.02em' }}>
               <span style={{ color: '#FB8500' }}>Properties</span> Professor
             </h2>

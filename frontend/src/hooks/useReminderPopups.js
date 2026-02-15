@@ -3,7 +3,7 @@ import { reminderAPI } from '../api/client';
 import { AuthContext } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 
-const POLL_INTERVAL = 5 * 60 * 1000; // 5 minutes
+const POLL_INTERVAL = 2 * 60 * 1000; // 2 minutes
 const DISMISSED_STORAGE_KEY = 'dismissed_reminders';
 
 // Get today's dismissed IDs from localStorage (resets daily)

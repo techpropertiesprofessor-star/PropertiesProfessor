@@ -13,7 +13,7 @@ function generateToken(user, employeeId = null) {
   if ((user.role === 'EMPLOYEE' || user.role === 'MANAGER') && employeeId) {
     payload.employeeId = employeeId;
   }
-  return jwt.sign(payload, jwtSecret, { expiresIn: '1d' });
+  return jwt.sign(payload, jwtSecret, { expiresIn: '3d' });
 }
 
 exports.register = async (req, res, next) => {

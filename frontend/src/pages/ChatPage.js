@@ -85,25 +85,34 @@ export default function ChatPage({ newMessageCount = 0, resetNewMessageCount }) 
       <div className={`flex-1 flex flex-col overflow-hidden ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
         <Header user={user} onLogout={logout} newMessageCount={newMessageCount} resetNewMessageCount={resetNewMessageCount} />
         
-        <main className="flex-1 min-h-0 overflow-hidden flex">
-          {/* Chat List Sidebar - hidden on mobile when chat is open */}
-          <div className={`w-full md:w-80 flex-shrink-0 border-r border-gray-200 h-full overflow-y-auto ${mobileShowChat ? 'hidden md:block' : 'block'}`}>
+        <main className="flex-1 min-h-0 overflow-hidden flex relative">
+          {/* Chat List Sidebar - full width on mobile, fixed 320px on desktop */}
+          <div className={`${mobileShowChat ? 'hidden md:block' : 'block'} w-full md:w-80 flex-shrink-0 border-r border-gray-200 h-full overflow-y-auto bg-white`}>
             <ChatList 
               onSelectChat={handleSelectChat} 
               activeChat={activeChat}
             />
           </div>
 
-          {/* Chat Room - hidden on mobile when chat list is shown */}
-          <div className={`flex-1 h-full min-h-0 overflow-hidden ${mobileShowChat ? 'block' : 'hidden md:block'}`}>
-            <ChatRoom 
-              chatType={activeChat.type}
-              userId={activeChat.userId}
-              userName={activeChat.userName}
-              isOnline={activeChat.isOnline}
-              onBack={handleBackToList}
-            />
-          </div>
+          {/* Chat Room - full width on mobile, flex-1 on desktop */}
+          {activeChat.userId || activeChat.type === 'team' ? (
+            <div className={`${mobileShowChat ? 'block' : 'hidden md:block'} w-full md:w-auto md:flex-1 h-full min-h-0 overflow-hidden absolute md:relative inset-0 md:inset-auto bg-white z-10 md:z-auto`}>
+              <ChatRoom 
+                chatType={activeChat.type}
+                userId={activeChat.userId}
+                userName={activeChat.userName}
+                isOnline={activeChat.isOnline}
+                onBack={handleBackToList}
+              />
+            </div>
+          ) : (
+            <div className="hidden md:flex flex-1 items-center justify-center h-full bg-gray-50">
+              <div className="text-center">
+                <div className="text-6xl mb-4">💬</div>
+                <p className="text-gray-400 text-lg font-medium">Select a conversation to start chatting</p>
+              </div>
+            </div>
+          )}
         </main>
       </div>
     </div>
