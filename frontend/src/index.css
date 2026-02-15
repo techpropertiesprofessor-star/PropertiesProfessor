@@ -319,6 +319,22 @@ code {
   background: rgba(51, 65, 85, 0.8);
 }
 
+/* Invisible scrollbar utility (cross-browser) */
+.scrollbar-hidden {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
+/* Sidebar scroll helper: ensures smooth scrolling and uses full height */
+.sidebar-scroll {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  max-height: 100vh;
+}
+
 /* PDF Generation Styles - Ensure charts are visible and clear */
 [data-chart] {
   position: relative;
@@ -375,4 +391,20 @@ input:-webkit-autofill,
 input:-webkit-autofill:focus,
 input:-webkit-autofill:hover {
   -webkit-text-fill-color: #000 !important;
+}
+
+/* PWA Install Prompt animation */
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slideUp {
+  animation: slideUp 0.4s ease-out;
 }

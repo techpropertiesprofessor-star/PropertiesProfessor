@@ -11,26 +11,26 @@ const ChatList = ({ onSelectChat, activeChat }) => {
   const [showNewChatModal, setShowNewChatModal] = useState(false);
   const socketRef = useRef(null);
 
+  const activeChatRef = useRef(activeChat);
+  useEffect(() => { activeChatRef.current = activeChat; }, [activeChat]);
+
   const loadChats = useCallback(async () => {
     try {
       const response = await chatAPI.getChatList();
-      console.log('📋 Full response:', response);
-      console.log('📋 response.data:', response.data);
-      console.log('📋 response.data type:', typeof response.data);
-      console.log('📋 Is array?', Array.isArray(response.data));
       
       // Handle both formats: {chats: [...]} or direct array
       const chatData = response.data.chats || response.data || [];
-      console.log('📋 Chat data to set:', chatData);
-      console.log('📋 Number of chats:', chatData.length);
       
-      // Log each chat item
-      chatData.forEach((chat, index) => {
-        console.log(`📋 Chat ${index}:`, chat);
-        console.log(`  - _id: ${chat?._id}`);
-        console.log(`  - otherParticipant:`, chat?.otherParticipant);
-        console.log(`  - lastMessage: ${chat?.lastMessage}`);
-      });
+      // If the user is currently viewing a private chat, clear its unread count
+      const current = activeChatRef.current;
+      if (current?.type === 'private' && current?.userId) {
+        chatData.forEach(chat => {
+          const otherId = chat?.otherParticipant?._id || chat?.otherParticipant;
+          if (otherId && String(otherId) === String(current.userId)) {
+            chat.unreadCount = 0;
+          }
+        });
+      }
       
       setChats(chatData);
       setLoading(false);
@@ -88,10 +88,6 @@ const ChatList = ({ onSelectChat, activeChat }) => {
       // If this is a private message and involves current user, reload chats
       if (message.chatType === 'private') {
         const isInvolved = message.receiver_id === currentUserId || message.sender_id === currentUserId;
-        console.log('👤 Current user ID:', currentUserId);
-        console.log('📨 Message receiver:', message.receiver_id);
-        console.log('📤 Message sender:', message.sender_id);
-        console.log('✅ Is user involved?', isInvolved);
         
         if (isInvolved) {
           console.log('🔄 Reloading chats...');
@@ -124,6 +120,19 @@ const ChatList = ({ onSelectChat, activeChat }) => {
     window.addEventListener('chatSeen', handleChatSeen);
     return () => window.removeEventListener('chatSeen', handleChatSeen);
   }, []);
+
+  // When activeChat changes to a private chat, immediately clear its unread count locally
+  useEffect(() => {
+    if (activeChat?.type === 'private' && activeChat?.userId) {
+      setChats(prev => prev.map(c => {
+        const otherId = c?.otherParticipant?._id || c?.otherParticipant;
+        if (otherId && String(otherId) === String(activeChat.userId)) {
+          return { ...c, unreadCount: 0 };
+        }
+        return c;
+      }));
+    }
+  }, [activeChat]);
 
   const loadEmployees = async () => {
     try {

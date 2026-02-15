@@ -2,6 +2,7 @@ const Project = require('../models/Project');
 const Tower = require('../models/Tower');
 const InventoryUnit = require('../models/InventoryUnit');
 const InventoryPriceHistory = require('../models/InventoryPriceHistory');
+const { emitToAll } = require('../utils/socket.util');
 
 // Project CRUD
 exports.createProject = async (req, res, next) => {
@@ -151,6 +152,10 @@ exports.createUnit = async (req, res, next) => {
       state
     });
     await unit.save();
+
+    // Broadcast inventory creation for real-time updates
+    emitToAll('inventory-created', { unit: unit.toObject(), timestamp: Date.now() });
+
     res.status(201).json(unit);
   } catch (err) {
     next(err);
@@ -612,8 +617,8 @@ exports.generateUnitPDF = async (req, res, next) => {
     const startY = yPos;
     addField('Project:', unit.project?.name || 'N/A', col1X, col1X + 40);
     addField('Tower:', unit.tower?.name || 'N/A', col1X, col1X + 40);
-    addField('Unit Number:', unit.unit_number || unit.unitNumber || 'N/A', col1X, col1X + 40);
-    addField('Floor:', unit.floor || 'N/A', col1X, col1X + 40);
+    addField('Floor Number:', unit.floor_number || 'N/A', col1X, col1X + 40);
+    addField('Total Floors:', unit.total_floors ? String(unit.total_floors) : 'N/A', col1X, col1X + 40);
     addField('BHK:', unit.bhk_type || 'N/A', col1X, col1X + 40);
     addField('Carpet Area:', unit.carpet_area ? `${unit.carpet_area} sq.ft` : 'N/A', col1X, col1X + 40);
     addField('Built-up Area:', unit.builtup_area ? `${unit.builtup_area} sq.ft` : 'N/A', col1X, col1X + 40);
@@ -623,7 +628,6 @@ exports.generateUnitPDF = async (req, res, next) => {
     yPos = startY;
     addField('Property Type:', unit.listing_type ? unit.listing_type.toUpperCase() : 'N/A', col2X, col2X + 40);
     addField('Status:', unit.status || 'N/A', col2X, col2X + 40);
-    addField('Keys Location:', unit.keys_location || 'N/A', col2X, col2X + 40);
     addField('Facing:', unit.facing || 'N/A', col2X, col2X + 40);
     addField('Furnished:', unit.furnished_status || 'N/A', col2X, col2X + 40);
     addField('Parking:', unit.parking ? String(unit.parking) : 'N/A', col2X, col2X + 40);

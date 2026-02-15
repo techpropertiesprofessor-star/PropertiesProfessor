@@ -1,6 +1,7 @@
 const Attendance = require('../models/Attendance');
 const LeaveRequest = require('../models/LeaveRequest');
 const { getIO } = require('../config/socket');
+const { emitToAll } = require('../utils/socket.util');
 
 exports.checkIn = async (req, res, next) => {
   try {
@@ -70,6 +71,10 @@ exports.checkOut = async (req, res, next) => {
     }
     attendance.checkOut = new Date();
     await attendance.save();
+
+    // Broadcast attendance update for real-time
+    emitToAll('attendance-updated', { type: 'checkOut', attendance: attendance.toObject(), employeeId, timestamp: Date.now() });
+
     res.json({ message: 'Checked out', attendance });
   } catch (err) {
     next(err);

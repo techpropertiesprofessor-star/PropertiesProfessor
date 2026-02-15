@@ -1,17 +1,19 @@
 import React from 'react';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
+import useSidebarCollapsed from '../hooks/useSidebarCollapsed';
 import { useNavigate } from 'react-router-dom';
 
 export default function PermissionsPage() {
+  const sidebarCollapsed = useSidebarCollapsed();
   const navigate = useNavigate();
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-      <Sidebar />
-      <div className="flex-1 flex flex-col">
+      <div className="hidden md:block"><Sidebar /></div>
+      <div className={`flex-1 flex flex-col overflow-hidden ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
         <Header />
-        <main className="flex-1 overflow-auto flex items-center justify-center p-8">
+        <main className="flex-1 overflow-auto flex items-center justify-center p-3 sm:p-4 md:p-8">
           <div className="max-w-2xl w-full">
             {/* Modern Info Card */}
             <div className="bg-white rounded-2xl shadow-xl border border-indigo-100 overflow-hidden">

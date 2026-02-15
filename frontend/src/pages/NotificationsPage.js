@@ -1,10 +1,12 @@
 
 import React, { useEffect, useState } from 'react';
 import { notificationAPI } from '../api/client';
+import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
+import useSidebarCollapsed from '../hooks/useSidebarCollapsed';
 
 export default function NotificationsPage({ newMessageCount = 0, resetNewMessageCount }) {
-
+  const sidebarCollapsed = useSidebarCollapsed();
   const [notifications, setNotifications] = useState([]);
   useEffect(() => {
     // Try to load from localStorage first
@@ -13,9 +15,11 @@ export default function NotificationsPage({ newMessageCount = 0, resetNewMessage
   }, []);
 
   return (
-    <>
-      <Header user={null} newMessageCount={newMessageCount} resetNewMessageCount={resetNewMessageCount} />
-      <div className="p-8">
+    <div className="flex h-screen bg-gray-50">
+      <div className="hidden md:block"><Sidebar /></div>
+      <div className={`flex-1 flex flex-col overflow-hidden ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
+        <Header user={null} newMessageCount={newMessageCount} resetNewMessageCount={resetNewMessageCount} />
+        <main className="flex-1 p-3 sm:p-4 md:p-8 overflow-y-auto">
         <h2 className="text-xl font-bold mb-4">Notifications</h2>
         {notifications.length === 0 ? (
           <div>No notifications found.</div>
@@ -38,7 +42,8 @@ export default function NotificationsPage({ newMessageCount = 0, resetNewMessage
             ))}
           </ul>
         )}
+        </main>
       </div>
-    </>
+    </div>
   );
 }

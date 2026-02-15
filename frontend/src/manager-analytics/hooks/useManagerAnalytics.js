@@ -252,17 +252,18 @@ export const useManagerAnalytics = () => {
   useEffect(() => {
     loadAllAnalytics();
     
-    // Auto-refresh every 5 minutes as fallback
+    // Auto-refresh every 30 seconds for real-time feel
     const autoRefreshInterval = setInterval(() => {
-      console.log('[ANALYTICS_HOOK] Auto-refreshing data...');
-      refreshChart('alerts'); // Refresh alerts most frequently
-      
-      // Refresh other data every other cycle (10 minutes)
-      if (Math.random() > 0.5) {
-        refreshChart('kpis');
-        refreshChart('taskStatus');
-      }
-    }, 5 * 60 * 1000); // 5 minutes
+      console.log('[ANALYTICS_HOOK] Auto-refreshing all data...');
+      refreshChart('alerts');
+      refreshChart('kpis');
+      refreshChart('taskStatus');
+      refreshChart('employeeLoad');
+      refreshChart('leadsFunnel');
+      refreshChart('leadSources');
+      refreshChart('inventory');
+      refreshChart('callActivity');
+    }, 30 * 1000); // 30 seconds
     
     // Cleanup auto-refresh
     return () => {

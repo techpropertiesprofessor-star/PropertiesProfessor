@@ -1,14 +1,16 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
+import useSidebarCollapsed from '../hooks/useSidebarCollapsed';
 import { employeeAPI, taskAPI, attendanceAPI, authAPI } from '../api/client';
 import { AuthContext } from '../context/AuthContext';
 import { format, isToday } from 'date-fns';
 import { usePermissions } from '../hooks/usePermissions';
-import io from 'socket.io-client';
+import useRealtimeData from '../hooks/useRealtimeData';
 
 export default function EmployeesPage() {
+      const sidebarCollapsed = useSidebarCollapsed();
       // Auto-refresh interval ref
       const statsIntervalRef = React.useRef();
     // Add Employee Modal State
@@ -150,6 +152,10 @@ export default function EmployeesPage() {
       showError('Failed to load employees');
     }
   };
+
+  // Real-time employee updates
+  const refreshEmployees = useCallback(() => loadEmployees(), []);
+  useRealtimeData(['employee-updated', 'employee-status-changed', 'user-added'], refreshEmployees);
 
   const loadEmployeeDetails = async (employeeId) => {
     try {
@@ -368,10 +374,10 @@ export default function EmployeesPage() {
   if (permissionsLoading) {
     return (
       <div className="flex h-screen bg-gray-50">
-        <Sidebar />
-        <div className="flex-1 flex flex-col">
+        <div className="hidden md:block"><Sidebar /></div>
+        <div className={`flex-1 flex flex-col overflow-hidden ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
           <Header user={user} />
-          <main className="flex-1 flex items-center justify-center p-8">
+          <main className="flex-1 flex items-center justify-center p-8 overflow-y-auto">
             <div className="text-gray-600 text-sm">Loading permissions...</div>
           </main>
         </div>
@@ -382,10 +388,10 @@ export default function EmployeesPage() {
   if (!canViewEmployees) {
     return (
       <div className="flex h-screen bg-gray-50">
-        <Sidebar />
-        <div className="flex-1 flex flex-col">
+        <div className="hidden md:block"><Sidebar /></div>
+        <div className="flex-1 flex flex-col overflow-hidden">
           <Header user={user} />
-          <main className="flex-1 flex items-center justify-center p-8">
+          <main className="flex-1 flex items-center justify-center p-8 overflow-y-auto">
             <div className="bg-red-100 border border-red-400 text-red-700 px-8 py-6 rounded-lg text-center max-w-md">
               <h2 className="text-2xl font-bold mb-2">Access Denied</h2>
               <p>You do not have permission to view employees.</p>
@@ -399,10 +405,10 @@ export default function EmployeesPage() {
 
   return (
     <div className="flex h-screen bg-gradient-to-tr from-blue-50 via-indigo-50 to-emerald-50">
-      <Sidebar />
-      <div className="flex-1 flex flex-col">
+      <div className="hidden md:block"><Sidebar /></div>
+      <div className={`flex-1 flex flex-col overflow-hidden ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
         <Header user={user} />
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-auto p-3 sm:p-4 md:p-6">
           {/* Success/Error Messages */}
           {successMsg && (
             <div className="fixed top-20 right-4 p-3 bg-green-50 border border-green-300 rounded text-green-800 text-xs z-50 animate-pulse max-w-xs">

@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import io from 'socket.io-client';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
+import useSidebarCollapsed from '../hooks/useSidebarCollapsed';
 import CalendarWidget from '../components/CalendarWidget';
 import HolidayForm from '../components/HolidayForm';
 import holidayAPI from '../api/holiday';
@@ -12,6 +12,7 @@ import { format, isToday, isSameMonth } from 'date-fns';
 import { FiMapPin, FiClock, FiAlertCircle, FiCheckCircle } from 'react-icons/fi';
 import { usePermissions } from '../hooks/usePermissions';
 import { leaveAPI } from "../api/client";
+import useRealtimeData from '../hooks/useRealtimeData';
 
 
 // Geo-fence configuration for attendance marking
@@ -49,6 +50,7 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
 };
 
 export default function AttendancePage({ newMessageCount = 0, resetNewMessageCount }) {
+    const sidebarCollapsed = useSidebarCollapsed();
     // Holidays state for calendar
     const [holidays, setHolidays] = useState([]);
     // Show/hide holiday form
@@ -134,28 +136,14 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
     return () => clearInterval(interval);
   }, [user]);
   
-  // Real-time team attendance updates for managers
-  useEffect(() => {
-    if (!user || user.role !== 'MANAGER') return;
-    
-    const socketUrl = process.env.REACT_APP_SOCKET_URL || 'http://localhost:5000';
-    const socket = io(socketUrl, { transports: ['websocket', 'polling'] });
-    
-    socket.on('connect', () => {
-      console.log('✅ Manager socket connected for team attendance');
-    });
-    
-    socket.on('team-attendance-updated', (data) => {
-      console.log('🔄 Team attendance updated:', data);
-      // Reload team attendance data
-      loadTeamAttendance();
-    });
-    
-    return () => {
-      socket.off('team-attendance-updated');
-      socket.disconnect();
-    };
+  // Real-time team attendance updates via shared socket
+  const refreshAttendance = useCallback(() => {
+    loadAttendance();
+    loadLeaveRequests();
+    checkTodayAttendance();
+    if (user && user.role === 'MANAGER') loadTeamAttendance();
   }, [user]);
+  useRealtimeData(['attendance-updated', 'team-attendance-updated'], refreshAttendance);
 
   useEffect(() => {
     if (!permissionsLoading && !canViewAttendance) {
@@ -439,10 +427,66 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
     return status === 'P';
   }).length;
   
-  const absentCount = attendance.filter(a => {
-    const status = getAttendanceStatus(a);
-    return status === 'A';
-  }).length;
+  // Calculate absent by counting working days with no attendance in current month
+  const absentCount = (() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const today = now.getDate();
+    
+    // Build a Set of dates (day number) that have present attendance
+    const presentDays = new Set();
+    attendance.forEach(a => {
+      const d = new Date(a.date);
+      if (d.getFullYear() === year && d.getMonth() === month) {
+        const status = getAttendanceStatus(a);
+        if (status === 'P') presentDays.add(d.getDate());
+      }
+    });
+    
+    // Build a Set of holiday dates for current month
+    const holidayDays = new Set();
+    (holidays || []).forEach(h => {
+      const d = new Date(h.date);
+      if (d.getFullYear() === year && d.getMonth() === month) {
+        holidayDays.add(d.getDate());
+      }
+    });
+    
+    // Build a Set of approved leave dates for current month
+    const leaveDays = new Set();
+    leaveRequests.filter(l => l.status === 'approved').forEach(l => {
+      const start = new Date(l.start_date || l.fromDate);
+      const end = new Date(l.end_date || l.toDate);
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        if (d.getFullYear() === year && d.getMonth() === month) {
+          leaveDays.add(d.getDate());
+        }
+      }
+    });
+    
+    let absent = 0;
+    for (let day = 1; day < today; day++) {
+      const date = new Date(year, month, day);
+      const dayOfWeek = date.getDay();
+      
+      // Skip Sundays (0) and Mondays (1 = weekly off)
+      if (dayOfWeek === 0 || dayOfWeek === 1) continue;
+      
+      // Skip holidays
+      if (holidayDays.has(day)) continue;
+      
+      // Skip if on approved leave
+      if (leaveDays.has(day)) continue;
+      
+      // Skip if attendance was marked
+      if (presentDays.has(day)) continue;
+      
+      // Working day with no attendance = absent
+      absent++;
+    }
+    return absent;
+  })();
   
   // Count approved leaves (real-time count from leave requests)
   const leaveCount = leaveRequests.filter(l => l.status === 'approved').length;
@@ -454,6 +498,65 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
   
   const pendingLeaves = leaveRequests.filter(l => l.status === 'pending').length;
   
+  // ===== ACCURATE ABSENT CALCULATION HELPER =====
+  // Counts working days where an employee had NO attendance in a given month
+  const calculateEmployeeAbsentDays = useCallback((employeeId, targetMonth, targetYear, empAttendanceData) => {
+    const now = new Date();
+    const isCurrentMonth = now.getMonth() === targetMonth && now.getFullYear() === targetYear;
+    const lastDay = isCurrentMonth ? now.getDate() : new Date(targetYear, targetMonth + 1, 0).getDate();
+
+    // Build Set of days with present attendance
+    const presentDays = new Set();
+    empAttendanceData.forEach(a => {
+      const d = new Date(a.date);
+      if (d.getFullYear() === targetYear && d.getMonth() === targetMonth) {
+        const status = getAttendanceStatus(a);
+        if (status === 'P') presentDays.add(d.getDate());
+      }
+    });
+
+    // Build Set of holiday dates
+    const holidayDays = new Set();
+    (holidays || []).forEach(h => {
+      const d = new Date(h.date);
+      if (d.getFullYear() === targetYear && d.getMonth() === targetMonth) {
+        holidayDays.add(d.getDate());
+      }
+    });
+
+    // Build Set of approved leave dates (use team leave data or global leaveRequests)
+    const leaveDays = new Set();
+    empAttendanceData.forEach(a => {
+      const d = new Date(a.date);
+      if (d.getFullYear() === targetYear && d.getMonth() === targetMonth) {
+        const status = getAttendanceStatus(a);
+        if (status === 'L') leaveDays.add(d.getDate());
+      }
+    });
+
+    let absent = 0;
+    for (let day = 1; day < lastDay; day++) {
+      const date = new Date(targetYear, targetMonth, day);
+      const dayOfWeek = date.getDay();
+      // Skip Sundays (0) and Mondays (1 = weekly off)
+      if (dayOfWeek === 0 || dayOfWeek === 1) continue;
+      if (holidayDays.has(day)) continue;
+      if (leaveDays.has(day)) continue;
+      if (presentDays.has(day)) continue;
+      absent++;
+    }
+    return absent;
+  }, [holidays]);
+
+  // Check if today is a working day
+  const isTodayWorkingDay = useCallback(() => {
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    if (dayOfWeek === 0 || dayOfWeek === 1) return false;
+    const isHoliday = (holidays || []).some(h => new Date(h.date).toDateString() === now.toDateString());
+    return !isHoliday;
+  }, [holidays]);
+
   // Manager helper functions
   const getEmployeeAttendanceForDate = (employeeId, date) => {
     const record = teamAttendance.find(a => 
@@ -489,7 +592,7 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
     employees.forEach(emp => {
       const empAttendance = teamAttendance.filter(a => a.employee === emp._id);
       const present = empAttendance.filter(a => getAttendanceStatus(a) === 'P').length;
-      const absent = empAttendance.filter(a => getAttendanceStatus(a) === 'A').length;
+      const absent = calculateEmployeeAbsentDays(emp._id, selectedMonth.getMonth(), selectedMonth.getFullYear(), empAttendance);
       const leave = empAttendance.filter(a => getAttendanceStatus(a) === 'L').length;
       const wo = empAttendance.filter(a => ['WO', 'H'].includes(getAttendanceStatus(a))).length;
       const consecutive = getConsecutiveAbsences(emp._id);
@@ -509,11 +612,11 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
 
   if (permissionsLoading) {
     return (
-      <div className="flex min-h-screen bg-gray-50">
+      <div className="flex h-screen bg-gray-50">
         <div className="hidden md:block"><Sidebar /></div>
-        <div className="flex-1 flex flex-col">
+        <div className={`flex-1 flex flex-col overflow-hidden ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
           <Header user={user} newMessageCount={newMessageCount} resetNewMessageCount={resetNewMessageCount} />
-          <main className="flex-1 flex items-center justify-center p-4 sm:p-8">
+          <main className="flex-1 flex items-center justify-center p-4 sm:p-8 overflow-y-auto">
             <div className="text-gray-600 text-sm">Loading permissions...
             </div>
           </main>
@@ -524,11 +627,11 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
 
   if (!canViewAttendance) {
     return (
-      <div className="flex min-h-screen bg-gray-50">
+      <div className="flex h-screen bg-gray-50">
         <div className="hidden md:block"><Sidebar /></div>
-        <div className="flex-1 flex flex-col">
+        <div className={`flex-1 flex flex-col overflow-hidden ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
           <Header user={user} newMessageCount={newMessageCount} resetNewMessageCount={resetNewMessageCount} />
-          <main className="flex-1 flex items-center justify-center p-4 sm:p-8">
+          <main className="flex-1 flex items-center justify-center p-4 sm:p-8 overflow-y-auto">
             <div className="bg-red-100 border border-red-400 text-red-700 px-4 sm:px-8 py-6 rounded-lg text-center max-w-md mx-4 sm:mx-0">
               <h2 className="text-2xl font-bold mb-2">Access Denied</h2>
               <p>You do not have permission to view attendance.</p>
@@ -541,9 +644,9 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
+    <div className="flex h-screen bg-gray-100">
       <div className="hidden md:block"><Sidebar /></div>
-      <div className="flex-1 flex flex-col">
+      <div className={`flex-1 flex flex-col overflow-hidden ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
         <Header user={user} newMessageCount={newMessageCount} resetNewMessageCount={resetNewMessageCount} />
         <main className="flex-1 overflow-auto p-4 sm:p-8">
           {/* Today's Check-in/Check-out */}
@@ -574,7 +677,7 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
             <h1 className="text-3xl font-extrabold text-blue-800 tracking-tight">Attendance & Leave</h1>
           </div>
           {/* Quick Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 md:gap-6 mb-8">
             <div className="bg-white rounded-2xl shadow-xl p-6 border border-blue-100">
               <div className="flex items-center justify-between">
                 <div>
@@ -665,7 +768,12 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                     <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-4 border border-red-200">
                       <p className="text-xs text-red-700 font-semibold mb-1">Absent Today</p>
                       <p className="text-3xl font-extrabold text-red-800">
-                        {teamAttendance.filter(a => isToday(new Date(a.date)) && getAttendanceStatus(a) === 'A').length}
+                        {(() => {
+                          if (!isTodayWorkingDay()) return 0;
+                          const presentToday = teamAttendance.filter(a => isToday(new Date(a.date)) && getAttendanceStatus(a) === 'P').length;
+                          const leaveToday = teamAttendance.filter(a => isToday(new Date(a.date)) && getAttendanceStatus(a) === 'L').length;
+                          return Math.max(0, employees.length - presentToday - leaveToday);
+                        })()}
                       </p>
                     </div>
                     <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-4 border border-orange-200">
@@ -701,7 +809,8 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                             const empAttendance = teamAttendance.filter(a => String(a.employee) === String(emp._id));
                             const todayStatus = getEmployeeAttendanceForDate(emp._id, new Date());
                             const present = empAttendance.filter(a => getAttendanceStatus(a) === 'P').length;
-                            const absent = empAttendance.filter(a => getAttendanceStatus(a) === 'A').length;
+                            const now = new Date();
+                            const absent = calculateEmployeeAbsentDays(emp._id, now.getMonth(), now.getFullYear(), empAttendance);
                             const leave = empAttendance.filter(a => getAttendanceStatus(a) === 'L').length;
                             const consecutive = getConsecutiveAbsences(emp._id);
                             
@@ -796,7 +905,7 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                   </div>
                   
                   {/* Monthly Statistics Summary */}
-                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mb-6">
                     <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 border border-purple-200">
                       <p className="text-xs text-purple-700 font-semibold mb-1">Total Employees</p>
                       <p className="text-3xl font-extrabold text-purple-800">{employees.length}</p>
@@ -819,12 +928,19 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                     <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-4 border border-red-200">
                       <p className="text-xs text-red-700 font-semibold mb-1">Total Absences</p>
                       <p className="text-3xl font-extrabold text-red-800">
-                        {teamAttendance.filter(a => {
-                          const attDate = new Date(a.date);
-                          return attDate.getMonth() === selectedMonth.getMonth() && 
-                                 attDate.getFullYear() === selectedMonth.getFullYear() &&
-                                 getAttendanceStatus(a) === 'A';
-                        }).length}
+                        {(() => {
+                          let totalAbsent = 0;
+                          employees.forEach(emp => {
+                            const empAtt = teamAttendance.filter(a => {
+                              const attDate = new Date(a.date);
+                              return attDate.getMonth() === selectedMonth.getMonth() && 
+                                     attDate.getFullYear() === selectedMonth.getFullYear() &&
+                                     String(a.employee) === String(emp._id);
+                            });
+                            totalAbsent += calculateEmployeeAbsentDays(emp._id, selectedMonth.getMonth(), selectedMonth.getFullYear(), empAtt);
+                          });
+                          return totalAbsent;
+                        })()}
                       </p>
                     </div>
                     <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-4 border border-orange-200">
@@ -880,7 +996,7 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                             });
                             
                             const present = monthAttendance.filter(a => getAttendanceStatus(a) === 'P').length;
-                            const absent = monthAttendance.filter(a => getAttendanceStatus(a) === 'A').length;
+                            const absent = calculateEmployeeAbsentDays(emp._id, selectedMonth.getMonth(), selectedMonth.getFullYear(), monthAttendance);
                             const leave = monthAttendance.filter(a => getAttendanceStatus(a) === 'L').length;
                             const weeklyOff = monthAttendance.filter(a => getAttendanceStatus(a) === 'WO').length;
                             const totalDays = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 0).getDate();

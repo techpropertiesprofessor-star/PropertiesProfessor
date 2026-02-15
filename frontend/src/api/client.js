@@ -188,18 +188,29 @@ createTower: (projectId, data) =>
  */
 export const leadAPI = {
   getAll: (params) =>
-    api.get("/leads", { params }),
+    api.get("leads", { params }),
+
   getById: (id) =>
-    api.get(`/leads/${id}`),
+    api.get(`leads/${id}`),
+
   create: (data) =>
-    api.post("/leads", data),
-  assign: (leadId, assignedTo) =>
-    api.post(`/leads/${leadId}/assign`, { assignedTo }),
-  updateRemarks: (leadId, remarks) =>
-    api.put(`/leads/${leadId}/remarks`, { remarks }),
+    api.post("leads", data),
+
+  assign: (id, employeeId) =>
+    api.post(`leads/${id}/assign`, {
+      assignedTo: employeeId
+    }),
+
+  updateRemarks: (leadId, remarks, note) =>
+    api.put(`leads/${leadId}/remarks`, { remarks, note }),
+
   download: ({ start, end }) =>
-    api.get("/leads/download", { params: { start, end }, responseType: 'blob' })
+    api.get("leads/download", {
+      params: { start, end },
+      responseType: 'blob'
+    })
 };
+
 
 /**
  * =====================================================
@@ -232,6 +243,10 @@ export const notificationAPI = {
   getAll: () => api.get("/notifications"),
   markAsRead: (id) =>
     api.put(`/notifications/${id}/read`),
+  getUnreadCount: () => api.get("/notifications/unread/count"),
+  getCountsByType: () => api.get("/notifications/counts-by-type"),
+  markTeamChatAsRead: () => api.put("/notifications/team-chat/mark-read"),
+  markSectionAsRead: (section) => api.put(`/notifications/section/${section}/mark-read`),
 };
 
 /**

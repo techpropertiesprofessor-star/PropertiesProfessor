@@ -13,13 +13,12 @@ router.post('/check-out', attendanceController.checkOut);
 
 // Attendance history
 router.get('/history/mine', attendanceController.myHistory);
+// Monthly summary - must come before /:employeeId to avoid route conflict
+router.get('/monthly-summary', attendanceController.monthlySummary);
 // Team attendance must come before /:employeeId to avoid route conflict
 router.get('/team', role(['ADMIN', 'MANAGER']), attendanceController.getTeamAttendance);
 // Employee-specific history (this catches any /:employeeId pattern)
 router.get('/:employeeId', role(['ADMIN', 'MANAGER']), attendanceController.employeeHistory);
-
-// Monthly summary
-router.get('/monthly-summary', attendanceController.monthlySummary);
 
 // Leave requests
 router.post('/leave-request', attendanceController.leaveRequest);

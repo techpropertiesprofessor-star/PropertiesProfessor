@@ -1,15 +1,16 @@
-import React, { useState, useEffect, useContext, useRef } from 'react';
+import React, { useState, useEffect, useContext, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
+import useSidebarCollapsed from '../hooks/useSidebarCollapsed';
 import { taskAPI, employeeAPI } from '../api/client';
-// import AddCallerModal from '../components/AddCallerModal';
-// import CallersList from '../components/CallersList';
 import { AuthContext } from '../context/AuthContext';
 import { format } from 'date-fns';
 import { usePermissions } from '../hooks/usePermissions';
+import useRealtimeData from '../hooks/useRealtimeData';
 
 export default function TasksPage({ newMessageCount = 0, resetNewMessageCount }) {
+  const sidebarCollapsed = useSidebarCollapsed();
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -117,6 +118,10 @@ export default function TasksPage({ newMessageCount = 0, resetNewMessageCount })
       console.error('Failed to load tasks:', err);
     }
   };
+
+  // Real-time task updates
+  const refreshTasks = useCallback(() => loadTasks(), []);
+  useRealtimeData(['task-created', 'task-updated', 'taskAssigned', 'taskStatusUpdated'], refreshTasks);
 
   // Only assigned employee can update status
   const handleStatusChange = async (task, newStatus) => {
@@ -230,11 +235,11 @@ export default function TasksPage({ newMessageCount = 0, resetNewMessageCount })
 
   if (permissionsLoading) {
     return (
-      <div className="flex min-h-screen bg-gray-50">
+      <div className="flex h-screen bg-gray-50">
         <div className="hidden md:block"><Sidebar /></div>
-        <div className="flex-1 flex flex-col">
+        <div className={`flex-1 flex flex-col overflow-hidden ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
           <Header user={user} newMessageCount={newMessageCount} resetNewMessageCount={resetNewMessageCount} />
-          <main className="flex-1 flex items-center justify-center p-4 sm:p-8">
+          <main className="flex-1 flex items-center justify-center p-4 sm:p-8 overflow-y-auto">
             <div className="text-gray-600 text-sm">Loading permissions...</div>
           </main>
         </div>
@@ -244,11 +249,11 @@ export default function TasksPage({ newMessageCount = 0, resetNewMessageCount })
 
   if (!canViewTasks) {
     return (
-      <div className="flex min-h-screen bg-gray-50">
+      <div className="flex h-screen bg-gray-50">
         <div className="hidden md:block"><Sidebar /></div>
-        <div className="flex-1 flex flex-col">
+        <div className={`flex-1 flex flex-col overflow-hidden ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
           <Header user={user} newMessageCount={newMessageCount} resetNewMessageCount={resetNewMessageCount} />
-          <main className="flex-1 flex items-center justify-center p-4 sm:p-8">
+          <main className="flex-1 flex items-center justify-center p-4 sm:p-8 overflow-y-auto">
             <div className="bg-red-100 border border-red-400 text-red-700 px-4 sm:px-8 py-6 rounded-lg text-center max-w-md mx-4 sm:mx-0">
               <h2 className="text-2xl font-bold mb-2">Access Denied</h2>
               <p>You do not have permission to view tasks.</p>
@@ -261,16 +266,16 @@ export default function TasksPage({ newMessageCount = 0, resetNewMessageCount })
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex h-screen bg-gray-50">
       <div className="hidden md:block"><Sidebar /></div>
       
-      <div className="flex-1 flex flex-col">
+      <div className={`flex-1 flex flex-col overflow-hidden ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
         <Header user={user} newMessageCount={newMessageCount} resetNewMessageCount={resetNewMessageCount} />
         
         <main className="flex-1 overflow-auto p-4 md:p-8 bg-gradient-to-tr from-blue-50 via-indigo-50 to-yellow-50">
-          <div className="max-w-5xl mx-auto py-8">
-            <div className="mb-8 flex flex-col md:flex-row justify-between items-center gap-4">
-              <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight drop-shadow-lg flex items-center gap-3">
+          <div className="max-w-5xl mx-auto py-4 sm:py-8">
+            <div className="mb-6 sm:mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 sm:gap-4">
+              <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-gray-900 tracking-tight drop-shadow-lg flex items-center gap-2 sm:gap-3">
                 <span className="text-indigo-500">🗂️</span> Tasks & Assignments
               </h1>
               <div className="flex space-x-2">
@@ -287,7 +292,7 @@ export default function TasksPage({ newMessageCount = 0, resetNewMessageCount })
 
             {/* Task Form */}
             {showForm && canCreateTasks && (
-              <div className="relative bg-white/70 backdrop-blur-lg rounded-2xl shadow-xl p-8 mb-10 border border-indigo-100 overflow-hidden">
+              <div className="relative bg-white/70 backdrop-blur-lg rounded-2xl shadow-xl p-4 sm:p-6 md:p-8 mb-6 sm:mb-10 border border-indigo-100 overflow-hidden">
                 <div className="absolute inset-0 pointer-events-none rounded-2xl" style={{background: 'linear-gradient(120deg, rgba(99,102,241,0.08) 0%, rgba(236,72,153,0.07) 100%)', filter: 'blur(2px)'}}></div>
                 <h2 className="text-2xl font-extrabold text-indigo-700 mb-6 flex items-center gap-2 tracking-tight relative z-10">
                   <span className="text-2xl">📝</span> Assign New Task
@@ -332,7 +337,7 @@ export default function TasksPage({ newMessageCount = 0, resetNewMessageCount })
                     rows={2}
                     className="w-full px-4 py-2 text-base border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 shadow-sm"
                   />
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <select
                       value={formData.priority}
                       onChange={(e) => setFormData({ ...formData, priority: e.target.value })}

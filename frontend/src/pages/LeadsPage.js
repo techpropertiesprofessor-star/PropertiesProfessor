@@ -1,13 +1,16 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { leadAPI, employeeAPI } from '../api/client';
-import io from 'socket.io-client';
+import { useSocket } from '../context/SocketContext';
+import useRealtimeData from '../hooks/useRealtimeData';
 import LeadUpload from '../components/LeadUpload';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
+import useSidebarCollapsed from '../hooks/useSidebarCollapsed';
 
 function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
+  const sidebarCollapsed = useSidebarCollapsed();
   const { user } = useContext(AuthContext);
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -58,7 +61,9 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
     }
   };
   const [leads, setLeads] = useState([]);
-  const [remarkInputs, setRemarkInputs] = useState({});
+  const [remarkNoteModal, setRemarkNoteModal] = useState(null); // { leadId, remark }
+  const [remarkNoteText, setRemarkNoteText] = useState('');
+  const [remarkFilter, setRemarkFilter] = useState('All'); // Filter tabs: All, Interested, Not Interested, Busy, Invalid Number
   const [employees, setEmployees] = useState([]); // All employees/managers
   const [loading, setLoading] = useState(false);  const [showUpload, setShowUpload] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
@@ -72,37 +77,29 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
   const pageLimit = 20;
 
   // =====================
-  // SOCKET.IO FOR REAL-TIME UPDATES
+  // REAL-TIME UPDATES VIA SHARED SOCKET
   // =====================
-  const [socket, setSocket] = useState(null);
+  const { on, off } = useSocket() || {};
 
+  // Listen for inline remarks updates
   useEffect(() => {
-    const newSocket = io('http://localhost:5000', {
-      transports: ['websocket', 'polling'],
-      withCredentials: true
-    });
-    
-    setSocket(newSocket);
-    
-    // Listen for real-time remarks updates
-    newSocket.on('lead-remarks-updated', (data) => {
-      console.log('📝 Received remarks update:', data);
-      setLeads(prevLeads => {
-        const updated = prevLeads.map(lead => {
-          if (String(lead._id) === String(data.leadId)) {
-            console.log('✅ Updating lead in UI:', lead._id);
-            return { ...lead, remarks: data.remarks, updatedAt: data.updatedAt };
-          }
-          return lead;
-        });
-        return updated;
-      });
-    });
-
-    return () => {
-      newSocket.disconnect();
+    if (!on || !off) return;
+    const handleRemarksUpdate = (data) => {
+      setLeads(prevLeads => prevLeads.map(lead =>
+        String(lead._id) === String(data.leadId)
+          ? { ...lead, remarks: data.remarks, remarkNotes: data.remarkNotes, updatedAt: data.updatedAt }
+          : lead
+      ));
     };
-  }, []);
+    on('lead-remarks-updated', handleRemarksUpdate);
+    return () => off('lead-remarks-updated', handleRemarksUpdate);
+  }, [on, off]);
+
+  // Auto-refresh leads list on lead create/update/assign
+  const refreshLeads = useCallback(() => {
+    fetchLeads(currentPage);
+  }, [currentPage]);
+  useRealtimeData(['lead-created', 'lead-updated'], refreshLeads);
 
   // =====================
   // ADD LEAD STATE & HANDLERS
@@ -219,12 +216,16 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
   // =====================
   // UPDATE REMARKS (ONLY FOR EMPLOYEE)
   // =====================
-  const handleUpdateRemarks = async (leadId, remarks) => {
+  const handleUpdateRemarks = async (leadId, remarks, note = '') => {
     try {
-      await leadAPI.updateRemarks(leadId, remarks);
-      // Real-time update will be handled by Socket.IO event
-      // Clear the input field
-      setRemarkInputs(prev => ({ ...prev, [leadId]: '' }));
+      const res = await leadAPI.updateRemarks(leadId, remarks, note);
+      // Update lead in state immediately with API response
+      const updatedLead = res.data;
+      setLeads(prevLeads => prevLeads.map(lead =>
+        String(lead._id) === String(leadId)
+          ? { ...lead, remarks: updatedLead.remarks, remarkNotes: updatedLead.remarkNotes, updatedAt: updatedLead.updatedAt }
+          : lead
+      ));
     } catch (err) {
       console.error('Failed to update remarks:', err);
       alert('Failed to update remarks');
@@ -256,17 +257,17 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
   };
 
   return (
-    <div className="flex min-h-screen w-full bg-gradient-to-br from-blue-50 via-white to-indigo-100">
+    <div className="flex h-screen w-full bg-gradient-to-br from-blue-50 via-white to-indigo-100">
       <div className="hidden md:block"><Sidebar /></div>
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className={`flex-1 flex flex-col overflow-hidden ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
         <Header user={user} newMessageCount={newMessageCount} resetNewMessageCount={resetNewMessageCount} />
-        <main className="flex-1 p-4 md:p-8 relative overflow-y-auto">
+        <main className="flex-1 p-3 sm:p-4 md:p-8 relative overflow-y-auto">
           {/* Modern Card Container */}
           <div className="max-w-7xl mx-auto">
             {/* Modern Header */}
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 sm:gap-4 mb-6 sm:mb-8">
               <div>
-                <h1 className="text-3xl md:text-4xl font-extrabold text-indigo-900 tracking-tight flex items-center gap-3">
+                <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-indigo-900 tracking-tight flex items-center gap-2 sm:gap-3">
                   <span className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-gradient-to-br from-indigo-400 to-blue-500 text-white shadow-md text-2xl">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="h-7 w-7">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -327,10 +328,10 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
                         <option key={emp._id} value={emp._id}>{emp.name || (emp.first_name ? (emp.first_name + ' ' + (emp.last_name || '')) : emp.email || emp.phone)}</option>
                       ))}
                     </select>
-                      <div className="flex flex-col sm:flex-row gap-2 justify-end">
-                        <button type="button" onClick={() => setShowAddLead(false)} className="w-full sm:w-auto px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">Cancel</button>
-                        <button type="submit" className="w-full sm:w-auto px-4 py-2 bg-gradient-to-r from-indigo-500 to-blue-500 text-white rounded hover:from-indigo-600 hover:to-blue-600">Add Lead</button>
-                      </div>
+                    <div className="flex gap-2 justify-end">
+                      <button type="button" onClick={() => setShowAddLead(false)} className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">Cancel</button>
+                      <button type="submit" className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-blue-500 text-white rounded hover:from-indigo-600 hover:to-blue-600">Add Lead</button>
+                    </div>
                   </form>
                 </div>
               </div>
@@ -341,6 +342,32 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
               <p className="text-indigo-700 font-semibold">
                 Showing {leads.length > 0 ? ((currentPage - 1) * pageLimit + 1) : 0} - {Math.min(currentPage * pageLimit, totalLeads)} of {totalLeads} leads
               </p>
+            </div>
+
+            {/* Remark Filter Tabs */}
+            <div className="flex flex-wrap gap-2 mb-4">
+              {['All', 'Interested', 'Not Interested', 'Busy', 'Invalid Number'].map((tab) => {
+                const count = tab === 'All'
+                  ? leads.length
+                  : leads.filter(l => l.remarks === tab).length;
+                const isActive = remarkFilter === tab;
+                const colorMap = {
+                  'All': isActive ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50',
+                  'Interested': isActive ? 'bg-green-600 text-white shadow-lg' : 'bg-white text-green-700 border-green-200 hover:bg-green-50',
+                  'Not Interested': isActive ? 'bg-red-600 text-white shadow-lg' : 'bg-white text-red-700 border-red-200 hover:bg-red-50',
+                  'Busy': isActive ? 'bg-yellow-500 text-white shadow-lg' : 'bg-white text-yellow-700 border-yellow-200 hover:bg-yellow-50',
+                  'Invalid Number': isActive ? 'bg-gray-600 text-white shadow-lg' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50',
+                };
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => setRemarkFilter(tab)}
+                    className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all duration-200 ${colorMap[tab]}`}
+                  >
+                    {tab} <span className={`ml-1 text-xs font-semibold ${isActive ? 'opacity-90' : 'opacity-60'}`}>({count})</span>
+                  </button>
+                );
+              })}
             </div>
 
             {/* Leads Table Card */}
@@ -363,7 +390,12 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {leads.map((lead, idx) => (
+                    {[...leads]
+                      .filter(l => remarkFilter === 'All' ? true : l.remarks === remarkFilter)
+                      .sort((a, b) => {
+                      const remarkOrder = (r) => r === 'Interested' ? 0 : r === 'Busy' ? 1 : r === 'Invalid Number' ? 2 : r === 'Not Interested' ? 3 : 1;
+                      return remarkOrder(a.remarks) - remarkOrder(b.remarks);
+                    }).map((lead, idx) => (
                       <tr key={lead._id} className={idx % 2 === 0 ? 'bg-white hover:bg-indigo-50 transition' : 'bg-indigo-50 hover:bg-indigo-100 transition'}>
                         <td className="px-4 py-3 align-middle whitespace-nowrap font-semibold text-gray-900">{lead.name || '-'}</td>
                         <td className="px-4 py-3 align-middle whitespace-nowrap">{lead.phone}</td>
@@ -378,48 +410,26 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
                               value={lead.assignedTo && typeof lead.assignedTo === 'object' ? lead.assignedTo._id : lead.assignedTo || ''}
                               onChange={async (e) => {
                                 const employeeId = e.target.value;
-                                if (lead.createdBy === 'website' && lead.assignedTo === null) {
-                                  try {
-                                    const allLeadsRes = await leadAPI.getAll();
-                                    let allLeads = Array.isArray(allLeadsRes.data) ? allLeadsRes.data : (allLeadsRes.data?.leads || []);
-                                    const duplicate = allLeads.find(l => l.phone === lead.phone && l.createdBy !== 'website');
-                                    const already = allLeads.find(l => l.phone === lead.phone && l.source === lead.source && l.createdBy !== 'website');
-                                    if (already) {
-                                      await leadAPI.assign(already._id, employeeId);
-                                    } else if (duplicate) {
-                                      await leadAPI.assign(duplicate._id, employeeId);
-                                    } else {
-                                      const allowedSources = ['contact_form','schedule_visit','whatsapp','chatbot','manual','Friend'];
-                                      let validSource = allowedSources.includes(lead.source) ? lead.source : 'contact_form';
-                                      const newLeadRes = await leadAPI.create({
-                                        name: lead.name,
-                                        phone: lead.phone,
-                                        email: lead.email,
-                                        source: validSource,
-                                        remarks: lead.remarks,
-                                        assignedTo: employeeId,
-                                        status: 'assigned',
-                                        createdBy: 'dashboard'
-                                      });
-                                      await leadAPI.assign(newLeadRes.data._id, employeeId);
-                                    }
-                                    fetchLeads(currentPage);
-                                  } catch (err) {
-                                    alert('Failed to convert and assign lead');
-                                  }
+                                // Guard: Don't proceed if no employee selected
+                                if (!employeeId) {
                                   return;
                                 }
                                 try {
+                                  console.log('Assigning lead', lead._id, 'to employee', employeeId);
                                   await leadAPI.assign(lead._id, employeeId);
                                   fetchLeads(currentPage);
                                 } catch (err) {
-                                  alert('Failed to assign lead');
+                                  console.error('Failed to assign lead:', err);
+                                  alert('Failed to assign lead: ' + (err.response?.data?.message || err.message));
                                 }
                               }}
                               className="border rounded px-2 py-1 text-sm bg-white shadow-sm focus:ring-2 focus:ring-indigo-200"
                               disabled={loading}
                             >
-                              <option value="">Unassigned</option>
+                              <option value="" disabled>
+  Unassigned
+</option>
+
                               {employees.map(emp => (
                                 <option key={emp._id} value={emp._id}>
                                   {emp.name || (emp.first_name ? (emp.first_name + ' ' + (emp.last_name || '')) : emp.email || emp.phone)}
@@ -443,33 +453,39 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
                           )}
                         </td>
                         <td className="px-4 py-3 align-middle whitespace-nowrap">
-                          {/* Only EMPLOYEE can add/edit remarks */}
-                          {(user && user.role === 'EMPLOYEE') ? (
-                            <form
-                              onSubmit={async (e) => {
-                                e.preventDefault();
-                                const remarksValue = remarkInputs[lead._id] !== undefined 
-                                  ? remarkInputs[lead._id] 
-                                  : lead.remarks || '';
-                                handleUpdateRemarks(lead._id, remarksValue);
+                          {/* EMPLOYEE and MANAGER can add/edit remarks */}
+                          {(user && (user.role === 'EMPLOYEE' || user.role === 'MANAGER')) ? (
+                            <select
+                              className={`border rounded px-2 py-1 text-xs w-36 focus:ring-2 focus:ring-indigo-200 cursor-pointer font-medium ${
+                                lead.remarks === 'Interested' ? 'bg-green-50 text-green-700 border-green-300' :
+                                lead.remarks === 'Not Interested' ? 'bg-red-50 text-red-700 border-red-300' :
+                                lead.remarks === 'Busy' ? 'bg-yellow-50 text-yellow-700 border-yellow-300' :
+                                lead.remarks === 'Invalid Number' ? 'bg-gray-100 text-gray-700 border-gray-400' :
+                                'bg-gray-50 text-gray-600 border-gray-300'
+                              }`}
+                              value={lead.remarks || ''}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (val) {
+                                  setRemarkNoteModal({ leadId: lead._id, remark: val });
+                                  setRemarkNoteText('');
+                                }
                               }}
-                              className="flex gap-1"
-            >                              <input
-                                type="text"
-                                className="border rounded px-2 py-1 text-xs w-40 focus:ring-2 focus:ring-indigo-200"
-                                placeholder="Add remarks..."
-                                value={remarkInputs[lead._id] !== undefined ? remarkInputs[lead._id] : lead.remarks || ''}
-                                onChange={e => setRemarkInputs(inputs => ({ ...inputs, [lead._id]: e.target.value }))}
-                              />
-                              <button 
-                                type="submit" 
-                                className="px-2 py-1 bg-gradient-to-r from-indigo-500 to-blue-500 text-white rounded text-xs hover:from-indigo-600 hover:to-blue-600"
-                              >
-                                Save
-                              </button>
-                            </form>
+                            >
+                              <option value="">Select Remark</option>
+                              <option value="Interested">Interested</option>
+                              <option value="Not Interested">Not Interested</option>
+                              <option value="Busy">Busy</option>
+                              <option value="Invalid Number">Invalid Number</option>
+                            </select>
                           ) : (
-                            <span className="text-gray-700 text-sm">{lead.remarks || '-'}</span>
+                            <span className={`text-sm font-medium px-2 py-1 rounded ${
+                              lead.remarks === 'Interested' ? 'bg-green-100 text-green-700' :
+                              lead.remarks === 'Not Interested' ? 'bg-red-100 text-red-700' :
+                              lead.remarks === 'Busy' ? 'bg-yellow-100 text-yellow-700' :
+                              lead.remarks === 'Invalid Number' ? 'bg-gray-200 text-gray-700' :
+                              'text-gray-700'
+                            }`}>{lead.remarks || '-'}</span>
                           )}
                         </td>
                         <td className="px-4 py-3 align-middle whitespace-nowrap">
@@ -559,15 +575,15 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
             {/* Lead Details Modal */}
             {selectedLead && (
               <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 animate-fadeIn">
-                <div className="bg-white rounded-2xl shadow-2xl p-0 max-w-xl w-full border border-indigo-100 animate-slideDown">
-                  <div className="flex justify-between items-center px-8 pt-8 pb-4 border-b border-indigo-50 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-t-2xl">
+                <div className="bg-white rounded-2xl shadow-2xl p-0 max-w-xl w-full border border-indigo-100 animate-slideDown max-h-[90vh] flex flex-col">
+                  <div className="flex justify-between items-center px-8 pt-8 pb-4 border-b border-indigo-50 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-t-2xl flex-shrink-0">
                     <h2 className="text-2xl font-bold text-indigo-800 tracking-tight flex items-center gap-2">
                       <svg xmlns='http://www.w3.org/2000/svg' className='h-7 w-7 text-indigo-500' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' /></svg>
                       Lead Details
                     </h2>
                     <button onClick={() => setSelectedLead(null)} className="text-gray-400 hover:text-indigo-600 text-2xl font-bold">×</button>
                   </div>
-                  <div className="px-8 py-6 bg-white rounded-b-2xl">
+                  <div className="px-8 py-6 bg-white rounded-b-2xl overflow-y-auto flex-1">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 mb-4">
                       <div><span className="text-gray-500 text-xs font-semibold uppercase">Contact Name</span><div className="text-lg font-bold text-gray-900">{selectedLead.name}</div></div>
                       <div><span className="text-gray-500 text-xs font-semibold uppercase">Phone</span><div className="text-base text-gray-800">{selectedLead.phone}</div></div>
@@ -578,8 +594,115 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
                         <div className="md:col-span-2"><span className="text-gray-500 text-xs font-semibold uppercase">Visiting Time</span><div className="text-base text-gray-800">{new Date(selectedLead.visitTime).toLocaleString()}</div></div>
                       )}
                       <div><span className="text-gray-500 text-xs font-semibold uppercase">Status</span><div className="text-base text-gray-800">{selectedLead.status}</div></div>
-                      <div><span className="text-gray-500 text-xs font-semibold uppercase">Remarks</span><div className="text-base text-gray-800">{selectedLead.remarks || '-'}</div></div>
+                      <div>
+                        <span className="text-gray-500 text-xs font-semibold uppercase">Assigned To</span>
+                        <div className="text-base text-gray-800">
+                          {selectedLead.assignedTo
+                            ? (typeof selectedLead.assignedTo === 'object'
+                                ? selectedLead.assignedTo.name || selectedLead.assignedTo.email || 'Assigned'
+                                : (() => {
+                                    const emp = employees.find(e => String(e._id) === String(selectedLead.assignedTo));
+                                    return emp ? (emp.name || emp.email) : 'Assigned';
+                                  })()
+                              )
+                            : 'Unassigned'}
+                        </div>
+                      </div>
+                      {selectedLead.message && (
+                        <div className="md:col-span-2">
+                          <span className="text-gray-500 text-xs font-semibold uppercase">Property / Inquiry</span>
+                          <div className="text-base text-gray-800 bg-indigo-50 rounded-lg px-4 py-2 mt-1">{selectedLead.message}</div>
+                        </div>
+                      )}
+                      <div>
+                        <span className="text-gray-500 text-xs font-semibold uppercase">Current Remark</span>
+                        <div className={`text-base font-semibold mt-0.5 ${
+                          selectedLead.remarks === 'Interested' ? 'text-green-700' :
+                          selectedLead.remarks === 'Not Interested' ? 'text-red-700' :
+                          selectedLead.remarks === 'Busy' ? 'text-yellow-700' :
+                          selectedLead.remarks === 'Invalid Number' ? 'text-gray-600' :
+                          'text-gray-800'
+                        }`}>{selectedLead.remarks || '-'}</div>
+                      </div>
                     </div>
+
+                    {/* Remark Notes History */}
+                    {selectedLead.remarkNotes && selectedLead.remarkNotes.length > 0 && (
+                      <div className="mt-4 border-t border-gray-100 pt-4">
+                        <h3 className="text-sm font-bold text-gray-700 uppercase mb-3 flex items-center gap-2">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                          Remark Notes
+                        </h3>
+                        <div className="space-y-2 max-h-48 overflow-y-auto">
+                          {[...selectedLead.remarkNotes].reverse().map((rn, idx) => (
+                            <div key={idx} className={`rounded-lg px-3 py-2 border text-sm ${
+                              rn.remark === 'Interested' ? 'bg-green-50 border-green-200' :
+                              rn.remark === 'Not Interested' ? 'bg-red-50 border-red-200' :
+                              rn.remark === 'Busy' ? 'bg-yellow-50 border-yellow-200' :
+                              rn.remark === 'Invalid Number' ? 'bg-gray-50 border-gray-300' :
+                              'bg-gray-50 border-gray-200'
+                            }`}>
+                              <div className="flex items-center justify-between mb-1">
+                                <span className={`font-semibold text-xs px-2 py-0.5 rounded-full ${
+                                  rn.remark === 'Interested' ? 'bg-green-200 text-green-800' :
+                                  rn.remark === 'Not Interested' ? 'bg-red-200 text-red-800' :
+                                  rn.remark === 'Busy' ? 'bg-yellow-200 text-yellow-800' :
+                                  rn.remark === 'Invalid Number' ? 'bg-gray-300 text-gray-800' :
+                                  'bg-gray-200 text-gray-800'
+                                }`}>{rn.remark}</span>
+                                <span className="text-gray-400 text-xs">{rn.createdAt ? new Date(rn.createdAt).toLocaleString() : ''}</span>
+                              </div>
+                              {rn.note && <p className="text-gray-700 text-sm mt-1">{rn.note}</p>}
+                              {rn.addedByName && <p className="text-gray-400 text-xs mt-1">— {rn.addedByName}</p>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Remark Note Popup Modal */}
+            {remarkNoteModal && (
+              <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-[60] animate-fadeIn">
+                <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full border border-indigo-100 animate-slideDown">
+                  <h3 className="text-lg font-bold text-gray-800 mb-1">Add Note</h3>
+                  <p className="text-sm text-gray-500 mb-4">
+                    Remark: <span className={`font-semibold ${
+                      remarkNoteModal.remark === 'Interested' ? 'text-green-600' :
+                      remarkNoteModal.remark === 'Not Interested' ? 'text-red-600' :
+                      remarkNoteModal.remark === 'Busy' ? 'text-yellow-600' :
+                      remarkNoteModal.remark === 'Invalid Number' ? 'text-gray-600' :
+                      'text-gray-600'
+                    }`}>{remarkNoteModal.remark}</span>
+                  </p>
+                  <textarea
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 resize-none"
+                    rows={3}
+                    placeholder="Write a note (optional)..."
+                    value={remarkNoteText}
+                    onChange={(e) => setRemarkNoteText(e.target.value)}
+                    autoFocus
+                  />
+                  <div className="flex gap-2 mt-4 justify-end">
+                    <button
+                      onClick={() => { setRemarkNoteModal(null); setRemarkNoteText(''); }}
+                      className="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 font-medium"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleUpdateRemarks(remarkNoteModal.leadId, remarkNoteModal.remark, remarkNoteText);
+                        setRemarkNoteModal(null);
+                        setRemarkNoteText('');
+                      }}
+                      className="px-4 py-2 text-sm bg-gradient-to-r from-indigo-500 to-blue-500 text-white rounded-lg hover:from-indigo-600 hover:to-blue-600 font-medium shadow"
+                    >
+                      Save Remark
+                    </button>
                   </div>
                 </div>
               </div>

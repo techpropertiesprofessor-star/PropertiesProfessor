@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import io from 'socket.io-client';
 import Sidebar from './Sidebar';
 import { FiBell, FiZap, FiUser, FiLogOut, FiCheckCircle, FiCalendar, FiChevronDown, FiKey } from 'react-icons/fi';
 import { notificationAPI } from '../api/client';
 import { useTheme } from '../context/ThemeContext';
+import { useNotificationCounts } from '../context/NotificationContext';
+import { useSocket } from '../context/SocketContext';
 import axios from 'axios';
 
 export default function Header({ user, onLogout, onSearch, notificationCount = 0, clearNotificationsBadge, onViewLead, onNotificationClick, newMessageCount = 0, resetNewMessageCount }) {
@@ -13,6 +14,12 @@ export default function Header({ user, onLogout, onSearch, notificationCount = 0
   
   // Get theme from context
   const { theme, isDark, setTheme: changeTheme } = useTheme();
+  
+  // Get notification counts from centralized context
+  const { totalUnread: contextUnreadCount, refreshCounts: refreshNotificationCounts } = useNotificationCounts();
+  
+  // Shared socket
+  const { on, off, connected } = useSocket() || {};
   
   // Enhanced UI state - starts with checking status
   const [systemStatus, setSystemStatus] = useState('checking'); // 'online', 'offline', 'checking'
@@ -168,6 +175,12 @@ export default function Header({ user, onLogout, onSearch, notificationCount = 0
   // Mark all notifications as read
   const markAllAsRead = async () => {
     try {
+      // Mark all notifications as read via API
+      const promises = notifications
+        .filter(n => !n.read && !n.isRead)
+        .map(n => notificationAPI.markAsRead(n._id || n.id).catch(() => {}));
+      await Promise.all(promises);
+      
       // Call existing handler if available
       if (clearNotificationsBadge) {
         clearNotificationsBadge();
@@ -181,6 +194,9 @@ export default function Header({ user, onLogout, onSearch, notificationCount = 0
         leads: 0,
         announcements: 0
       });
+      
+      // Refresh centralized notification counts
+      refreshNotificationCounts();
     } catch (error) {
       console.error('Failed to mark all as read:', error);
     }
@@ -211,59 +227,44 @@ export default function Header({ user, onLogout, onSearch, notificationCount = 0
   };
 
   // Real-time notifications: fetch all and update on socket event
+  const fetchNotifications = useCallback(() => {
+    notificationAPI.getAll()
+      .then(res => {
+        const sorted = (res.data || []).sort((a, b) => new Date(b.createdAt || b.created_at) - new Date(a.createdAt || a.created_at));
+        setNotifications(sorted);
+        const types = {
+          messages: sorted.filter(n => n.type === 'TEAM_CHAT' && !n.isRead && !n.read).length,
+          tasks: sorted.filter(n => (n.type === 'TASK_ASSIGNED' || n.type === 'TASK_STATUS_UPDATE') && !n.isRead && !n.read).length,
+          leads: sorted.filter(n => (n.type === 'lead-assigned' || n.type === 'LEAD_ASSIGNED') && !n.isRead && !n.read).length,
+          announcements: sorted.filter(n => n.type === 'announcement' && !n.isRead && !n.read).length
+        };
+        setNotificationTypes(types);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
   useEffect(() => {
     let interval;
-    let socket;
-    const fetchNotifications = () => {
-      notificationAPI.getAll()
-        .then(res => {
-          // Sort by createdAt descending, show all
-          const sorted = (res.data || []).sort((a, b) => new Date(b.createdAt || b.created_at) - new Date(a.createdAt || a.created_at));
-          setNotifications(sorted);
-          
-          // Categorize notifications for smart display
-          const types = {
-            messages: sorted.filter(n => n.type === 'TEAM_CHAT' && !n.isRead && !n.read).length,
-            tasks: sorted.filter(n => (n.type === 'TASK_ASSIGNED' || n.type === 'TASK_STATUS_UPDATE') && !n.isRead && !n.read).length,
-            leads: sorted.filter(n => (n.type === 'lead-assigned' || n.type === 'LEAD_ASSIGNED') && !n.isRead && !n.read).length,
-            announcements: sorted.filter(n => n.type === 'announcement' && !n.isRead && !n.read).length
-          };
-          setNotificationTypes(types);
-        })
-        .finally(() => setLoading(false));
-    };
     if (showDropdown) {
       setLoading(true);
       fetchNotifications();
       interval = setInterval(fetchNotifications, 5000);
-      // Don't clear badge when opening - only clear when individual notifications are read
       if (resetNewMessageCount) resetNewMessageCount();
-      // Real-time socket connection for notifications
-      const socketBase = process.env.REACT_APP_API_URL
-        ? process.env.REACT_APP_API_URL.replace('/api', '')
-        : window.location.origin;
-      socket = io(socketBase, {
-        reconnection: true,
-        reconnectionDelay: 1000,
-        reconnectionDelayMax: 5000,
-        reconnectionAttempts: 5
-      });
-      socket.on('connect', () => {
-        const userId = user?.employeeId || user?._id || user?.id;
-        if (userId) {
-          socket.emit('identify', userId);
-          console.log('🔔 Identified user for notifications:', userId);
-        }
-      });
-      socket.on('new-notification', () => {
-        fetchNotifications();
-      });
     }
     return () => {
       if (interval) clearInterval(interval);
-      if (socket) socket.disconnect();
     };
-  }, [showDropdown, clearNotificationsBadge, user, resetNewMessageCount]);
+  }, [showDropdown, resetNewMessageCount, fetchNotifications]);
+
+  // Refresh notification list when shared socket fires new-notification
+  useEffect(() => {
+    if (!on || !off || !connected) return;
+    const handler = () => {
+      if (showDropdown) fetchNotifications();
+    };
+    on('new-notification', handler);
+    return () => off('new-notification', handler);
+  }, [on, off, connected, showDropdown, fetchNotifications]);
 
   // Play a short beep using WebAudio
   const playNotificationSound = (opts = {}) => {
@@ -288,35 +289,21 @@ export default function Header({ user, onLogout, onSearch, notificationCount = 0
     }
   };
 
-  // Global socket for sounds and announcement banners
+  // Global socket for sounds and announcement banners (using shared socket)
   useEffect(() => {
-    if (!user) return;
-    const socketBase = process.env.REACT_APP_API_URL
-      ? process.env.REACT_APP_API_URL.replace('/api', '')
-      : window.location.origin;
-    const s = io(socketBase, { reconnection: true });
-    s.on('connect', () => {
-      const userId = user?.employeeId || user?._id || user?.id;
-      if (userId) s.emit('identify', userId);
-    });
+    if (!user || !on || !off || !connected) return;
 
-    s.on('chat-message', (data) => {
-      // Play distinct tone for chat
-      playNotificationSound({ freq: 900, duration: 140, volume: 0.06 });
-    });
-
-    s.on('private-message', (data) => {
-      playNotificationSound({ freq: 760, duration: 160, volume: 0.07 });
-    });
-
-    s.on('lead-assigned', (data) => {
-      playNotificationSound({ freq: 520, duration: 220, volume: 0.07 });
-    });
-
-    s.on('new-notification', async (payload) => {
-      // Generic notification sound
+    const handleChat = () => playNotificationSound({ freq: 900, duration: 140, volume: 0.06 });
+    const handlePrivate = () => playNotificationSound({ freq: 760, duration: 160, volume: 0.07 });
+    const handleLeadAssigned = () => playNotificationSound({ freq: 520, duration: 220, volume: 0.07 });
+    const handleAnnouncement = () => {
+      playNotificationSound({ freq: 700, duration: 180, volume: 0.08 });
+      setTimeout(() => playNotificationSound({ freq: 880, duration: 120, volume: 0.06 }), 200);
+    };
+    const handleTaskAssigned = () => playNotificationSound({ freq: 600, duration: 200, volume: 0.07 });
+    const handleNotification = () => playNotificationSound({ freq: 640, duration: 140, volume: 0.06 });
+    const handleNewNotification = async () => {
       playNotificationSound({ freq: 640, duration: 140, volume: 0.06 });
-      // If it's an announcement, fetch latest and show banner
       try {
         const res = await notificationAPI.getAll();
         const list = Array.isArray(res.data) ? res.data : (res.data?.data || []);
@@ -328,16 +315,31 @@ export default function Header({ user, onLogout, onSearch, notificationCount = 0
           });
           setTimeout(() => setAnnouncementBanner(null), 7000);
         }
-      } catch (e) {
-        // ignore
-      }
-    });
+      } catch (e) { /* ignore */ }
+    };
 
-    return () => s.disconnect();
-  }, [user]);
+    on('chat-message', handleChat);
+    on('private-message', handlePrivate);
+    on('lead-assigned', handleLeadAssigned);
+    on('new-announcement', handleAnnouncement);
+    on('taskAssigned', handleTaskAssigned);
+    on('notification', handleNotification);
+    on('new-notification', handleNewNotification);
 
-  // Calculate total unread count from internal notifications
-  const totalUnreadCount = notifications.filter(n => !n.isRead && !n.read).length;
+    return () => {
+      off('chat-message', handleChat);
+      off('private-message', handlePrivate);
+      off('lead-assigned', handleLeadAssigned);
+      off('new-announcement', handleAnnouncement);
+      off('taskAssigned', handleTaskAssigned);
+      off('notification', handleNotification);
+      off('new-notification', handleNewNotification);
+    };
+  }, [user, on, off, connected]);
+
+  // Use centralized context count for the bell badge (always up-to-date)
+  // The local notifications list is only used for the dropdown content
+  const totalUnreadCount = contextUnreadCount;
   useEffect(() => {
     function handleClickOutside(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -366,17 +368,17 @@ export default function Header({ user, onLogout, onSearch, notificationCount = 0
 
   return (
     <>
-      <header className="bg-gradient-to-r from-yellow-100 via-yellow-200 to-yellow-100 shadow-sm border-b border-yellow-300">
-        <div className="flex items-center justify-between px-6 py-2.5">
+      <header className="z-40 flex-shrink-0 bg-gradient-to-r from-yellow-100 via-yellow-200 to-yellow-100 shadow-sm border-b border-yellow-300">
+        <div className="flex items-center justify-between px-2 sm:px-4 md:px-6 py-2 sm:py-2.5">
         {/* Brand section with role badge */}
-        <div className="flex items-center space-x-3 overflow-hidden">
+        <div className="flex items-center space-x-2 sm:space-x-3 overflow-hidden">
           {/* Mobile hamburger (left of role badge) - visible on small screens */}
-          <div className="md:hidden mr-2">
-            <button onClick={() => { setShowMobileSidebar(true); }} className="p-2 rounded-md bg-white/50 hover:bg-white/80 text-gray-700" aria-label="Open menu">☰</button>
+          <div className="md:hidden">
+            <button onClick={() => { setShowMobileSidebar(true); }} className="p-1.5 sm:p-2 rounded-md bg-white/50 hover:bg-white/80 text-gray-700" aria-label="Open menu">☰</button>
           </div>
           {/* Role Badge - moved to left corner */}
           <div className="group relative">
-            <div className={`px-3 py-1 rounded-full text-xs font-semibold border-2 cursor-default transition-all duration-200 ${
+            <div className={`px-2 sm:px-3 py-1 rounded-full text-xs font-semibold border-2 cursor-default transition-all duration-200 ${
               user?.role === 'MANAGER' ? 'bg-purple-100 text-purple-800 border-purple-300 hover:bg-purple-200' :
               user?.role === 'ADMIN' ? 'bg-red-100 text-red-800 border-red-300 hover:bg-red-200' :
               'bg-blue-100 text-blue-800 border-blue-300 hover:bg-blue-200'
@@ -397,19 +399,19 @@ export default function Header({ user, onLogout, onSearch, notificationCount = 0
         <div className="hidden md:flex items-center">
         </div>
         
-        {/* Enhanced Live Clock with IST */}
-        <div className="flex items-center space-x-3 bg-white/30 rounded-lg px-3 py-2 border border-gray-200">
+        {/* Enhanced Live Clock with IST - hidden on very small screens */}
+        <div className="hidden xs:flex items-center space-x-3 bg-white/30 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200">
           <div className="text-center">
-            <div className="text-sm font-bold text-gray-800 transition-all duration-1000">
+            <div className="text-xs sm:text-sm font-bold text-gray-800 transition-all duration-1000">
               {getISTTime()}
             </div>
-            <div className="text-xs text-gray-600 font-medium">
+            <div className="text-xs text-gray-600 font-medium hidden sm:block">
               {getISTDate()}
             </div>
           </div>
         </div>
         {/* Right side controls */}
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-1 sm:space-x-3">
           {/* Quick Actions Menu */}
           <div className="relative" ref={quickActionsRef}>
             <button

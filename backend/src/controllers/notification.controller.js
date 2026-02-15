@@ -103,3 +103,39 @@ exports.markTeamChatAsRead = async (req, res, next) => {
   }
 };
 
+// Mark all notifications of a specific section/type as read
+exports.markSectionAsRead = async (req, res, next) => {
+  try {
+    const userId = req.user.employeeId || req.user._id || req.user.id;
+    const { section } = req.params;
+    
+    // Map section names to notification types
+    const sectionTypeMap = {
+      leads: ['lead-assigned', 'LEAD_ASSIGNED'],
+      tasks: ['TASK_ASSIGNED', 'TASK_STATUS_UPDATE'],
+      teamChat: ['TEAM_CHAT', 'PRIVATE_MESSAGE'],
+      callers: ['CALLER_ASSIGNED'],
+      calendar: ['calendar-event'],
+      announcements: ['ANNOUNCEMENT']
+    };
+    
+    const types = sectionTypeMap[section];
+    if (!types) {
+      return res.status(400).json({ message: 'Invalid section type' });
+    }
+    
+    const result = await Notification.updateMany(
+      { userId, type: { $in: types }, read: false },
+      { read: true }
+    );
+    
+    res.json({ 
+      success: true, 
+      markedCount: result.modifiedCount,
+      message: `${result.modifiedCount} ${section} notifications marked as read`
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+

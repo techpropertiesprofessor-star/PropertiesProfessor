@@ -1,7 +1,7 @@
-import { useEffect, useContext } from 'react';
+import { useEffect, useContext, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import io from 'socket.io-client';
 import { AuthContext } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
 import { useNotificationToast } from '../context/NotificationToastContext';
 import { playNotificationSound } from '../utils/sound';
 
@@ -9,62 +9,38 @@ export const useRealtimeNotifications = () => {
   const { user } = useContext(AuthContext);
   const { showToast } = useNotificationToast();
   const navigate = useNavigate();
+  const { on, off, connected } = useSocket() || {};
+
+  // Helper to map notification types to routes
+  const getRouteForType = useCallback((type) => {
+    const typeStr = String(type).toLowerCase();
+    if (typeStr.includes('task')) return '/tasks';
+    if (typeStr.includes('lead')) return '/leads';
+    if (typeStr.includes('caller')) return '/callers';
+    if (typeStr.includes('chat') || typeStr.includes('message')) return '/chat';
+    if (typeStr.includes('announcement')) return '/announcements';
+    return '/notifications';
+  }, []);
 
   useEffect(() => {
-    if (!user) return;
-
-    const socketBase = process.env.REACT_APP_API_URL
-      ? process.env.REACT_APP_API_URL.replace('/api', '')
-      : window.location.origin;
-
-    const socket = io(socketBase, {
-      reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      reconnectionAttempts: 5
-    });
-
-    socket.on('connect', () => {
-      console.log('🔔 Toast notification system connected');
-      if (user?._id) socket.emit('identify', user._id);
-    });
-
-    // Helper to map notification types to routes
-    const getRouteForType = (type) => {
-      const typeStr = String(type).toLowerCase();
-      
-      if (typeStr.includes('task')) return '/tasks';
-      if (typeStr.includes('lead')) return '/leads';
-      if (typeStr.includes('caller')) return '/callers';
-      if (typeStr.includes('chat') || typeStr.includes('message')) return '/chat';
-      if (typeStr.includes('announcement')) return '/announcements';
-      
-      return '/notifications';
-    };
+    if (!user || !on || !off || !connected) return;
 
     // Helper to format notification data
-    const formatNotification = (data) => {
-      return {
-        type: data.type || 'notification',
-        title: data.title || data.taskTitle || 'New Notification',
-        message: data.message || data.description || data.taskDescription || '',
-        timestamp: data.timestamp || data.createdAt || Date.now(),
-        link: getRouteForType(data.type),
-        onClick: () => {
-          navigate(getRouteForType(data.type));
-        }
-      };
-    };
-
-    // Listen to various notification events
-    socket.on('new-notification', (data) => {
-      console.log('🔔 New notification:', data);
-      playNotificationSound();
-      showToast(formatNotification(data));
+    const formatNotification = (data) => ({
+      type: data.type || 'notification',
+      title: data.title || data.taskTitle || 'New Notification',
+      message: data.message || data.description || data.taskDescription || '',
+      timestamp: data.timestamp || data.createdAt || Date.now(),
+      link: getRouteForType(data.type),
+      onClick: () => navigate(getRouteForType(data.type))
     });
 
-    socket.on('taskAssigned', (data) => {
-      console.log('📋 Task assigned:', data);
+    const handleNewNotification = (data) => {
+      playNotificationSound();
+      showToast(formatNotification(data));
+    };
+
+    const handleTaskAssigned = (data) => {
       playNotificationSound();
       showToast({
         type: 'TASK_ASSIGNED',
@@ -74,10 +50,9 @@ export const useRealtimeNotifications = () => {
         link: '/tasks',
         onClick: () => navigate('/tasks')
       });
-    });
+    };
 
-    socket.on('new-lead', (data) => {
-      console.log('👤 New lead:', data);
+    const handleNewLead = (data) => {
       playNotificationSound();
       showToast({
         type: 'LEAD',
@@ -87,29 +62,59 @@ export const useRealtimeNotifications = () => {
         link: '/leads',
         onClick: () => navigate('/leads')
       });
-    });
+    };
 
-    socket.on('notification', (data) => {
-      console.log('🔔 General notification:', data);
+    const handleNotification = (data) => {
       playNotificationSound();
       showToast(formatNotification(data));
-    });
+    };
 
-    socket.on('ANNOUNCEMENT', (data) => {
-      console.log('📢 Announcement:', data);
+    const handleAnnouncement = (data) => {
       playNotificationSound();
       showToast({
         type: 'ANNOUNCEMENT',
         title: '📢 New Announcement',
-        message: data.message || data.title || 'New announcement posted',
+        message: data.message || data.title || data.text || 'New announcement posted',
         timestamp: Date.now(),
         link: '/announcements',
         onClick: () => navigate('/announcements')
       });
-    });
+    };
+
+    const handleChat = () => playNotificationSound();
+
+    const handleLeadAssigned = (data) => {
+      playNotificationSound();
+      showToast({
+        type: 'LEAD_ASSIGNED',
+        title: '📋 Lead Assigned',
+        message: data.message || 'A lead has been assigned to you',
+        timestamp: Date.now(),
+        link: '/leads',
+        onClick: () => navigate('/leads')
+      });
+    };
+
+    on('new-notification', handleNewNotification);
+    on('taskAssigned', handleTaskAssigned);
+    on('new-lead', handleNewLead);
+    on('notification', handleNotification);
+    on('ANNOUNCEMENT', handleAnnouncement);
+    on('new-announcement', handleAnnouncement);
+    on('chat-message', handleChat);
+    on('private-message', handleChat);
+    on('lead-assigned', handleLeadAssigned);
 
     return () => {
-      socket.disconnect();
+      off('new-notification', handleNewNotification);
+      off('taskAssigned', handleTaskAssigned);
+      off('new-lead', handleNewLead);
+      off('notification', handleNotification);
+      off('ANNOUNCEMENT', handleAnnouncement);
+      off('new-announcement', handleAnnouncement);
+      off('chat-message', handleChat);
+      off('private-message', handleChat);
+      off('lead-assigned', handleLeadAssigned);
     };
-  }, [user, showToast, navigate]);
+  }, [user, on, off, connected, showToast, navigate, getRouteForType]);
 };

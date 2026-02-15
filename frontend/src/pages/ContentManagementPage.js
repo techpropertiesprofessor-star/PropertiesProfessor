@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useContext } from 'react';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
+import useSidebarCollapsed from '../hooks/useSidebarCollapsed';
 import { AuthContext } from '../context/AuthContext';
 import { FiPlus, FiEdit2, FiTrash2, FiUserPlus, FiCheck, FiX } from 'react-icons/fi';
 import { format } from 'date-fns';
 import { usePermissions } from '../hooks/usePermissions';
 
 export default function ContentManagementPage() {
+  const sidebarCollapsed = useSidebarCollapsed();
   const { user } = useContext(AuthContext);
   const { canViewContent, canCreateContent, loading: permissionsLoading } = usePermissions();
   const [content, setContent] = useState([]);
@@ -261,10 +263,10 @@ export default function ContentManagementPage() {
   if (permissionsLoading) {
     return (
       <div className="flex h-screen bg-gray-50">
-        <Sidebar />
-        <div className="flex-1 flex flex-col">
+        <div className="hidden md:block"><Sidebar /></div>
+        <div className={`flex-1 flex flex-col overflow-hidden ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
           <Header user={user} />
-          <main className="flex-1 flex items-center justify-center p-8">
+          <main className="flex-1 flex items-center justify-center p-8 overflow-y-auto">
             <div className="text-gray-600 text-sm">Loading permissions...</div>
           </main>
         </div>
@@ -275,10 +277,10 @@ export default function ContentManagementPage() {
   if (!canViewContent) {
     return (
       <div className="flex h-screen bg-gray-50">
-        <Sidebar />
-        <div className="flex-1 flex flex-col">
+        <div className="hidden md:block"><Sidebar /></div>
+        <div className={`flex-1 flex flex-col overflow-hidden ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
           <Header user={user} />
-          <main className="flex-1 flex items-center justify-center p-8">
+          <main className="flex-1 flex items-center justify-center p-8 overflow-y-auto">
             <div className="bg-red-100 border border-red-400 text-red-700 px-8 py-6 rounded-lg text-center max-w-md">
               <h2 className="text-2xl font-bold mb-2">Access Denied</h2>
               <p>You do not have permission to view content management.</p>
@@ -292,9 +294,9 @@ export default function ContentManagementPage() {
 
   return (
     <div className="flex h-screen bg-gray-100">
-      <Sidebar />
+      <div className="hidden md:block"><Sidebar /></div>
       
-      <div className="flex-1 flex flex-col">
+      <div className={`flex-1 flex flex-col overflow-hidden ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
         <Header user={user} />
         
         <main className="flex-1 overflow-auto">

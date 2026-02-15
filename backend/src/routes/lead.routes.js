@@ -1,10 +1,12 @@
 const express = require('express');
 const router = express.Router();
+
 const leadController = require('../controllers/lead.controller');
 const auth = require('../middlewares/auth.middleware');
 const role = require('../middlewares/role.middleware');
 const multer = require('multer');
 const path = require('path');
+
 
 // ==================
 // Multer setup
@@ -39,7 +41,7 @@ router.get('/download', auth, role(['MANAGER', 'ADMIN']), leadController.downloa
 // GET /api/leads should be public for dashboard listing
 router.get('/', auth, leadController.getLeads);
 
-router.post('/:id/assign', auth, leadController.assignLead);
+router.post('/:id/assign', auth, role(['MANAGER', 'ADMIN']), leadController.assignLead);
 
 // Comments
 router.post('/:id/comments', leadController.addComment);
@@ -54,3 +56,11 @@ router.get('/:id', leadController.getLeadById);
 router.put('/:id', leadController.updateLead);
 
 module.exports = router;
+exports.getUploadHistory = async (req, res, next) => {
+  try {
+    const uploads = await UploadHistory.find({}).sort({ uploadedAt: -1 });
+    res.json(uploads);
+  } catch (err) {
+    next(err);
+  }
+};

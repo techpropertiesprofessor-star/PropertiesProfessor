@@ -4,9 +4,11 @@ import { default as api } from '../api/client';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
+import useSidebarCollapsed from '../hooks/useSidebarCollapsed';
 import { AuthContext } from '../context/AuthContext';
 
 export default function LeaveRequestFormPage() {
+  const sidebarCollapsed = useSidebarCollapsed();
   const { user } = useContext(AuthContext);
   const [formData, setFormData] = useState({
     start_date: '',
@@ -38,11 +40,11 @@ export default function LeaveRequestFormPage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      <Sidebar />
-      <div className="flex-1 flex flex-col">
+    <div className="flex h-screen bg-gray-50">
+      <div className="hidden md:block"><Sidebar /></div>
+      <div className={`flex-1 flex flex-col overflow-hidden ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
         <Header user={user} />
-        <div className="flex flex-col items-center justify-center flex-1 relative w-full">
+        <div className="flex flex-col items-center justify-center flex-1 relative w-full overflow-y-auto">
           <button
             onClick={() => navigate('/leaves')}
             className="px-4 py-1.5 bg-gray-100 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-200 font-medium shadow-sm transition flex items-center gap-1 absolute left-0 top-0 ml-8 mt-8 z-10"

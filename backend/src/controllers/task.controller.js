@@ -39,6 +39,9 @@ exports.updateTaskStatusByEmployee = async (req, res, next) => {
       });
     }
     
+    // Broadcast task update to all clients for real-time updates
+    emitToAll('task-updated', { task: task.toObject(), timestamp: Date.now() });
+
     res.json(task);
   } catch (err) {
     next(err);
@@ -119,7 +122,7 @@ const Task = require('../models/Task');
 const TaskComment = require('../models/TaskComment');
 
 const Notification = require('../models/Notification');
-const { emitToUser } = require('../utils/socket.util');
+const { emitToUser, emitToAll } = require('../utils/socket.util');
 
 exports.createTask = async (req, res, next) => {
   try {
@@ -157,6 +160,9 @@ exports.createTask = async (req, res, next) => {
         createdAt: notification.createdAt
       });
     }
+
+    // Broadcast task creation to all connected clients for real-time updates
+    emitToAll('task-created', { task: task.toObject(), timestamp: Date.now() });
 
     res.status(201).json(task);
   } catch (err) {
@@ -197,6 +203,10 @@ exports.updateTask = async (req, res, next) => {
       { new: true }
     );
     if (!task) return res.status(404).json({ message: 'Task not found' });
+
+    // Broadcast task update to all connected clients for real-time updates
+    emitToAll('task-updated', { task: task.toObject(), timestamp: Date.now() });
+
     res.json(task);
   } catch (err) {
     next(err);

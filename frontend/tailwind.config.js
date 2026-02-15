@@ -3,7 +3,14 @@ module.exports = {
     "./src/**/*.{js,jsx,ts,tsx}",
   ],
   theme: {
-    extend: {},
+    extend: {
+      zIndex: {
+        '60': '60',
+      },
+      screens: {
+        'xs': '480px',
+      },
+    },
   },
   plugins: [],
 }

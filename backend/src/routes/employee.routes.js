@@ -27,12 +27,13 @@ router.get('/statistics/all', auth, role(['ADMIN', 'MANAGER']), employeeControll
 router.put('/status/online', auth, employeeController.updateOnlineStatus);
 router.get('/:id/status', auth, employeeController.getEmployeeWithStatus);
 
+// Public endpoint for basic member info (for chat @ tagging) - accessible by all authenticated users
+router.get('/basic', auth, employeeController.getEmployeesBasic);
+
 // Only ADMIN or MANAGER can access other routes
 router.use(auth, role(['ADMIN', 'MANAGER']));
 
 router.post('/', employeeController.createEmployee);
-// Public endpoint for basic member info (for chat)
-router.get('/basic', employeeController.getEmployeesBasic);
 router.get('/:id', employeeController.getEmployeeById);
 router.put('/:id', employeeController.updateEmployee);
 router.post('/:id/documents', upload.single('document'), employeeController.uploadDocument);

@@ -2,17 +2,11 @@ import React, { useContext, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
+import { useNotificationCounts } from '../context/NotificationContext';
 import { FiHome, FiClock, FiCheckSquare, FiPhone, FiUser, FiUsers, FiTrendingUp, FiPackage, FiChevronLeft, FiChevronRight, FiMessageCircle, FiBook, FiCalendar, FiEdit3, FiBarChart2 } from 'react-icons/fi';
 
 import { useLocation } from 'react-router-dom';
 export default function Sidebar({ 
-  notificationCount = 0, 
-  clearLeadsBadge,
-  leadsCount = 0,
-  tasksCount = 0,
-  teamChatCount = 0,
-  callersCount = 0,
-  calendarCount = 0,
   mobile = false,
   onClose = null
 }) {
@@ -20,6 +14,16 @@ export default function Sidebar({
   const navigate = useNavigate();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
+  
+  // Get notification counts from centralized context
+  const { 
+    leadsCount, 
+    tasksCount, 
+    teamChatCount, 
+    callersCount, 
+    calendarCount,
+    clearSection 
+  } = useNotificationCounts();
   useEffect(() => {
     try {
       console.log('Sidebar render debug:', { mobile, collapsed, hasOnClose: !!onClose });
@@ -27,22 +31,34 @@ export default function Sidebar({
       /* ignore */
     }
   }, [mobile, collapsed, onClose]);
-  // Clear badge when visiting /leads
+  // Clear section badge when visiting specific pages
   useEffect(() => {
-    if (location.pathname === '/leads' && clearLeadsBadge) {
-      clearLeadsBadge();
+    const pathToSection = {
+      '/leads': 'leads',
+      '/tasks': 'tasks',
+      '/chat': 'teamChat',
+      '/callers': 'callers',
+      '/calendar': 'calendar',
+      '/announcements': 'announcements'
+    };
+    const section = pathToSection[location.pathname];
+    if (section) {
+      clearSection(section);
     }
-  }, [location.pathname, clearLeadsBadge]);
+  }, [location.pathname, clearSection]);
 
   useEffect(() => {
     const saved = localStorage.getItem('sidebarCollapsed');
     if (saved === 'true') setCollapsed(true);
   }, []);
 
+  
+
   const toggleCollapsed = () => {
     const next = !collapsed;
     setCollapsed(next);
     localStorage.setItem('sidebarCollapsed', String(next));
+    window.dispatchEvent(new CustomEvent('sidebarToggle', { detail: { collapsed: next } }));
   };
 
   const menuItems = [
@@ -103,12 +119,11 @@ export default function Sidebar({
   const wrapperWidthClass = collapsed ? 'md:w-20' : 'md:w-64';
 
   const content = (
-    <div className={`w-full ${wrapperWidthClass} flex-shrink-0`}> 
-      {/* Desktop fixed sidebar */}
-      <aside
-        className={mobile ? `fixed inset-y-0 left-0 z-60 bg-slate-900 border-r border-slate-800 text-white flex flex-col transition-all duration-300 ease-in-out shadow-2xl ${collapsed ? 'w-20' : 'w-64'}` : `hidden md:block fixed left-0 top-0 h-screen bg-slate-900 border-r border-slate-800 text-white flex flex-col transition-all duration-300 ease-in-out shadow-2xl ${collapsed ? 'w-20' : 'w-64'}`}
-        style={mobile ? { width: collapsed ? '5rem' : '16rem' } : {}}
-      >
+    /* Desktop fixed sidebar: render only the fixed <aside> so parent layout doesn't reserve width */
+    <aside
+      className={mobile ? `fixed inset-y-0 left-0 z-60 bg-slate-900 border-r border-slate-800 text-white flex flex-col transition-all duration-300 ease-in-out shadow-2xl sidebar-scroll scrollbar-hidden ${collapsed ? 'w-20' : 'w-64'}` : `hidden md:block fixed left-0 top-0 h-screen bg-slate-900 border-r border-slate-800 text-white flex flex-col transition-all duration-300 ease-in-out shadow-2xl sidebar-scroll scrollbar-hidden ${collapsed ? 'w-20' : 'w-64'}`}
+      style={mobile ? { width: collapsed ? '5rem' : '16rem' } : {}}
+    >
         {mobile && (
           <div className="px-3 py-2 border-b border-slate-800/50 flex items-center justify-between">
             <div className="text-sm font-semibold">Menu</div>
@@ -116,7 +131,7 @@ export default function Sidebar({
           </div>
         )}
       {/* Brand Header with Collapse Toggle */}
-      <div className="px-4 py-4 border-b border-slate-800/50 flex items-center justify-between bg-gradient-to-br from-slate-800/50 to-slate-900/50">
+      <div className="sticky top-0 z-30 px-4 py-4 border-b border-slate-800/50 flex items-center justify-between bg-gradient-to-br from-slate-800 to-slate-900">
         {!collapsed && (
           <div 
             className="flex items-center gap-2 cursor-pointer hover:bg-slate-800/30 rounded-lg p-2 -m-2 transition-all duration-200"
@@ -142,7 +157,7 @@ export default function Sidebar({
       </div>
 
       {/* Menu Items with Modern Styling */}
-      <nav className={`${collapsed ? 'px-2' : 'px-3'} flex-1 py-4 space-y-1 overflow-hidden`}>
+      <nav className={`${collapsed ? 'px-2' : 'px-3'} flex-1 py-4 space-y-1 pr-2`}>
         {filteredItems.map((item) => {
           // Determine badge count for each menu item
           let badgeCount = 0;
@@ -232,7 +247,6 @@ export default function Sidebar({
       )}
 
       </aside>
-    </div>
   );
 
   if (mobile && typeof document !== 'undefined') {

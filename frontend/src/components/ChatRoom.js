@@ -374,7 +374,7 @@ export default function ChatRoom({ chatType = 'team', userId = null, userName = 
   };
 
   return (
-    <div className="flex flex-col w-full h-full bg-white overflow-hidden">
+    <div className="flex flex-col w-full h-full min-h-0 bg-white overflow-hidden">
       {/* HEADER */}
       <div className="px-4 py-3 border-b bg-blue-600 text-white flex items-center justify-between">
         <div>
@@ -392,7 +392,7 @@ export default function ChatRoom({ chatType = 'team', userId = null, userName = 
       </div>
 
       {/* MESSAGES */}
-      <div className="flex-1 overflow-y-auto px-3 py-4 space-y-6 bg-white/90">
+      <div className="flex-1 min-h-0 overflow-y-auto px-3 py-4 space-y-6 bg-white/90">
         {Object.entries(groupMessagesByDate(messages)).map(([date, msgs]) => (
           <div key={date}>
             <div className="text-center text-xs text-gray-400 mb-2 font-semibold tracking-wide">{date}</div>

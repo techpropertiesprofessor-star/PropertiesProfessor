@@ -2,10 +2,13 @@
 import React, { useContext, useState, useEffect, useCallback } from 'react';
 import { playNotificationSound } from '../utils/sound';
 import { useNavigate } from 'react-router-dom';
-import io from 'socket.io-client';
+import { useSocket } from '../context/SocketContext';
+import useRealtimeData from '../hooks/useRealtimeData';
 import { AuthContext } from '../context/AuthContext';
+import { useNotificationCounts } from '../context/NotificationContext';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
+import useSidebarCollapsed from '../hooks/useSidebarCollapsed';
 import CalendarWidget from '../components/CalendarWidget';
 import { attendanceAPI, notificationAPI, taskAPI, userAPI, leadAPI, employeeAPI } from '../api/client';
 import { format } from 'date-fns';
@@ -36,7 +39,9 @@ function Toast({ message, onClose }) {
 }
 
 export default function DashboardPage() {
-  const [remarkInputs, setRemarkInputs] = useState({});
+  const sidebarCollapsed = useSidebarCollapsed();
+  const [remarkNoteModal, setRemarkNoteModal] = useState(null);
+  const [remarkNoteText, setRemarkNoteText] = useState('');
   // Employees for assignment dropdown
   const [employees, setEmployees] = useState([]);
   useEffect(() => {
@@ -64,33 +69,20 @@ export default function DashboardPage() {
 
   // Assign lead (same as LeadsPage)
   const assignLead = async (lead, employeeId) => {
-  // If this is a normalized contact/website lead, auto-convert to Lead collection and assign
-  if (lead.createdBy === 'website' && !lead.assignedTo) {
-    try {
-      const allowedSources = ['contact_form','schedule_visit','whatsapp','chatbot','manual','Friend'];
-      let validSource = allowedSources.includes(lead.source) ? lead.source : 'contact_form';
-      const newLeadRes = await leadAPI.create({
-        name: lead.name,
-        phone: lead.phone,
-        email: lead.email,
-        source: validSource,
-        remarks: lead.remarks,
-        assignedTo: employeeId,
-        status: 'assigned',
-        createdBy: 'dashboard'
-      });
-      await leadAPI.assign(newLeadRes.data._id, employeeId);
-      if (typeof fetchAssignedLeads === 'function') await fetchAssignedLeads();
-    } catch (err) {
-      alert('Failed to convert and assign lead');
-    }
-    return;
-  }
   try {
-    await leadAPI.assign(lead._id, employeeId);
-    if (typeof fetchAssignedLeads === 'function') await fetchAssignedLeads();
+    // Guard: Don't proceed if no employee selected
+    if (!employeeId) {
+      return;
+    }
+    
+    console.log('Dashboard assignLead: Assigning lead', lead._id, 'to employee', employeeId);
+    const res = await leadAPI.assign(lead._id, employeeId);
+    console.log('Dashboard assignLead: Response:', res.data);
+    return { success: true };
   } catch (err) {
-    alert('Failed to assign lead');
+    console.error('Dashboard assignLead error:', err);
+    alert('Failed to assign lead: ' + (err.response?.data?.message || err.message));
+    return { success: false };
   }
 };
   // Announcements state
@@ -228,9 +220,10 @@ export default function DashboardPage() {
 // Fetch assigned leads + include website contacts for manager/employee views
 const fetchAssignedLeads = useCallback(async () => {
   try {
+    // ask for more items so dashboard shows recent website contacts
     const response = await leadAPI.getAll({ page: 1, limit: 50 });
 
-    // Normalize possible response shapes
+    // Normalize response shapes (support array or paginated { leads, pagination })
     let leadsArr = [];
     if (Array.isArray(response.data)) leadsArr = response.data;
     else if (Array.isArray(response.data.leads)) leadsArr = response.data.leads;
@@ -255,34 +248,66 @@ useEffect(() => {
 
   // Fetch attendance data for employee dashboard
   const loadAttendanceData = useCallback(async () => {
-    if (!user || user.role !== 'EMPLOYEE') return;
+    if (!user || (user.role !== 'EMPLOYEE' && user.role !== 'MANAGER')) return;
     try {
       const response = await attendanceAPI.getHistory();
       const attendanceRecords = response.data || [];
-      
-      console.log('📊 Attendance records:', attendanceRecords);
       
       // Count present days (where checkIn exists)
       const present = attendanceRecords.filter(record => record.checkIn).length;
       setPresentCount(present);
       
-      console.log('✅ Present count:', present);
+      // Calculate absent by counting working days with no attendance
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      const today = now.getDate();
       
-      // Count absent days - you might need to calculate based on working days
-      // For now, let's count days where no checkIn or explicitly marked absent
-      const absent = attendanceRecords.filter(record => !record.checkIn || record.status === 'ABSENT').length;
+      // Build a Set of dates (YYYY-MM-DD) that have attendance records with checkIn
+      const presentDates = new Set();
+      attendanceRecords.forEach(record => {
+        if (record.checkIn || record.status === 'PRESENT') {
+          const d = new Date(record.date);
+          presentDates.add(`${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`);
+        }
+      });
+      
+      // Build a Set of holiday dates
+      const holidayDates = new Set();
+      (holidays || []).forEach(h => {
+        const d = new Date(h.date);
+        holidayDates.add(`${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`);
+      });
+      
+      // Count working days in current month up to today that have no attendance
+      let absent = 0;
+      for (let day = 1; day < today; day++) {
+        const date = new Date(year, month, day);
+        const dayOfWeek = date.getDay();
+        const dateKey = `${year}-${month}-${day}`;
+        
+        // Skip Sundays (0) and Mondays (1 = weekly off based on existing logic)
+        if (dayOfWeek === 0 || dayOfWeek === 1) continue;
+        
+        // Skip holidays
+        if (holidayDates.has(dateKey)) continue;
+        
+        // Skip if attendance was marked
+        if (presentDates.has(dateKey)) continue;
+        
+        // This is a working day with no attendance = absent
+        absent++;
+      }
       setAbsentCount(absent);
-      
-      console.log('❌ Absent count:', absent);
     } catch (err) {
       console.error('Failed to load attendance data:', err);
       setPresentCount(0);
       setAbsentCount(0);
     }
-  }, [user]);
+  }, [user, holidays]);
 
   useEffect(() => {
-    if (user && user.role === 'EMPLOYEE') {
+    if (user && (user.role === 'EMPLOYEE' || user.role === 'MANAGER')) {
       loadAttendanceData();
       // Refresh attendance data every 30 seconds for real-time updates
       const interval = setInterval(loadAttendanceData, 30000);
@@ -290,27 +315,14 @@ useEffect(() => {
     }
   }, [user, loadAttendanceData]);
 
-  // Socket listener for real-time attendance updates
+  // Real-time attendance updates via shared socket
+  const { on, off } = useSocket() || {};
+
   useEffect(() => {
-    if (!user || user.role !== 'EMPLOYEE') return;
+    if (!on || !off || !user || user.role !== 'EMPLOYEE') return;
     
-    const socketUrl = process.env.REACT_APP_SOCKET_URL || 'http://localhost:5000';
-    const socket = io(socketUrl, { transports: ['websocket', 'polling'] });
-    
-    // Identify user to join their room
-    socket.emit('identify', user.id);
-    
-    // Listen for attendance updates
-    socket.on('attendance-updated', (data) => {
-      console.log('✅ Attendance updated via socket:', data);
-      // Immediately refresh attendance data
-      loadAttendanceData();
-    });
-    
-    // Listen for real-time lead remarks updates
-    socket.on('lead-remarks-updated', (data) => {
-      console.log('📝 Lead remarks updated via socket:', data);
-      // Update both assignedLeads and allLeads
+    const handleAttendanceUpdate = () => loadAttendanceData();
+    const handleRemarksUpdate = (data) => {
       setAssignedLeads(prevLeads => 
         prevLeads.map(lead => 
           lead._id === data.leadId 
@@ -325,25 +337,21 @@ useEffect(() => {
             : lead
         )
       );
-    });
+    };
+    
+    on('attendance-updated', handleAttendanceUpdate);
+    on('lead-remarks-updated', handleRemarksUpdate);
     
     return () => {
-      socket.off('attendance-updated');
-      socket.off('lead-remarks-updated');
-      socket.disconnect();
+      off('attendance-updated', handleAttendanceUpdate);
+      off('lead-remarks-updated', handleRemarksUpdate);
     };
-  }, [user, loadAttendanceData]);
-  // Notification badge state
-  // notificationCount persists until user visits relevant page
-  const [notificationCount, setNotificationCount] = useState(0);
+  }, [user, on, off, loadAttendanceData]);
+  
+  // Get notification counts from centralized context
+  const { totalUnread: notificationCount, refreshCounts: refreshNotificationCounts } = useNotificationCounts();
   // New message count for real-time badge
   const [newMessageCount, setNewMessageCount] = useState(0);
-  // Individual counts by notification type
-  const [leadsCount, setLeadsCount] = useState(0);
-  const [tasksCount, setTasksCount] = useState(0);
-  const [teamChatCount, setTeamChatCount] = useState(0);
-  const [callersCount, setCallersCount] = useState(0);
-  const [calendarCount, setCalendarCount] = useState(0);
 
   useEffect(() => {
     if (!loading && !canViewDashboard) {
@@ -361,19 +369,7 @@ useEffect(() => {
       const sorted = (response.data || []).sort((a, b) => new Date(b.createdAt || b.created_at) - new Date(a.createdAt || a.created_at));
       setNotifications(sorted.slice(0, 5));
       setAllNotifications(sorted.slice(0, 10));
-      // Load unread count
-      const unreadCountRes = await notificationAPI.getUnreadCount();
-      setNotificationCount(unreadCountRes.data?.count || 0);
-      
-      // Load counts by type for sidebar badges
-      const countsByType = await notificationAPI.getCountsByType();
-      if (countsByType.data) {
-        setLeadsCount(countsByType.data.leads || 0);
-        setTasksCount(countsByType.data.tasks || 0);
-        setTeamChatCount(countsByType.data.teamChat || 0);
-        setCallersCount(countsByType.data.callers || 0);
-        setCalendarCount(countsByType.data.calendar || 0);
-      }
+      // Notification counts are handled by NotificationContext
     } catch (err) {
       console.error('Failed to load notifications:', err);
     }
@@ -436,96 +432,36 @@ useEffect(() => {
     }
   };
 
-  // Only clear badge when user visits leads or notifications page
-  const clearLeadsBadge = useCallback(() => {
-    setNotificationCount(0);
-  }, []);
   const clearNotificationsBadge = useCallback(() => {
-    setNotificationCount(0);
-  }, []);
+    refreshNotificationCounts();
+  }, [refreshNotificationCounts]);
   // Reset new message count when dropdown is opened
   const resetNewMessageCount = useCallback(() => {
     setNewMessageCount(0);
   }, []);
 
-  // Listen for notification read events and decrement count
-  useEffect(() => {
-    const handleNotificationRead = (event) => {
-      setNotificationCount((c) => Math.max(0, c - 1));
-      
-      // Decrement the specific type count as well
-      const notificationType = event.detail?.type;
-      if (notificationType === 'lead-assigned') {
-        setLeadsCount((c) => Math.max(0, c - 1));
-      } else if (notificationType === 'TASK_ASSIGNED' || notificationType === 'TASK_STATUS_UPDATE') {
-        setTasksCount((c) => Math.max(0, c - 1));
-      } else if (notificationType === 'TEAM_CHAT' || notificationType === 'PRIVATE_MESSAGE') {
-        setTeamChatCount((c) => Math.max(0, c - 1));
-      } else if (notificationType === 'CALLER_ASSIGNED') {
-        setCallersCount((c) => Math.max(0, c - 1));
-      } else if (notificationType === 'calendar-event') {
-        setCalendarCount((c) => Math.max(0, c - 1));
-      }
-    };
-    window.addEventListener('notificationRead', handleNotificationRead);
-    return () => window.removeEventListener('notificationRead', handleNotificationRead);
-  }, []);
+  // Notification read events are handled by NotificationContext
 
   useEffect(() => {
-    // loadAttendance(); // Removed, not used
     loadNotifications();
     loadTasks();
-    // loadEmployees(); // Removed, not used
     loadUsers();
     if (user?.role === 'manager' || user?.role === 'admin') {
       loadAllLeaveRequests();
     }
+  }, [user, loadNotifications, loadUsers, loadTasks]);
 
-    // Connect to Socket.IO for real-time notifications and team updates
-    const socketBase = process.env.REACT_APP_API_URL
-      ? process.env.REACT_APP_API_URL.replace('/api', '')
-      : window.location.origin;
-    const socket = io(socketBase, {
-      reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      reconnectionAttempts: 5
-    });
-    // setSocketInstance(socket); // Removed, not used
+  // Real-time dashboard updates via shared socket
+  useEffect(() => {
+    if (!on || !off) return;
 
-    socket.on('connect', () => {
-      // Identify user for private notifications
-      if (user?._id) socket.emit('identify', user._id);
-    });
-
-    // Helper to handle all notification types and play sound
     const handleNewNotification = (data) => {
-      setNotificationCount((c) => c + 1);
       setNewMessageCount((c) => c + 1);
-      
-      // Increment specific type count based on notification type
-      if (data.type === 'lead-assigned') {
-        setLeadsCount((c) => c + 1);
-      } else if (data.type === 'TASK_ASSIGNED' || data.type === 'TASK_STATUS_UPDATE') {
-        setTasksCount((c) => c + 1);
-      } else if (data.type === 'TEAM_CHAT' || data.type === 'PRIVATE_MESSAGE') {
-        setTeamChatCount((c) => c + 1);
-      } else if (data.type === 'CALLER_ASSIGNED') {
-        setCallersCount((c) => c + 1);
-      } else if (data.type === 'calendar-event') {
-        setCalendarCount((c) => c + 1);
-      } else if (data.type === 'ANNOUNCEMENT') {
-        // Announcements don't have a specific badge, included in total count
-        console.log('📢 New announcement notification received');
-      }
-      
       playNotificationSound();
       loadNotifications();
     };
 
-
-    socket.on('taskAssigned', (data) => {
-      console.log('📋 New task assigned, reloading tasks...');
+    const handleTaskAssigned = (data) => {
       setNewTaskAlert({
         taskTitle: data.task?.title,
         taskDescription: data.task?.description,
@@ -534,68 +470,58 @@ useEffect(() => {
         dueDate: data.task?.dueDate
       });
       handleNewNotification({ type: 'TASK_ASSIGNED', ...data });
-      // Reload tasks immediately for real-time count update
       loadTasks();
-      setTimeout(() => {
-        setNewTaskAlert(null);
-      }, 2000);
-    });
+      setTimeout(() => setNewTaskAlert(null), 2000);
+    };
 
-    socket.on('new-lead', (data) => handleNewNotification({ type: 'LEAD', ...data }));
-    socket.on('new-notification', (data) => {
-      // Handle different notification types
-      console.log('🔔 Received notification:', data.type, data);
-      handleNewNotification(data);
-      
-      // Reload notification counts for real-time update in grid cards
+    const handleTaskStatusUpdated = (data) => {
+      loadTasks();
       loadNotifications();
-    });
-
-    // Listen for task status updates (employee completing tasks)
-    socket.on('taskStatusUpdated', (data) => {
-      console.log('📋 Task status updated, reloading tasks...');
-      loadTasks(); // Reload tasks to update Active Tasks count
-      loadNotifications(); // Also reload notifications for manager
       handleNewNotification({ type: 'TASK_STATUS_UPDATE', ...data });
-    });
+    };
 
-    // Listen for leave approve/reject notifications
-    socket.on('notification', (data) => {
-      handleNewNotification({ type: 'IMPORTANT', ...data });
-    });
+    const handleUserAdded = () => {
+      if (user && user.role === 'MANAGER') loadUsers();
+    };
 
-    // Listen for announcement events (broadcast to all)
-    socket.on('new-announcement', (data) => {
-      console.log('📢 New announcement received:', data);
-      // Notification already created in backend and sent via new-notification event
-      // This is just for UI updates if needed
-    });
+    const handleNewLead = (data) => handleNewNotification({ type: 'LEAD', ...data });
+    const handleNewNotif = (data) => { handleNewNotification(data); loadNotifications(); };
+    const handleNotification = (data) => handleNewNotification({ type: 'IMPORTANT', ...data });
+    const handleAnnouncement = (data) => { playNotificationSound(); handleNewNotification({ type: 'ANNOUNCEMENT', ...data }); };
 
-    // Listen for real-time user additions (employee/user added)
-    socket.on('user-added', (data) => {
-      console.log('🔔 New user added:', data);
-      if (user && user.role === 'MANAGER') {
-        loadUsers(); // Reload user count for manager
-      }
-    });
-
-    // Listen for real-time employee changes (optional, if backend emits these events)
-    // socket.on('employee-updated', loadEmployees);
-    // socket.on('employee-added', loadEmployees);
-    // socket.on('employee-removed', loadEmployees);
+    on('taskAssigned', handleTaskAssigned);
+    on('new-lead', handleNewLead);
+    on('new-notification', handleNewNotif);
+    on('taskStatusUpdated', handleTaskStatusUpdated);
+    on('notification', handleNotification);
+    on('new-announcement', handleAnnouncement);
+    on('user-added', handleUserAdded);
 
     return () => {
-      socket.disconnect();
+      off('taskAssigned', handleTaskAssigned);
+      off('new-lead', handleNewLead);
+      off('new-notification', handleNewNotif);
+      off('taskStatusUpdated', handleTaskStatusUpdated);
+      off('notification', handleNotification);
+      off('new-announcement', handleAnnouncement);
+      off('user-added', handleUserAdded);
     };
-  }, [user, loadNotifications, loadUsers, loadTasks]);
+  }, [on, off, user, loadNotifications, loadUsers, loadTasks]);
+
+  // Auto-refresh leads & tasks on data changes
+  const refreshDashboardData = useCallback(() => {
+    loadTasks();
+    loadNotifications();
+  }, [loadTasks, loadNotifications]);
+  useRealtimeData(['lead-created', 'lead-updated', 'task-created', 'task-updated'], refreshDashboardData);
 
   if (!canViewDashboard) {
     return (
-      <div className="flex min-h-screen bg-gray-50">
+      <div className="flex h-screen bg-gray-50">
         <div className="hidden md:block"><Sidebar /></div>
-        <div className="flex-1 flex flex-col">
+        <div className={`flex-1 flex flex-col overflow-hidden ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
           <Header user={user} onLogout={logout} />
-          <main className="flex-1 flex items-center justify-center p-4 sm:p-8">
+          <main className="flex-1 flex items-center justify-center p-4 sm:p-8 overflow-y-auto">
             <div className="bg-red-100 border border-red-400 text-red-700 px-8 py-6 rounded-lg text-center max-w-md">
               <h2 className="text-2xl font-bold mb-2">Access Denied</h2>
               <p>You do not have permission to view the dashboard.</p>
@@ -608,17 +534,9 @@ useEffect(() => {
   }
 
   return (
-    <div className="flex min-h-screen bg-gradient-to-tr from-blue-50 via-indigo-50 to-yellow-50">
-      <div className="hidden md:block"><Sidebar 
-        notificationCount={notificationCount} 
-        clearLeadsBadge={clearLeadsBadge}
-        leadsCount={leadsCount}
-        tasksCount={tasksCount}
-        teamChatCount={teamChatCount}
-        callersCount={callersCount}
-        calendarCount={calendarCount}
-      /></div>
-      <div className="flex-1 flex flex-col">
+    <div className="flex h-screen bg-gradient-to-tr from-blue-50 via-indigo-50 to-yellow-50">
+      <div className="hidden md:block"><Sidebar /></div>
+      <div className={`flex-1 flex flex-col overflow-hidden ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
         <Header
           user={user}
           onLogout={logout}
@@ -632,15 +550,15 @@ useEffect(() => {
           resetNewMessageCount={resetNewMessageCount}
           onNotificationClick={() => {}}
         />
-        <main className="flex-1 overflow-auto p-4 md:p-6">
+        <main className="flex-1 overflow-auto p-3 sm:p-4 md:p-6">
           {/* Modern User Banner */}
-          <div className="backdrop-blur-md bg-white/70 rounded-2xl shadow-xl p-6 flex flex-col md:flex-row md:items-center md:justify-between border-b border-indigo-100 mb-8 mt-4 mx-2 md:mx-0">
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-400 to-blue-400 flex items-center justify-center text-white text-3xl font-bold shadow-lg">
+          <div className="backdrop-blur-md bg-white/70 rounded-2xl shadow-xl p-4 sm:p-6 flex flex-col md:flex-row md:items-center md:justify-between border-b border-indigo-100 mb-6 sm:mb-8 mt-2 sm:mt-4 mx-0">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-indigo-400 to-blue-400 flex items-center justify-center text-white text-xl sm:text-3xl font-bold shadow-lg">
                 {user?.name?.[0] || user?.first_name?.[0] || 'U'}
               </div>
               <div>
-                <span className="block font-extrabold text-2xl text-gray-900 mb-1 tracking-tight">Welcome, {user?.name || user?.first_name || 'User'}!</span>
+                <span className="block font-extrabold text-lg sm:text-2xl text-gray-900 mb-1 tracking-tight">Welcome, {user?.name || user?.first_name || 'User'}!</span>
                 <span className="inline-block px-3 py-1 rounded-full bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 text-xs uppercase font-semibold shadow">{user?.role}</span>
               </div>
             </div>
@@ -964,6 +882,16 @@ useEffect(() => {
                             key={notif._id || notif.id || idx}
                             className="relative group bg-gradient-to-r from-blue-50 to-blue-100 border-l-4 border-blue-400 pl-5 pr-4 py-4 rounded-xl shadow-sm hover:shadow-lg hover:scale-[1.025] transition-all duration-200 cursor-pointer flex items-start gap-3"
                             style={{ minHeight: '64px' }}
+                            onClick={() => {
+                              const t = (notif.type || '').toLowerCase();
+                              if (t.includes('chat') || t === 'team_chat') navigate('/chat');
+                              else if (t.includes('lead')) navigate('/leads');
+                              else if (t.includes('task')) navigate('/tasks');
+                              else if (t.includes('caller')) navigate('/callers');
+                              else if (t.includes('leave') || t.includes('approve') || t.includes('reject')) navigate('/attendance');
+                              else if (t.includes('announcement')) navigate('/announcements');
+                              else navigate('/notifications');
+                            }}
                           >
                             <div className="flex-shrink-0 flex flex-col items-center justify-center mt-0.5">
                               {notif.type === 'TEAM_CHAT' ? (
@@ -1053,20 +981,14 @@ useEffect(() => {
                 </div>
               )}
 
-              {/* Quick Stats - 4 cards for Employee view */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              {/* Quick Stats - 5 cards for Employee view */}
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
                 {/* Holographic Cards */}
                 <div onClick={() => navigate('/tasks')} className="relative rounded-2xl p-5 overflow-hidden shadow-2xl group transition-transform hover:scale-105 cursor-pointer" style={{background: 'linear-gradient(135deg, rgba(34,245,170,0.7) 0%, rgba(34,197,94,0.7) 100%)', backdropFilter: 'blur(12px)'}}>
                   <div className="absolute inset-0 rounded-2xl border-2 border-green-300/40 group-hover:border-green-400/80 pointer-events-none" style={{boxShadow: '0 0 32px 4px rgba(34,245,170,0.25), 0 2px 16px 0 rgba(34,197,94,0.15)'}}></div>
                   <p className="text-xs font-semibold opacity-90 mb-2 drop-shadow">Active Tasks</p>
                   <p className="text-2xl font-extrabold tracking-tight drop-shadow-lg">{tasks.filter(t => t.status !== 'COMPLETED').length}</p>
                   <p className="text-xs opacity-80 mt-2 drop-shadow">Pending tasks</p>
-                </div>
-                <div onClick={() => setShowNotifications(!showNotifications)} className="relative rounded-2xl p-5 overflow-hidden shadow-2xl group transition-transform hover:scale-105 cursor-pointer" style={{background: 'linear-gradient(135deg, rgba(168,85,247,0.7) 0%, rgba(236,72,153,0.7) 100%)', backdropFilter: 'blur(12px)'}}>
-                  <div className="absolute inset-0 rounded-2xl border-2 border-purple-300/40 group-hover:border-pink-400/80 pointer-events-none" style={{boxShadow: '0 0 32px 4px rgba(168,85,247,0.25), 0 2px 16px 0 rgba(236,72,153,0.15)'}}></div>
-                  <p className="text-xs font-semibold opacity-90 mb-2 drop-shadow">Notifications</p>
-                  <p className="text-2xl font-extrabold tracking-tight drop-shadow-lg">{notificationCount}</p>
-                  <p className="text-xs opacity-80 mt-2 drop-shadow">Unread messages</p>
                 </div>
                 <div onClick={() => navigate('/attendance')} className="relative rounded-2xl p-5 overflow-hidden shadow-2xl group transition-transform hover:scale-105 cursor-pointer" style={{background: 'linear-gradient(135deg, rgba(59,130,246,0.7) 0%, rgba(37,99,235,0.7) 100%)', backdropFilter: 'blur(12px)'}}>
                   <div className="absolute inset-0 rounded-2xl border-2 border-blue-300/40 group-hover:border-blue-400/80 pointer-events-none" style={{boxShadow: '0 0 32px 4px rgba(59,130,246,0.25), 0 2px 16px 0 rgba(37,99,235,0.15)'}}></div>
@@ -1076,9 +998,21 @@ useEffect(() => {
                 </div>
                 <div onClick={() => navigate('/attendance')} className="relative rounded-2xl p-5 overflow-hidden shadow-2xl group transition-transform hover:scale-105 cursor-pointer" style={{background: 'linear-gradient(135deg, rgba(239,68,68,0.7) 0%, rgba(220,38,38,0.7) 100%)', backdropFilter: 'blur(12px)'}}>
                   <div className="absolute inset-0 rounded-2xl border-2 border-red-300/40 group-hover:border-red-400/80 pointer-events-none" style={{boxShadow: '0 0 32px 4px rgba(239,68,68,0.25), 0 2px 16px 0 rgba(220,38,38,0.15)'}}></div>
-                  <p className="text-xs font-semibold opacity-90 mb-2 drop-shadow">Absent</p>
+                  <p className="text-xs font-semibold opacity-90 mb-2 drop-shadow">Absent Days</p>
                   <p className="text-2xl font-extrabold tracking-tight drop-shadow-lg">{absentCount}</p>
-                  <p className="text-xs opacity-80 mt-2 drop-shadow">Total absent</p>
+                  <p className="text-xs opacity-80 mt-2 drop-shadow">This month</p>
+                </div>
+                <div onClick={() => navigate('/leads')} className="relative rounded-2xl p-5 overflow-hidden shadow-2xl group transition-transform hover:scale-105 cursor-pointer" style={{background: 'linear-gradient(135deg, rgba(16,185,129,0.7) 0%, rgba(5,150,105,0.7) 100%)', backdropFilter: 'blur(12px)'}}>
+                  <div className="absolute inset-0 rounded-2xl border-2 border-emerald-300/40 group-hover:border-emerald-400/80 pointer-events-none" style={{boxShadow: '0 0 32px 4px rgba(16,185,129,0.25), 0 2px 16px 0 rgba(5,150,105,0.15)'}}></div>
+                  <p className="text-xs font-semibold opacity-90 mb-2 drop-shadow">Interested Leads</p>
+                  <p className="text-2xl font-extrabold tracking-tight drop-shadow-lg">{assignedLeads.filter(l => l.remarks === 'Interested').length}</p>
+                  <p className="text-xs opacity-80 mt-2 drop-shadow">Total interested</p>
+                </div>
+                <div onClick={() => setShowNotifications(!showNotifications)} className="relative rounded-2xl p-5 overflow-hidden shadow-2xl group transition-transform hover:scale-105 cursor-pointer" style={{background: 'linear-gradient(135deg, rgba(168,85,247,0.7) 0%, rgba(236,72,153,0.7) 100%)', backdropFilter: 'blur(12px)'}}>
+                  <div className="absolute inset-0 rounded-2xl border-2 border-purple-300/40 group-hover:border-pink-400/80 pointer-events-none" style={{boxShadow: '0 0 32px 4px rgba(168,85,247,0.25), 0 2px 16px 0 rgba(236,72,153,0.15)'}}></div>
+                  <p className="text-xs font-semibold opacity-90 mb-2 drop-shadow">Notifications</p>
+                  <p className="text-2xl font-extrabold tracking-tight drop-shadow-lg">{notificationCount}</p>
+                  <p className="text-xs opacity-80 mt-2 drop-shadow">Unread messages</p>
                 </div>
               </div>
 
@@ -1088,12 +1022,17 @@ useEffect(() => {
                   <span className="text-purple-500 text-lg">📊</span> Recent Leads
                 </h2>
                 {(() => {
-                  // Sort all leads by created date descending
+                  // Sort leads: new (no remark) first, then Interested, then Not Interested
                   let filteredLeads = [...assignedLeads];
                   if (user && user.role === 'EMPLOYEE' && user.employeeId) {
                     filteredLeads = filteredLeads.filter(l => l.assignedTo && (l.assignedTo._id === user.employeeId || l.assignedTo === user.employeeId));
                   }
-                  const sortedLeads = filteredLeads.sort((a, b) => new Date(b.createdAt || b.created_at) - new Date(a.createdAt || a.created_at));
+                  const sortedLeads = filteredLeads.sort((a, b) => {
+                    const remarkOrder = (r) => !r || r === '' ? 0 : r === 'Interested' ? 1 : r === 'Busy' ? 2 : r === 'Invalid Number' ? 3 : r === 'Not Interested' ? 4 : 5;
+                    const orderDiff = remarkOrder(a.remarks) - remarkOrder(b.remarks);
+                    if (orderDiff !== 0) return orderDiff;
+                    return new Date(b.createdAt || b.created_at) - new Date(a.createdAt || a.created_at);
+                  });
                   const leadsToShow = sortedLeads.slice(0, 5);
                   if (sortedLeads.length === 0) {
                     return <div className="text-xs text-gray-500">No leads found</div>;
@@ -1138,7 +1077,16 @@ useEffect(() => {
                                 <td className="px-4 py-2">
                                   <select
                                     value={lead.assignedTo && typeof lead.assignedTo === 'object' ? lead.assignedTo._id : lead.assignedTo || ''}
-                                    onChange={e => assignLead(lead, e.target.value)}
+                                    onChange={async e => {
+                                      const employeeId = e.target.value;
+                                      if (employeeId) {
+                                        console.log('Dashboard: Assigning lead', lead._id, 'to employee', employeeId);
+                                        await assignLead(lead, employeeId);
+                                        // Force refresh of leads data
+                                        console.log('Dashboard: Refreshing leads after assignment');
+                                        await fetchAssignedLeads();
+                                      }
+                                    }}
                                     className="border rounded px-2 py-1 text-xs"
                                   >
                                     <option value="">Unassigned</option>
@@ -1151,34 +1099,39 @@ useEffect(() => {
                                 </td>
                               )}
                               <td className="px-4 py-2">
-                                {/* Remarks input for employee */}
-                                {user && user.role === 'EMPLOYEE' ? (
-                                  <form
-                                    onSubmit={async (e) => {
-                                      e.preventDefault();
-                                      try {
-                                        const remarksValue = remarkInputs[lead._id] !== undefined 
-                                          ? remarkInputs[lead._id] 
-                                          : lead.remarks || '';
-                                        await leadAPI.updateRemarks(lead._id, remarksValue);
-                                        // Real-time update will be handled by Socket.IO
-                                        setRemarkInputs(prev => ({ ...prev, [lead._id]: '' }));
-                                      } catch (err) {
-                                        alert('Failed to update remarks');
+                                {/* Remarks dropdown for employee and manager */}
+                                {user && (user.role === 'EMPLOYEE' || user.role === 'MANAGER') ? (
+                                  <select
+                                    className={`border rounded px-2 py-1 text-xs w-32 cursor-pointer font-medium ${
+                                      lead.remarks === 'Interested' ? 'bg-green-50 text-green-700 border-green-300' :
+                                      lead.remarks === 'Not Interested' ? 'bg-red-50 text-red-700 border-red-300' :
+                                      lead.remarks === 'Busy' ? 'bg-yellow-50 text-yellow-700 border-yellow-300' :
+                                      lead.remarks === 'Invalid Number' ? 'bg-gray-100 text-gray-700 border-gray-400' :
+                                      'bg-gray-50 text-gray-600 border-gray-300'
+                                    }`}
+                                    value={lead.remarks || ''}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      if (val) {
+                                        setRemarkNoteModal({ leadId: lead._id, remark: val });
+                                        setRemarkNoteText('');
                                       }
                                     }}
                                   >
-                                    <input
-                                      type="text"
-                                      className="border rounded px-2 py-1 text-xs w-32"
-                                      placeholder="Add remarks"
-                                      value={remarkInputs[lead._id] || lead.remarks || ''}
-                                      onChange={e => setRemarkInputs(inputs => ({ ...inputs, [lead._id]: e.target.value }))}
-                                    />
-                                    <button type="submit" className="ml-1 px-2 py-1 bg-blue-500 text-white rounded text-xs">Save</button>
-                                  </form>
+                                    <option value="">Select Remark</option>
+                                    <option value="Interested">Interested</option>
+                                    <option value="Not Interested">Not Interested</option>
+                                    <option value="Busy">Busy</option>
+                                    <option value="Invalid Number">Invalid Number</option>
+                                  </select>
                                 ) : (
-                                  <span>{lead.remarks || '-'}</span>
+                                  <span className={`text-xs font-medium px-2 py-0.5 rounded ${
+                                    lead.remarks === 'Interested' ? 'bg-green-100 text-green-700' :
+                                    lead.remarks === 'Not Interested' ? 'bg-red-100 text-red-700' :
+                                    lead.remarks === 'Busy' ? 'bg-yellow-100 text-yellow-700' :
+                                    lead.remarks === 'Invalid Number' ? 'bg-gray-200 text-gray-700' :
+                                    'text-gray-600'
+                                  }`}>{lead.remarks || '-'}</span>
                                 )}
                               </td>
                               <td className="px-4 py-2">
@@ -1261,7 +1214,18 @@ useEffect(() => {
                           if ((notif.type || '').toLowerCase().includes('reject')) { icon = '❌'; iconColor = 'text-red-500'; }
                           if ((notif.type || '').toLowerCase().includes('approve')) { icon = '✅'; iconColor = 'text-green-600'; }
                           return (
-                            <div key={notif._id || notif.id || idx} className="flex items-start gap-3 bg-white/80 border border-blue-100 rounded-xl px-4 py-3 shadow-sm hover:shadow-lg hover:scale-[1.025] transition-all duration-200 cursor-pointer">
+                            <div key={notif._id || notif.id || idx} className="flex items-start gap-3 bg-white/80 border border-blue-100 rounded-xl px-4 py-3 shadow-sm hover:shadow-lg hover:scale-[1.025] transition-all duration-200 cursor-pointer"
+                              onClick={() => {
+                                const t = (notif.type || '').toLowerCase();
+                                if (t.includes('chat') || t === 'team_chat') navigate('/chat');
+                                else if (t.includes('lead')) navigate('/leads');
+                                else if (t.includes('task')) navigate('/tasks');
+                                else if (t.includes('caller')) navigate('/callers');
+                                else if (t.includes('leave') || t.includes('approve') || t.includes('reject')) navigate('/attendance');
+                                else if (t.includes('announcement')) navigate('/announcements');
+                                else navigate('/notifications');
+                              }}
+                            >
                               <span className={`text-xl mt-1 ${iconColor}`}>{icon}</span>
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 mb-1">
@@ -1317,6 +1281,60 @@ useEffect(() => {
             </div>
           )}
         </main>
+
+        {/* Remark Note Popup Modal */}
+        {remarkNoteModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-[60] animate-fadeIn">
+            <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full border border-indigo-100">
+              <h3 className="text-lg font-bold text-gray-800 mb-1">Add Note</h3>
+              <p className="text-sm text-gray-500 mb-4">
+                Remark: <span className={`font-semibold ${
+                  remarkNoteModal.remark === 'Interested' ? 'text-green-600' :
+                  remarkNoteModal.remark === 'Not Interested' ? 'text-red-600' :
+                  remarkNoteModal.remark === 'Busy' ? 'text-yellow-600' :
+                  remarkNoteModal.remark === 'Invalid Number' ? 'text-gray-600' :
+                  'text-gray-600'
+                }`}>{remarkNoteModal.remark}</span>
+              </p>
+              <textarea
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 resize-none"
+                rows={3}
+                placeholder="Write a note (optional)..."
+                value={remarkNoteText}
+                onChange={(e) => setRemarkNoteText(e.target.value)}
+                autoFocus
+              />
+              <div className="flex gap-2 mt-4 justify-end">
+                <button
+                  onClick={() => { setRemarkNoteModal(null); setRemarkNoteText(''); }}
+                  className="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const res = await leadAPI.updateRemarks(remarkNoteModal.leadId, remarkNoteModal.remark, remarkNoteText);
+                      const updatedLead = res.data;
+                      setAssignedLeads(prevLeads => prevLeads.map(l =>
+                        String(l._id) === String(remarkNoteModal.leadId)
+                          ? { ...l, remarks: updatedLead.remarks, remarkNotes: updatedLead.remarkNotes, updatedAt: updatedLead.updatedAt }
+                          : l
+                      ));
+                    } catch (err) {
+                      alert('Failed to update remarks');
+                    }
+                    setRemarkNoteModal(null);
+                    setRemarkNoteText('');
+                  }}
+                  className="px-4 py-2 text-sm bg-gradient-to-r from-indigo-500 to-blue-500 text-white rounded-lg hover:from-indigo-600 hover:to-blue-600 font-medium shadow"
+                >
+                  Save Remark
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

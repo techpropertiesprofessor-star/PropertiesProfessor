@@ -1,39 +1,38 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from '../components/Sidebar';
-import io from 'socket.io-client';
 import api from '../api/client';
 import Header from '../components/Header';
 import { useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import useSidebarCollapsed from '../hooks/useSidebarCollapsed';
+import { useSocket } from '../context/SocketContext';
+import useRealtimeData from '../hooks/useRealtimeData';
 
 export default function AnnouncementsPage() {
   const { user } = useContext(AuthContext);
+  const sidebarCollapsed = useSidebarCollapsed();
   const [announcements, setAnnouncements] = useState([]);
-  const socketRef = useRef(null);
-  // Load announcements from backend on mount
-  useEffect(() => {
+
+  const loadAnnouncements = useCallback(() => {
     api.get('/announcements').then(res => {
       setAnnouncements(res.data || []);
       localStorage.setItem('announcements', JSON.stringify(res.data || []));
     });
-    // Setup socket connection
-    const socketBase = process.env.REACT_APP_API_URL
-      ? process.env.REACT_APP_API_URL.replace('/api', '')
-      : window.location.origin;
-    const socket = io(socketBase, {
-      reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      reconnectionAttempts: 5
-    });
-    socketRef.current = socket;
-    socket.on('new-announcement', (announcement) => {
+  }, []);
+
+  // Load announcements from backend on mount
+  useEffect(() => {
+    loadAnnouncements();
+  }, [loadAnnouncements]);
+
+  // Real-time: listen for new announcements via shared socket
+  const { on, off } = useSocket() || {};
+  useEffect(() => {
+    if (!on || !off) return;
+    const handleNewAnnouncement = (announcement) => {
       setAnnouncements(prev => [announcement, ...prev]);
-      // Also update localStorage for offline support
-      const updated = [announcement, ...announcements];
-      localStorage.setItem('announcements', JSON.stringify(updated));
-      // Add to notifications
+      localStorage.setItem('announcements', JSON.stringify([announcement, ...announcements]));
       const notifications = JSON.parse(localStorage.getItem('notifications') || '[]');
       notifications.unshift({
         id: announcement.id,
@@ -43,10 +42,10 @@ export default function AnnouncementsPage() {
         created_at: announcement.date
       });
       localStorage.setItem('notifications', JSON.stringify(notifications));
-    });
-    return () => { socket.disconnect(); };
-    // eslint-disable-next-line
-  }, []);
+    };
+    on('new-announcement', handleNewAnnouncement);
+    return () => off('new-announcement', handleNewAnnouncement);
+  }, [on, off, announcements]);
   const [newAnnouncement, setNewAnnouncement] = useState('');
   const navigate = useNavigate();
 
@@ -69,11 +68,11 @@ export default function AnnouncementsPage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-gradient-to-br from-gray-100 to-blue-50">
+    <div className="flex h-screen bg-gradient-to-br from-gray-100 to-blue-50">
       <div className="hidden md:block"><Sidebar /></div>
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
         <Header user={user} />
-        <div className="relative p-4 sm:p-8 max-w-2xl mx-auto w-full overflow-y-auto">
+        <div className="flex-1 relative p-3 sm:p-4 md:p-8 max-w-2xl mx-auto w-full overflow-y-auto">
           <div className="flex items-center justify-between mb-6">
             <button
               onClick={() => navigate(-1)}

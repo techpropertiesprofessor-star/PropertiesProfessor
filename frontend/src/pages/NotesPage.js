@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from "react";
 import Sidebar from "../components/Sidebar";
 import Header from "../components/Header";
+import useSidebarCollapsed from '../hooks/useSidebarCollapsed';
 import { AuthContext } from "../context/AuthContext";
 
 // For demo: use localStorage. Replace with API for production.
@@ -18,6 +19,7 @@ function saveUserNotes(userId, notes) {
 }
 
 export default function NotesPage() {
+  const sidebarCollapsed = useSidebarCollapsed();
   const { user } = useContext(AuthContext);
   const [notes, setNotes] = useState([]);
   const [showModal, setShowModal] = useState(false);
@@ -95,10 +97,10 @@ export default function NotesPage() {
 
   return (
     <div className="flex h-screen bg-gray-50">
-      <Sidebar />
-      <div className="flex-1 flex flex-col">
+      <div className="hidden md:block"><Sidebar /></div>
+      <div className={`flex-1 flex flex-col overflow-hidden ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
         <Header user={user} />
-        <main className="flex-1 p-8 overflow-y-auto">
+        <main className="flex-1 p-3 sm:p-4 md:p-8 overflow-y-auto">
           <div className="flex justify-between items-center mb-6">
             <div>
               <h1 className="text-3xl font-bold text-blue-900">My Personal Notes</h1>

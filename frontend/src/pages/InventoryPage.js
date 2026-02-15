@@ -1,14 +1,18 @@
 import React, { useState, useEffect, useContext, useCallback } from 'react';
-import io from 'socket.io-client';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api, { inventoryAPI } from '../api/client';
 import { AuthContext } from '../context/AuthContext';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
+import useSidebarCollapsed from '../hooks/useSidebarCollapsed';
 import AddInventoryForm from '../components/AddInventoryForm';
 import InventoryCard from '../components/InventoryCard';
+import useRealtimeData from '../hooks/useRealtimeData';
+import { useSocket } from '../context/SocketContext';
+import { FiX, FiHome, FiMapPin, FiLayers, FiMaximize, FiGrid, FiSun, FiUser, FiPhone, FiCalendar, FiFileText, FiEdit2, FiEye, FiDownload, FiKey, FiTruck, FiCheckCircle, FiDollarSign, FiMessageSquare } from 'react-icons/fi';
 
 function InventoryPage() {
+  const sidebarCollapsed = useSidebarCollapsed();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useContext(AuthContext);
@@ -190,57 +194,37 @@ function InventoryPage() {
     fetchProjects();
     fetchUnits();
     fetchStats();
-    // Setup Socket.IO listener for inventory updates
-    let socket;
-    try {
-      // Determine socket URL: prefer API baseURL, otherwise derive from window with backend port 5001
-      const apiBase = (api && api.defaults && api.defaults.baseURL) ? api.defaults.baseURL : null;
-      let socketUrl = apiBase;
-      if (!socketUrl && typeof window !== 'undefined') {
-        const host = window.location.hostname || 'localhost';
-        // Use backend port 5001 (dev) unless REACT_APP_API_URL points elsewhere
-        socketUrl = `http://${host}:5001`;
-      }
-      socket = io(socketUrl, { transports: ['websocket'] });
-      socket.on('connect', () => {
-        if (user && user._id) socket.emit('identify', user._id);
-      });
-
-      socket.on('unit-updated', (payload) => {
-        try {
-          const unitId = payload && (payload.unitId || (payload.unit && (payload.unit._id || payload.unit.id)));
-          const updatedUnit = payload.unit || payload;
-          if (!unitId) return;
-          setUnits((prev) => {
-            let found = false;
-            const next = prev.map((u) => {
-              if ((u._id || u.id) == unitId) {
-                found = true;
-                // merge updated fields (keep raw copy)
-                const merged = { ...u, ...updatedUnit, raw: updatedUnit };
-                return merged;
-              }
-              return u;
-            });
-            // if unit not in current page and payload contains unit, prepend it
-            if (!found && updatedUnit) {
-              const norm = (uu) => ({ _id: uu._id || uu.id, id: uu._id || uu.id, unit_number: uu.unit_number || uu.unitNumber || uu.name || '', name: uu.name || uu.unit_number || uu.unitNumber || '', location: uu.location || uu.address || '', bhk: uu.bhk || '', status: uu.status || 'available', base_price: uu.base_price || uu.basePrice || uu.price || 0, final_price: uu.final_price || uu.finalPrice || uu.price || 0, price_per_sqft: uu.price_per_sqft || uu.pricePerSqft || 0, parking_slots: uu.parking_slots || uu.parking || uu.parkingSlots || 0, listing_type: uu.listing_type || uu.listingType || uu.looking_to || '', keys_location: uu.keys_location || uu.keysLocation || '', furnished_status: uu.furnished_status || uu.furnishedStatus || '', owner_name: uu.owner_name || (uu.ownerDetails && uu.ownerDetails.name) || '', owner_phone: uu.owner_phone || (uu.ownerDetails && uu.ownerDetails.phone) || '', availability_date: uu.availability_date || uu.availabilityDate || '', remarks: uu.remarks || uu.keys_remarks || '', thumbnail: (Array.isArray(uu.media) && uu.media[0]) ? (uu.media[0].url || uu.media[0].filename || uu.media[0]) : (uu.thumbnail || uu.cover_image || null), building_name: uu.building_name || uu.buildingName || uu.tower || '', project_name: (uu.project && (uu.project.name || uu.project.title)) || uu.project_name || '', amenities: Array.isArray(uu.amenities) ? uu.amenities : (uu.amenities ? uu.amenities.split(',').map(s=>s.trim()) : []), raw: uu });
-              return [norm(updatedUnit), ...prev];
-            }
-            return next;
-          });
-        } catch (e) {
-          console.error('Error applying unit-updated payload', e);
-        }
-      });
-    } catch (e) {
-      console.warn('Socket setup failed in InventoryPage:', e.message || e);
-    }
-
-    return () => {
-      try { if (socket && socket.disconnect) socket.disconnect(); } catch (e) {}
-    };
   }, [fetchUnits]);
+
+  // Real-time: listen for unit updates and inventory creation via shared socket
+  const { on, off } = useSocket() || {};
+
+  useEffect(() => {
+    if (!on || !off) return;
+    const handleUnitUpdated = (payload) => {
+      try {
+        const unitId = payload && (payload.unitId || (payload.unit && (payload.unit._id || payload.unit.id)));
+        const updatedUnit = payload.unit || payload;
+        if (!unitId) return;
+        setUnits((prev) => prev.map((u) =>
+          (u._id || u.id) === unitId ? { ...u, ...updatedUnit, raw: updatedUnit } : u
+        ));
+        fetchStats();
+      } catch (e) {
+        console.error('Error applying unit-updated payload', e);
+      }
+    };
+    on('unit-updated', handleUnitUpdated);
+    return () => off('unit-updated', handleUnitUpdated);
+  }, [on, off]);
+
+  // Full refresh on inventory creation
+  const refreshInventory = useCallback(() => {
+    fetchUnits();
+    fetchStats();
+    fetchProjects();
+  }, [fetchUnits]);
+  useRealtimeData(['inventory-created'], refreshInventory);
 
   // Helpers
   const buildMediaUrl = (url) => {
@@ -591,11 +575,11 @@ function InventoryPage() {
 
   // Render UI (kept the original structure / classes)
   return (
-    <div className="flex min-h-screen w-full bg-gradient-to-br from-emerald-50 via-white to-teal-100">
+    <div className="flex h-screen w-full bg-gradient-to-br from-emerald-50 via-white to-teal-100">
       <div className="hidden md:block">
         <Sidebar />
       </div>
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className={`flex-1 flex flex-col overflow-hidden ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
         <Header user={user} />
         <main className="flex-1 p-4 sm:p-6 overflow-y-auto">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
@@ -621,7 +605,7 @@ function InventoryPage() {
           {(liveStats || stats) && (() => {
             const displayStats = liveStats || stats || {};
             return (
-              <div className="grid grid-cols-1 md:grid-cols-8 gap-4 mb-6">
+              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-4 mb-6">
                 <div className="bg-white rounded-lg shadow p-4">
                   <p className="text-sm text-gray-500">Total Units</p>
                   <p className="text-2xl font-bold text-gray-900">{displayStats.total_units || 0}</p>
@@ -786,121 +770,217 @@ function InventoryPage() {
 
           {/* Unit Detail Modal */}
           {selectedUnit && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-auto">
-              <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto relative">
-                <button onClick={() => setSelectedUnit(null)} className="absolute top-3 right-3 text-gray-600 text-xl p-2">✕</button>
-                <div className="p-6">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="w-full h-64 bg-gray-100 rounded-md overflow-hidden">
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-auto">
+              <div className="bg-white rounded-2xl max-w-5xl w-full max-h-[92vh] overflow-hidden shadow-2xl relative animate-fade-in">
+                {/* Gradient Header Bar */}
+                <div className="bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-600 px-6 py-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+                      <FiHome className="text-white text-lg" />
+                    </div>
+                    <div>
+                      <h3 className="text-white font-bold text-lg">{selectedUnit.building_name || selectedUnit.project_name || 'Unit Details'}</h3>
+                      <p className="text-blue-100 text-xs">{selectedUnit.bhk || 'Property'} {selectedUnit.unit_number ? `• Unit ${selectedUnit.unit_number}` : ''}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {(() => {
+                      const kind = resolveListingKind(selectedUnit || {});
+                      if (kind === 'rent') return <span className="px-3 py-1 rounded-full bg-white/20 text-white text-xs font-bold tracking-wide">FOR RENT</span>;
+                      if (kind === 'sale') return <span className="px-3 py-1 rounded-full bg-white/20 text-white text-xs font-bold tracking-wide">FOR SALE</span>;
+                      const rawLabel = ((selectedUnit.raw && selectedUnit.raw.listing_type) || selectedUnit.listing_type || '').toString();
+                      return rawLabel ? <span className="px-3 py-1 rounded-full bg-white/20 text-white text-xs font-bold tracking-wide">{rawLabel.toUpperCase()}</span> : null;
+                    })()}
+                    {selectedUnit.status && (() => {
+                      const s = selectedUnit.status.toString().toLowerCase();
+                      if (s.includes('sold')) return <span className="px-3 py-1 rounded-full bg-red-500 text-white text-xs font-bold">SOLD</span>;
+                      if (s.includes('book')) return <span className="px-3 py-1 rounded-full bg-yellow-400 text-gray-900 text-xs font-bold">BOOKED</span>;
+                      if (s.includes('hold')) return <span className="px-3 py-1 rounded-full bg-orange-400 text-white text-xs font-bold">ON HOLD</span>;
+                      if (s.includes('available')) return <span className="px-3 py-1 rounded-full bg-emerald-400 text-white text-xs font-bold">AVAILABLE</span>;
+                      return <span className="px-3 py-1 rounded-full bg-white/20 text-white text-xs font-bold">{selectedUnit.status.toUpperCase()}</span>;
+                    })()}
+                    <button onClick={() => setSelectedUnit(null)} className="ml-2 w-8 h-8 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center transition-colors">
+                      <FiX className="text-white text-lg" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="overflow-y-auto max-h-[calc(92vh-68px)]">
+                  <div className="flex flex-col lg:flex-row">
+                    {/* Left: Image Gallery */}
+                    <div className="lg:w-1/2 p-5">
+                      <div className="rounded-xl overflow-hidden bg-gray-100 aspect-video shadow-inner">
                         {unitMedia && unitMedia.length > 0 && unitMedia[0].media_type === 'image' ? (
-                          <img src={buildMediaUrl(unitMedia[0].url)} alt={unitMedia[0].caption || ''} className="w-full h-64 object-cover" />
+                          <img src={buildMediaUrl(unitMedia[0].url)} alt={unitMedia[0].caption || ''} className="w-full h-full object-cover" />
                         ) : unitMedia && unitMedia.length > 0 && unitMedia[0].media_type !== 'image' ? (
-                          <video controls className="w-full h-64 object-cover">
+                          <video controls className="w-full h-full object-cover">
                             <source src={buildMediaUrl(unitMedia[0].url)} />
                           </video>
+                        ) : selectedUnit.thumbnail ? (
+                          <img src={selectedUnit.thumbnail} alt={selectedUnit.name || ''} className="w-full h-full object-cover" />
                         ) : (
-                          selectedUnit.thumbnail ? (
-                            <img src={selectedUnit.thumbnail} alt={selectedUnit.name || ''} className="w-full h-64 object-cover" />
-                          ) : (
-                            <div className="w-full h-64 flex items-center justify-center text-gray-400">No image</div>
-                          )
+                          <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
+                            <FiHome className="text-4xl mb-2" />
+                            <span className="text-sm">No image available</span>
+                          </div>
                         )}
                       </div>
-                      {/* Thumbnails */}
-                      <div className="grid grid-cols-4 gap-3 mt-4">
-                        {unitMedia.map((m) => (
-                          <div key={m.id} className="h-20 overflow-hidden rounded-md border">
-                            {m.media_type === 'image' ? (
-                              <img src={buildMediaUrl(m.url)} alt={m.caption || ''} className="w-full h-full object-cover" />
-                            ) : (
-                              <video className="w-full h-full">
-                                <source src={buildMediaUrl(m.url)} />
-                              </video>
+                      {/* Thumbnail Grid */}
+                      {unitMedia.length > 0 && (
+                        <div className="grid grid-cols-4 gap-2 mt-3">
+                          {unitMedia.map((m) => (
+                            <div key={m.id} className="aspect-square overflow-hidden rounded-lg border-2 border-transparent hover:border-blue-400 cursor-pointer transition-all shadow-sm">
+                              {m.media_type === 'image' ? (
+                                <img src={buildMediaUrl(m.url)} alt={m.caption || ''} className="w-full h-full object-cover" />
+                              ) : (
+                                <video className="w-full h-full object-cover">
+                                  <source src={buildMediaUrl(m.url)} />
+                                </video>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Price Card */}
+                      <div className="mt-4 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl p-4 border border-emerald-100">
+                        <div className="flex items-center gap-2 text-emerald-700 mb-1">
+                          <FiDollarSign className="text-lg" />
+                          <span className="text-sm font-semibold">Price</span>
+                        </div>
+                        <div className="text-2xl font-bold text-gray-900">{formatCurrency(selectedUnit.base_price || selectedUnit.final_price)}</div>
+                        {selectedUnit.price_per_sqft && (
+                          <div className="text-xs text-gray-500 mt-1">₹{selectedUnit.price_per_sqft}/sqft</div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Right: Details */}
+                    <div className="lg:w-1/2 p-5 lg:border-l border-gray-100">
+                      {/* Property Info Grid */}
+                      <div className="mb-5">
+                        <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                          <FiFileText className="text-blue-500" /> Property Information
+                        </h4>
+                        <div className="grid grid-cols-2 gap-3">
+                          {[
+                            { icon: <FiHome className="text-blue-500" />, label: 'Property Type', value: selectedUnit.bhk },
+                            { icon: <FiLayers className="text-purple-500" />, label: 'Floor', value: selectedUnit.floor_number ? `${selectedUnit.floor_number}${selectedUnit.total_floors ? ` / ${selectedUnit.total_floors}` : ''}` : null },
+                            { icon: <FiMapPin className="text-red-500" />, label: 'Building', value: selectedUnit.building_name || selectedUnit.project_name },
+                            { icon: <FiMaximize className="text-teal-500" />, label: 'Area', value: selectedUnit.area || selectedUnit.carpet_area ? `${selectedUnit.area || selectedUnit.carpet_area} sqft` : null },
+                            { icon: <FiMaximize className="text-indigo-500" />, label: 'Super Area', value: selectedUnit.super_area ? `${selectedUnit.super_area} sqft` : null },
+                            { icon: <FiMaximize className="text-cyan-500" />, label: 'Built-up Area', value: selectedUnit.built_up_area ? `${selectedUnit.built_up_area} sqft` : null },
+                            { icon: <FiSun className="text-yellow-500" />, label: 'Facing', value: selectedUnit.facing },
+                            { icon: <FiGrid className="text-green-500" />, label: 'Furnished', value: selectedUnit.furnished_status },
+                            { icon: <FiTruck className="text-gray-500" />, label: 'Parking', value: selectedUnit.parking_slots },
+                            { icon: <FiCalendar className="text-orange-500" />, label: 'Available', value: selectedUnit.availability_date ? new Date(selectedUnit.availability_date).toLocaleDateString() : null },
+                          ].filter(item => item.value).map((item, idx) => (
+                            <div key={idx} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
+                              <div className="mt-0.5">{item.icon}</div>
+                              <div>
+                                <div className="text-[11px] text-gray-400 uppercase font-semibold tracking-wide">{item.label}</div>
+                                <div className="text-sm font-medium text-gray-800">{item.value}</div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Owner Information */}
+                      {(selectedUnit.owner_name || selectedUnit.owner_phone) && (
+                        <div className="mb-5">
+                          <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                            <FiUser className="text-blue-500" /> Owner Information
+                          </h4>
+                          <div className="bg-blue-50 rounded-xl p-4 space-y-2">
+                            {selectedUnit.owner_name && (
+                              <div className="flex items-center gap-2 text-sm">
+                                <FiUser className="text-blue-600" />
+                                <span className="text-gray-800 font-medium">{selectedUnit.owner_name}</span>
+                              </div>
+                            )}
+                            {selectedUnit.owner_phone && (
+                              <div className="flex items-center gap-2 text-sm">
+                                <FiPhone className="text-blue-600" />
+                                <span className="text-gray-800">{selectedUnit.owner_phone}</span>
+                              </div>
                             )}
                           </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="w-80">
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-semibold text-lg">Unit Details</h3>
-                        <div className="flex items-center gap-2">
-                          {(() => {
-                            const kind = resolveListingKind(selectedUnit || {});
-                            if (kind === 'rent') return <div className="text-xs font-semibold px-2 py-1 rounded bg-blue-600 text-white">FOR RENT</div>;
-                            if (kind === 'sale') return <div className="text-xs font-semibold px-2 py-1 rounded bg-blue-600 text-white">FOR SALE</div>;
-                            const rawLabel = ((selectedUnit.raw && selectedUnit.raw.listing_type) || selectedUnit.listing_type || '').toString();
-                            return rawLabel ? <div className="text-xs font-semibold px-2 py-1 rounded bg-blue-600 text-white">{rawLabel.toUpperCase()}</div> : null;
-                          })()}
-                          {/* status color */}
-                          {selectedUnit && selectedUnit.status && (() => {
-                            const s = selectedUnit.status.toString().toLowerCase();
-                            if (s.includes('sold')) return <div className="text-xs font-semibold px-2 py-1 rounded bg-red-600 text-white">SOLD</div>;
-                            if (s.includes('book')) return <div className="text-xs font-semibold px-2 py-1 rounded bg-yellow-400 text-black">BOOKED</div>;
-                            if (s.includes('hold') || s.includes('on hold')) return <div className="text-xs font-semibold px-2 py-1 rounded bg-green-600 text-white">ON HOLD</div>;
-                            if (s.includes('available')) return <div className="text-xs font-semibold px-2 py-1 rounded bg-green-50 text-gray-800">AVAILABLE</div>;
-                            return null;
-                          })()}
                         </div>
-                      </div>
+                      )}
 
-                      <div className="mt-3 space-y-2 text-sm text-gray-700">
-                        <div><strong className="text-gray-800">Property Type:</strong> {selectedUnit.bhk || '-'}</div>
-                        <div><strong className="text-gray-800">Unit Number:</strong> {selectedUnit.unit_number || '-'}</div>
-                        <div><strong className="text-gray-800">Floor:</strong> {selectedUnit.floor_number || '-'}</div>
-                        <div><strong className="text-gray-800">Building / Apartment / Society:</strong> {selectedUnit.building_name || selectedUnit.project_name || '-'}</div>
-                        <div><strong className="text-gray-800">Area:</strong> {selectedUnit.area || selectedUnit.carpet_area || '-'}</div>
-                        <div><strong className="text-gray-800">Super Area:</strong> {selectedUnit.super_area || '-'}</div>
-                        <div><strong className="text-gray-800">Built-up Area:</strong> {selectedUnit.built_up_area || '-'}</div>
-                        <div><strong className="text-gray-800">Price:</strong> {formatCurrency(selectedUnit.base_price || selectedUnit.final_price)} {selectedUnit.price_per_sqft ? (<span className="text-xs text-gray-500"> • ₹{selectedUnit.price_per_sqft}/sqft</span>) : null}</div>
-                        <div><strong className="text-gray-800">Status:</strong> <span className="ml-1 font-semibold">{(selectedUnit.status || '-').toString().toUpperCase()}</span></div>
-                        <div><strong className="text-gray-800">Keys:</strong> {selectedUnit.keys_location || '-'}</div>
-                        <div><strong className="text-gray-800">Facing:</strong> {selectedUnit.facing || '-'}</div>
-                        <div><strong className="text-gray-800">Furnished:</strong> {selectedUnit.furnished_status || '-'}</div>
-                        <div><strong className="text-gray-800">Parking:</strong> {selectedUnit.parking_slots || '-'}</div>
-                        <div><strong className="text-gray-800">Owner Name:</strong> {selectedUnit.owner_name || '-'}</div>
-                        <div><strong className="text-gray-800">Phone:</strong> {selectedUnit.owner_phone || '-'}</div>
-                        <div><strong className="text-gray-800">Available:</strong> {selectedUnit.availability_date ? new Date(selectedUnit.availability_date).toLocaleDateString() : '-'}</div>
-                        <div><strong className="text-gray-800">Remarks:</strong> {selectedUnit.remarks || '-'}</div>
-
+                      {/* Remarks */}
+                      {selectedUnit.remarks && (
+                        <div className="mb-5">
+                          <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-2">
+                            <FiMessageSquare className="text-blue-500" /> Remarks
+                          </h4>
+                          <p className="text-sm text-gray-600 bg-gray-50 rounded-lg p-3 leading-relaxed">{selectedUnit.remarks}</p>
                         </div>
-
-                      {/* action buttons moved to fixed footer */}
+                      )}
 
                       {/* Amenities */}
-                      <div className="mt-4">
-                        <h4 className="text-sm font-semibold mb-2">Amenities</h4>
-                        {selectedUnit.amenities && selectedUnit.amenities.length > 0 ? (
+                      {selectedUnit.amenities && selectedUnit.amenities.length > 0 && (
+                        <div className="mb-5">
+                          <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                            <FiCheckCircle className="text-blue-500" /> Amenities
+                          </h4>
                           <div className="flex flex-wrap gap-2">
                             {selectedUnit.amenities.map((a, idx) => (
-                              <span key={idx} className="inline-block bg-gray-100 text-xs px-2 py-1 rounded">{a}</span>
+                              <span key={idx} className="inline-flex items-center gap-1 bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 text-xs font-medium px-3 py-1.5 rounded-full border border-blue-100">
+                                <FiCheckCircle className="text-blue-400 text-[10px]" /> {a}
+                              </span>
                             ))}
                           </div>
-                        ) : (
-                          <div className="text-sm text-gray-500">-</div>
-                        )}
-                      </div>
-
-                      {/* Tenant Information (always shown) */}
-                      <div className="mt-4 border-t pt-4">
-                        <h4 className="text-sm font-semibold mb-2">Tenant Information</h4>
-                        <div className="space-y-2 text-sm text-gray-700">
-                          <div><strong className="text-gray-800">Tenant Name:</strong> {selectedUnit.tenant_name || '-'}</div>
-                          <div><strong className="text-gray-800">Contact:</strong> {selectedUnit.tenant_contact || '-'}</div>
-                          <div><strong className="text-gray-800">Start Date:</strong> {selectedUnit.tenant_start_date ? new Date(selectedUnit.tenant_start_date).toLocaleDateString() : '-'}</div>
-                          <div><strong className="text-gray-800">End Date:</strong> {selectedUnit.tenant_end_date ? new Date(selectedUnit.tenant_end_date).toLocaleDateString() : '-'}</div>
                         </div>
-                      </div>
-                      
-                      {/* Action buttons placed at bottom of details column */}
-                      <div className="mt-4 flex gap-2 justify-center">
-                        <button onClick={() => viewUnit(selectedUnit.id || selectedUnit._id)} className="px-3 py-2 bg-blue-600 text-white rounded">View</button>
-                        <button onClick={() => startEditUnit(selectedUnit.id || selectedUnit._id)} className="px-3 py-2 bg-green-600 text-white rounded">Edit</button>
-                        <button onClick={handleGeneratePDF} className="px-3 py-2 bg-red-600 text-white rounded">Generate PDF</button>
-                      </div>
+                      )}
+
+                      {/* Tenant Information */}
+                      {(selectedUnit.tenant_name || selectedUnit.tenant_contact) && (
+                        <div className="mb-5">
+                          <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                            <FiKey className="text-blue-500" /> Tenant Information
+                          </h4>
+                          <div className="bg-amber-50 rounded-xl p-4 space-y-2 border border-amber-100">
+                            {selectedUnit.tenant_name && (
+                              <div className="flex items-center gap-2 text-sm">
+                                <FiUser className="text-amber-600" />
+                                <span className="text-gray-800 font-medium">{selectedUnit.tenant_name}</span>
+                              </div>
+                            )}
+                            {selectedUnit.tenant_contact && (
+                              <div className="flex items-center gap-2 text-sm">
+                                <FiPhone className="text-amber-600" />
+                                <span className="text-gray-800">{selectedUnit.tenant_contact}</span>
+                              </div>
+                            )}
+                            {(selectedUnit.tenant_start_date || selectedUnit.tenant_end_date) && (
+                              <div className="flex items-center gap-2 text-sm">
+                                <FiCalendar className="text-amber-600" />
+                                <span className="text-gray-800">
+                                  {selectedUnit.tenant_start_date ? new Date(selectedUnit.tenant_start_date).toLocaleDateString() : '—'}
+                                  {' → '}
+                                  {selectedUnit.tenant_end_date ? new Date(selectedUnit.tenant_end_date).toLocaleDateString() : '—'}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
+                  </div>
+
+                  {/* Action Buttons Footer */}
+                  <div className="border-t border-gray-100 px-6 py-4 bg-gray-50 flex items-center justify-center gap-3">
+                    <button onClick={() => viewUnit(selectedUnit.id || selectedUnit._id)} className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold shadow-lg shadow-blue-200 transition-all hover:shadow-xl hover:-translate-y-0.5">
+                      <FiEye /> View
+                    </button>
+                    <button onClick={() => startEditUnit(selectedUnit.id || selectedUnit._id)} className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold shadow-lg shadow-emerald-200 transition-all hover:shadow-xl hover:-translate-y-0.5">
+                      <FiEdit2 /> Edit
+                    </button>
+                    <button onClick={handleGeneratePDF} className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white rounded-xl text-sm font-semibold shadow-lg shadow-red-200 transition-all hover:shadow-xl hover:-translate-y-0.5">
+                      <FiDownload /> Generate PDF
+                    </button>
                   </div>
                 </div>
               </div>

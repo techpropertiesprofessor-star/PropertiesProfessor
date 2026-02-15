@@ -26,7 +26,10 @@ const leadSchema = new mongoose.Schema(
         'whatsapp',
         'chatbot',
         'manual',
-        'Friend'
+        'Friend',
+        'property_enquiry',
+        'Website',
+        'website'
       ]
     },
     property: {
@@ -63,13 +66,46 @@ const leadSchema = new mongoose.Schema(
       default: ''
     },
 
+    remarkNotes: [{
+      remark: { type: String, enum: ['Interested', 'Not Interested', 'Busy', 'Invalid Number'], required: true },
+      note: { type: String, default: '' },
+      addedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      addedByName: { type: String, default: '' },
+      createdAt: { type: Date, default: Date.now }
+    }],
+
     createdBy: {
       type: String,
       enum: ['website', 'dashboard'],
       default: 'website'
+    },
+
+    assignedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null
     }
   },
   { timestamps: true }
 );
+
+// Debug middleware
+leadSchema.pre('save', function(next) {
+  console.log('Lead pre-save:', {
+    id: this._id,
+    assignedTo: this.assignedTo,
+    status: this.status,
+    isModified: this.isModified('assignedTo')
+  });
+  next();
+});
+
+leadSchema.post('save', function(doc) {
+  console.log('Lead post-save:', {
+    id: doc._id,
+    assignedTo: doc.assignedTo,
+    status: doc.status
+  });
+});
 
 module.exports = mongoose.model('Lead', leadSchema);

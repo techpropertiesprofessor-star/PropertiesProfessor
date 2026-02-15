@@ -2,6 +2,7 @@ import React, { useContext, useRef, useState } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
+import useSidebarCollapsed from '../hooks/useSidebarCollapsed';
 import defaultLogo from '../assets/companyLogo';
 import defaultPhoto from '../assets/userPhoto';
 import { FiCamera } from 'react-icons/fi';
@@ -25,6 +26,7 @@ function formatDate(dateStr) {
 }
 
 export default function ProfilePage() {
+  const sidebarCollapsed = useSidebarCollapsed();
   const { user, loading } = useContext(AuthContext);
   const cardRef = useRef();
   const fileInputRef = useRef();
@@ -144,8 +146,8 @@ export default function ProfilePage() {
 
   return (
     <div className="flex h-screen bg-gray-100">
-      <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="hidden md:block"><Sidebar /></div>
+      <div className={`flex-1 flex flex-col overflow-hidden ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
         <Header user={user} />
         
         {/* Flip Card Styles */}

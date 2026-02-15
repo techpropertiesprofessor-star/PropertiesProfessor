@@ -2,9 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
+import useSidebarCollapsed from '../hooks/useSidebarCollapsed';
 import { taskAPI, employeeAPI } from '../api/client';
 
 export default function TaskDetailsPage() {
+  const sidebarCollapsed = useSidebarCollapsed();
   const { id } = useParams();
   const navigate = useNavigate();
   const [task, setTask] = useState(null);
@@ -45,16 +47,16 @@ export default function TaskDetailsPage() {
     return !isNaN(d) ? d.toLocaleDateString() : '-';
   }
 
-  if (loading) return <div className="flex h-screen"><Sidebar /><div className="flex-1 flex flex-col"><Header /><main className="flex-1 flex items-center justify-center">Loading...</main></div></div>;
-  if (error) return <div className="flex h-screen"><Sidebar /><div className="flex-1 flex flex-col"><Header /><main className="flex-1 flex items-center justify-center text-red-600">{error}</main></div></div>;
+  if (loading) return <div className="flex h-screen"><div className="hidden md:block"><Sidebar /></div><div className={`flex-1 flex flex-col overflow-hidden ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}><Header /><main className="flex-1 flex items-center justify-center overflow-y-auto">Loading...</main></div></div>;
+  if (error) return <div className="flex h-screen"><div className="hidden md:block"><Sidebar /></div><div className={`flex-1 flex flex-col overflow-hidden ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}><Header /><main className="flex-1 flex items-center justify-center text-red-600 overflow-y-auto">{error}</main></div></div>;
   if (!task) return null;
 
   return (
     <div className="flex h-screen bg-gray-50">
-      <Sidebar />
-      <div className="flex-1 flex flex-col">
+      <div className="hidden md:block"><Sidebar /></div>
+      <div className={`flex-1 flex flex-col overflow-hidden ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
         <Header />
-        <main className="flex-1 p-8">
+        <main className="flex-1 p-8 overflow-y-auto">
           <button onClick={() => navigate(-1)} className="mb-4 text-blue-600 hover:underline">&larr; Back</button>
           <div className="bg-white rounded-lg shadow p-6 max-w-xl mx-auto">
             <h1 className="text-2xl font-bold mb-2">{task.title}</h1>

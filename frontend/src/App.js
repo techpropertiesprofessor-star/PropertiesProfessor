@@ -10,8 +10,11 @@ import { ThemeProvider } from './context/ThemeContext';
 import { ProtectedRoute } from './context/ProtectedRoute';
 import { useActivityTracker } from './hooks/useActivityTracker';
 import { NotificationToastProvider, useNotificationToast } from './context/NotificationToastContext';
+import { NotificationProvider } from './context/NotificationContext';
+import { SocketProvider } from './context/SocketContext';
 import NotificationToastContainer from './components/NotificationToast';
 import { useRealtimeNotifications } from './hooks/useRealtimeNotifications';
+import PWAInstallPrompt from './components/PWAInstallPrompt';
 import './styles/NotificationToast.css';
 
 // Pages
@@ -45,11 +48,15 @@ function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <NotificationToastProvider>
-          <Router>
-            <AppContent />
-          </Router>
-        </NotificationToastProvider>
+        <SocketProvider>
+          <NotificationProvider>
+            <NotificationToastProvider>
+              <Router>
+                <AppContent />
+              </Router>
+            </NotificationToastProvider>
+          </NotificationProvider>
+        </SocketProvider>
       </AuthProvider>
     </ThemeProvider>
   );
@@ -63,6 +70,7 @@ function AppContent() {
   
   return (
     <>
+      <PWAInstallPrompt />
       <NotificationToastContainer toasts={toasts} onRemove={removeToast} />
       <Routes>
         <Route path="/login" element={<LoginPage />} />

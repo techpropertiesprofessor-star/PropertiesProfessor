@@ -1,12 +1,15 @@
 
-import React, { useEffect, useState, useContext } from 'react';
+import React, { useEffect, useState, useContext, useCallback } from 'react';
 import { default as api } from '../api/client';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
+import useSidebarCollapsed from '../hooks/useSidebarCollapsed';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import useRealtimeData from '../hooks/useRealtimeData';
 
 function LeaveRequestsPage() {
+  const sidebarCollapsed = useSidebarCollapsed();
   const { user } = useContext(AuthContext);
   const [leaves, setLeaves] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -39,6 +42,10 @@ function LeaveRequestsPage() {
     }
   };
 
+  // Real-time leave request updates
+  const refreshLeaves = useCallback(() => fetchLeaves(), []);
+  useRealtimeData(['notification', 'new-notification'], refreshLeaves);
+
   const handleAction = async (id, action) => {
     setActionLoading(id + action);
     setError('');
@@ -53,10 +60,11 @@ function LeaveRequestsPage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      <Sidebar />
-      <div className="flex-1 flex flex-col">
+    <div className="flex h-screen bg-gray-50">
+      <div className="hidden md:block"><Sidebar /></div>
+      <div className={`flex-1 flex flex-col overflow-hidden ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
         <Header user={user} />
+        <div className="flex-1 overflow-y-auto">
         <div className="flex items-center justify-between px-8 pt-8 pb-2">
           <button
             onClick={() => navigate(-1)}
@@ -150,6 +158,7 @@ function LeaveRequestsPage() {
               </table>
             )}
           </div>
+        </div>
         </div>
       </div>
     </div>

@@ -1,12 +1,15 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, useCallback } from "react";
 import { useSearchParams } from 'react-router-dom';
 import Sidebar from "../components/Sidebar";
 import Header from "../components/Header";
+import useSidebarCollapsed from '../hooks/useSidebarCollapsed';
 import { callerAPI, leadAPI, employeeAPI } from "../api/client";
 import CallersList from "../components/CallersList";
 import { AuthContext } from "../context/AuthContext";
+import useRealtimeData from '../hooks/useRealtimeData';
 
 export default function CallersPage() {
+  const sidebarCollapsed = useSidebarCollapsed();
   const { user } = useContext(AuthContext);
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -74,6 +77,10 @@ export default function CallersPage() {
     }
   };
 
+  // Real-time callers updates
+  const refreshCallers = useCallback(() => loadCallers(), []);
+  useRealtimeData(['lead-created', 'lead-updated', 'lead-remarks-updated'], refreshCallers);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     if (name === "last_response") {
@@ -128,19 +135,19 @@ export default function CallersPage() {
 
   return (
     <div className="flex h-screen bg-gray-50">
-      <Sidebar />
+      <div className="hidden md:block"><Sidebar /></div>
 
-      <div className="flex-1 flex flex-col">
+      <div className={`flex-1 flex flex-col overflow-hidden ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
         <Header user={user} />
 
-        <main className="flex-1 p-8 overflow-y-auto">
+        <main className="flex-1 p-3 sm:p-4 md:p-8 overflow-y-auto">
           {/* PAGE HEADER */}
-          <div className="flex justify-between items-center mb-6">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
                 Data Assignment & Calling
               </h1>
-              <p className="text-gray-600">
+              <p className="text-sm sm:text-base text-gray-600">
                 Call assigned leads and record responses
               </p>
             </div>

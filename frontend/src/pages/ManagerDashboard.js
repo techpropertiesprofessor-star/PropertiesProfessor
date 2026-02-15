@@ -2,12 +2,14 @@ import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
+import useSidebarCollapsed from '../hooks/useSidebarCollapsed';
 import api from '../api/client';
 import { AuthContext } from '../context/AuthContext';
 import { FiUsers, FiCheckCircle, FiClock, FiAlertCircle, FiCalendar, FiCheck, FiX } from 'react-icons/fi';
 import axios from 'axios';
 
 const ManagerDashboard = () => {
+  const sidebarCollapsed = useSidebarCollapsed();
   const navigate = useNavigate();
   const { user } = useContext(AuthContext);
   const [employees, setEmployees] = useState([]);
@@ -98,11 +100,11 @@ const filteredEmployees = safeEmployees.filter(emp => {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen bg-gray-50">
+      <div className="flex h-screen bg-gray-50">
         <div className="hidden md:block"><Sidebar /></div>
-        <div className="flex-1 flex flex-col">
+        <div className={`flex-1 flex flex-col overflow-hidden ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
           <Header user={user} />
-          <main className="flex-1 flex items-center justify-center p-4 sm:p-8">
+          <main className="flex-1 flex items-center justify-center p-4 sm:p-8 overflow-y-auto">
             <div className="text-xl text-gray-600 break-words">Loading employee statistics...</div>
           </main>
         </div>
@@ -112,11 +114,11 @@ const filteredEmployees = safeEmployees.filter(emp => {
 
   if (error) {
     return (
-      <div className="flex min-h-screen bg-gray-50">
+      <div className="flex h-screen bg-gray-50">
         <div className="hidden md:block"><Sidebar /></div>
-        <div className="flex-1 flex flex-col">
+        <div className={`flex-1 flex flex-col overflow-hidden ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
           <Header user={user} />
-          <main className="flex-1 flex items-center justify-center p-4 sm:p-8">
+          <main className="flex-1 flex items-center justify-center p-4 sm:p-8 overflow-y-auto">
             <div className="text-xl text-red-600 break-words">{error}</div>
           </main>
         </div>
@@ -125,9 +127,9 @@ const filteredEmployees = safeEmployees.filter(emp => {
   }
 
   return (
-    <div className="flex min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+    <div className="flex h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
       <div className="hidden md:block"><Sidebar /></div>
-      <div className="flex-1 flex flex-col">
+      <div className={`flex-1 flex flex-col overflow-hidden ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
         <Header user={user} />
         <main className="flex-1 overflow-auto p-4 sm:p-6 max-w-7xl w-full mx-auto">
           {/* Back Button */}
