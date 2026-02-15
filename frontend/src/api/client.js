@@ -284,6 +284,15 @@ export const calendarAPI = {
   deleteEvent: (id) => api.delete(`/calendar/events/${id}`),
 };
 
+/**
+ * =====================================================
+ * REMINDER APIs
+ * =====================================================
+ */
+export const reminderAPI = {
+  getTodayReminders: () => api.get("/reminders/today"),
+};
+
 export default api;
 
 export const leaveAPI = {

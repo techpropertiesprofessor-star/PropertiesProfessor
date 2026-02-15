@@ -74,7 +74,7 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalLeads, setTotalLeads] = useState(0);
-  const pageLimit = 20;
+  const pageLimit = 15;
 
   // =====================
   // REAL-TIME UPDATES VIA SHARED SOCKET
@@ -453,8 +453,11 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
                           )}
                         </td>
                         <td className="px-4 py-3 align-middle whitespace-nowrap">
-                          {/* EMPLOYEE and MANAGER can add/edit remarks */}
-                          {(user && (user.role === 'EMPLOYEE' || user.role === 'MANAGER')) ? (
+                          {/* MANAGER can always add remarks, EMPLOYEE only if lead is assigned to them */}
+                          {(user && (user.role === 'MANAGER' || (user.role === 'EMPLOYEE' && user.employeeId && (
+                            (lead.assignedTo && typeof lead.assignedTo === 'object' && String(lead.assignedTo._id) === String(user.employeeId)) ||
+                            (lead.assignedTo && typeof lead.assignedTo === 'string' && String(lead.assignedTo) === String(user.employeeId))
+                          )))) ? (
                             <select
                               className={`border rounded px-2 py-1 text-xs w-36 focus:ring-2 focus:ring-indigo-200 cursor-pointer font-medium ${
                                 lead.remarks === 'Interested' ? 'bg-green-50 text-green-700 border-green-300' :

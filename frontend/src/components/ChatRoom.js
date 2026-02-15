@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useContext, useCallback } from 'react';
 import { chatAPI, employeeAPI } from '../api/client';
 import { AuthContext } from '../context/AuthContext';
-import { FiSend } from 'react-icons/fi';
+import { FiSend, FiArrowLeft } from 'react-icons/fi';
 import io from 'socket.io-client';
 // Helper to group messages by date
 function groupMessagesByDate(messages) {
@@ -72,7 +72,7 @@ const getAvatarColor = (userId) => {
   return colors[Math.abs(hash) % colors.length];
 };
 
-export default function ChatRoom({ chatType = 'team', userId = null, userName = null, isOnline = false }) {
+export default function ChatRoom({ chatType = 'team', userId = null, userName = null, isOnline = false, onBack = null }) {
   const { user } = useContext(AuthContext);
 
   console.log('🔍 Current user from AuthContext:', user);
@@ -377,17 +377,29 @@ export default function ChatRoom({ chatType = 'team', userId = null, userName = 
     <div className="flex flex-col w-full h-full min-h-0 bg-white overflow-hidden">
       {/* HEADER */}
       <div className="px-4 py-3 border-b bg-blue-600 text-white flex items-center justify-between">
-        <div>
-          <h3 className="font-extrabold text-base tracking-tight flex items-center gap-2">
-            <span className="text-xl">{chatType === 'team' ? '💬' : '👤'}</span>
-            {chatType === 'team' ? 'Team Chat' : userName || 'Private Chat'}
-          </h3>
-          <p className="text-xs text-blue-100 mt-0.5">
-            {chatType === 'team' 
-              ? `${teamMembers.length} Member${teamMembers.length !== 1 ? 's' : ''}`
-              : isOnline ? '🟢 Online' : '⚪ Offline'
-            }
-          </p>
+        <div className="flex items-center gap-2">
+          {/* Back button - visible on mobile */}
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="md:hidden p-1.5 rounded-full hover:bg-blue-500 transition-colors -ml-1"
+              title="Back to chats"
+            >
+              <FiArrowLeft size={20} />
+            </button>
+          )}
+          <div>
+            <h3 className="font-extrabold text-base tracking-tight flex items-center gap-2">
+              <span className="text-xl">{chatType === 'team' ? '💬' : '👤'}</span>
+              {chatType === 'team' ? 'Team Chat' : userName || 'Private Chat'}
+            </h3>
+            <p className="text-xs text-blue-100 mt-0.5">
+              {chatType === 'team' 
+                ? `${teamMembers.length} Member${teamMembers.length !== 1 ? 's' : ''}`
+                : isOnline ? '🟢 Online' : '⚪ Offline'
+              }
+            </p>
+          </div>
         </div>
       </div>
 
@@ -413,7 +425,7 @@ export default function ChatRoom({ chatType = 'team', userId = null, userName = 
                     key={msg.id || `msg-${msgIndex}-${msg.created_at}`}
                     className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'}`}
                   >
-                    <div className={`flex items-end ${isMe ? 'flex-row-reverse' : ''} w-fit max-w-full`} style={{marginLeft: isMe ? 'auto' : 0, marginRight: isMe ? 0 : 'auto'}}>
+                    <div className={`flex items-end ${isMe ? 'flex-row-reverse' : ''} w-fit max-w-[85%] sm:max-w-[75%]`} style={{marginLeft: isMe ? 'auto' : 0, marginRight: isMe ? 0 : 'auto'}}>
                       {/* Avatar for others */}
                       {!isMe && (
                         <div
@@ -424,7 +436,7 @@ export default function ChatRoom({ chatType = 'team', userId = null, userName = 
                           {getInitials(displayName)}
                         </div>
                       )}
-                      <div className={`max-w-xs ${isMe ? 'ml-2' : 'mr-2'}`}> 
+                      <div className={`max-w-[calc(100%-2.5rem)] ${isMe ? 'ml-2' : 'mr-2'}`}> 
                         <div className={`flex items-center gap-2 mb-1 ${isMe ? 'justify-end flex-row-reverse' : ''}`}>
                           <span className="text-xs font-semibold text-gray-700">
                             {isMe ? 'You' : displayName}

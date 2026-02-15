@@ -191,6 +191,7 @@ exports.getLeads = async (req, res, next) => {
 
     const leads = await Lead.find(filter)
       .populate({ path: 'assignedTo', select: 'name email role' })
+      .populate({ path: 'remarkNotes.addedBy', select: 'name email' })
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(pageLimit);
@@ -217,7 +218,8 @@ exports.getLeads = async (req, res, next) => {
 exports.getLeadById = async (req, res, next) => {
   try {
     const lead = await Lead.findById(req.params.id)
-      .populate({ path: 'assignedTo', select: 'name email role' });
+      .populate({ path: 'assignedTo', select: 'name email role' })
+      .populate({ path: 'remarkNotes.addedBy', select: 'name email' });
 
     if (!lead) {
       return res.status(404).json({ message: 'Lead not found' });
@@ -265,12 +267,24 @@ exports.updateLead = async (req, res, next) => {
 };
 
 // =======================================
-// UPDATE REMARKS (EMPLOYEE ONLY)
+// UPDATE REMARKS (ASSIGNED EMPLOYEE or MANAGER)
 // =======================================
 exports.updateRemarks = async (req, res, next) => {
   try {
     if (req.user.role !== 'EMPLOYEE' && req.user.role !== 'MANAGER') {
       return res.status(403).json({ message: 'Only employees and managers can update remarks' });
+    }
+
+    // EMPLOYEE can only update remarks for leads assigned to them
+    if (req.user.role === 'EMPLOYEE') {
+      const existingLead = await Lead.findById(req.params.id);
+      if (!existingLead) {
+        return res.status(404).json({ message: 'Lead not found' });
+      }
+      const employeeId = req.user.employeeId || req.user._id;
+      if (!existingLead.assignedTo || String(existingLead.assignedTo) !== String(employeeId)) {
+        return res.status(403).json({ message: 'You can only add remarks to leads assigned to you' });
+      }
     }
 
     const { remarks, note } = req.body;

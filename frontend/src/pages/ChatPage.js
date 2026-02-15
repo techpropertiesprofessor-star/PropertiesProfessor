@@ -13,9 +13,16 @@ export default function ChatPage({ newMessageCount = 0, resetNewMessageCount }) 
   const { user, logout } = useContext(AuthContext);
   const { canViewChat, loading } = usePermissions();
   const [activeChat, setActiveChat] = useState({ type: 'team' });
+  // Mobile: track whether to show ChatRoom or ChatList
+  const [mobileShowChat, setMobileShowChat] = useState(false);
 
   const handleSelectChat = (chatInfo) => {
     setActiveChat(chatInfo);
+    setMobileShowChat(true); // On mobile, switch to ChatRoom view
+  };
+
+  const handleBackToList = () => {
+    setMobileShowChat(false); // On mobile, go back to ChatList
   };
 
   // Mark all team chat notifications as read when page opens
@@ -79,21 +86,22 @@ export default function ChatPage({ newMessageCount = 0, resetNewMessageCount }) 
         <Header user={user} onLogout={logout} newMessageCount={newMessageCount} resetNewMessageCount={resetNewMessageCount} />
         
         <main className="flex-1 min-h-0 overflow-hidden flex">
-          {/* Chat List Sidebar */}
-          <div className="w-80 flex-shrink-0 border-r border-gray-200 h-full overflow-y-auto">
+          {/* Chat List Sidebar - hidden on mobile when chat is open */}
+          <div className={`w-full md:w-80 flex-shrink-0 border-r border-gray-200 h-full overflow-y-auto ${mobileShowChat ? 'hidden md:block' : 'block'}`}>
             <ChatList 
               onSelectChat={handleSelectChat} 
               activeChat={activeChat}
             />
           </div>
 
-          {/* Chat Room */}
-          <div className="flex-1 h-full min-h-0 overflow-hidden">
+          {/* Chat Room - hidden on mobile when chat list is shown */}
+          <div className={`flex-1 h-full min-h-0 overflow-hidden ${mobileShowChat ? 'block' : 'hidden md:block'}`}>
             <ChatRoom 
               chatType={activeChat.type}
               userId={activeChat.userId}
               userName={activeChat.userName}
               isOnline={activeChat.isOnline}
+              onBack={handleBackToList}
             />
           </div>
         </main>

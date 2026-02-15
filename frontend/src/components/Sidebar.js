@@ -138,7 +138,7 @@ export default function Sidebar({
             onClick={() => window.location.reload()}
             title="Click to refresh page"
           >
-            <img src="/logo.png" alt="PP" className="w-8 h-8 rounded-full object-cover" />
+            <img src="/logo.png" alt="PP" className="w-12 h-12 rounded-full object-cover" />
             <div className="min-w-0">
               <h2 className="text-xs font-bold leading-tight text-slate-200">Properties Professor</h2>
               <p className="text-blue-400 text-xs opacity-80">System</p>

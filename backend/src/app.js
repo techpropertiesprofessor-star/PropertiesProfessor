@@ -58,6 +58,7 @@ app.use('/api/chat', require('./routes/chat.routes'));
 app.use('/api/callers', require('./routes/caller.routes'));
 app.use('/api/permissions', require('./routes/permissions.routes'));
 app.use('/api/personal-notes', require('./routes/personalNote.routes'));
+app.use('/api/reminders', require('./routes/reminder.routes'));
 
 /* ========================
    MANAGER ANALYTICS ROUTES

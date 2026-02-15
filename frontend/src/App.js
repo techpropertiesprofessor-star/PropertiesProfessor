@@ -15,6 +15,8 @@ import { SocketProvider } from './context/SocketContext';
 import NotificationToastContainer from './components/NotificationToast';
 import { useRealtimeNotifications } from './hooks/useRealtimeNotifications';
 import PWAInstallPrompt from './components/PWAInstallPrompt';
+import ReminderPopup, { ReminderBadge } from './components/ReminderPopup';
+import useReminderPopups from './hooks/useReminderPopups';
 import './styles/NotificationToast.css';
 
 // Pages
@@ -67,11 +69,22 @@ function AppContent() {
   useActivityTracker(); // Track all dashboard activities
   useRealtimeNotifications(); // Connect real-time notification toasts
   const { toasts, removeToast } = useNotificationToast();
+  const { reminders, showPopup, reminderCount, dismissReminder, dismissAll, closePopup, openPopup } = useReminderPopups();
   
   return (
     <>
       <PWAInstallPrompt />
       <NotificationToastContainer toasts={toasts} onRemove={removeToast} />
+      {/* Reminder Warning Popups */}
+      {showPopup && (
+        <ReminderPopup
+          reminders={reminders}
+          onDismiss={dismissReminder}
+          onDismissAll={dismissAll}
+          onClose={closePopup}
+        />
+      )}
+      {!showPopup && <ReminderBadge count={reminderCount} onClick={openPopup} />}
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />

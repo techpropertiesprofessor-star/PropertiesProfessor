@@ -1099,8 +1099,11 @@ useEffect(() => {
                                 </td>
                               )}
                               <td className="px-4 py-2">
-                                {/* Remarks dropdown for employee and manager */}
-                                {user && (user.role === 'EMPLOYEE' || user.role === 'MANAGER') ? (
+                                {/* Remarks: MANAGER always, EMPLOYEE only if assigned to them */}
+                                {user && (user.role === 'MANAGER' || (user.role === 'EMPLOYEE' && user.employeeId && (
+                                  (lead.assignedTo && typeof lead.assignedTo === 'object' && String(lead.assignedTo._id) === String(user.employeeId)) ||
+                                  (lead.assignedTo && typeof lead.assignedTo === 'string' && String(lead.assignedTo) === String(user.employeeId))
+                                ))) ? (
                                   <select
                                     className={`border rounded px-2 py-1 text-xs w-32 cursor-pointer font-medium ${
                                       lead.remarks === 'Interested' ? 'bg-green-50 text-green-700 border-green-300' :
