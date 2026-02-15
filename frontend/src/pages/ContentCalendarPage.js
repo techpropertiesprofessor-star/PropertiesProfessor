@@ -66,7 +66,7 @@ export default function ContentCalendarPage() {
       description: '',
       priority: 'medium',
       color: '#3B82F6',
-      isPublished: false
+      isPublished: isManager ? false : false // EMPLOYEE cannot publish
     });
     setShowEventModal(true);
   };
@@ -94,7 +94,11 @@ export default function ContentCalendarPage() {
       return;
     }
     try {
-      const eventData = { ...eventForm, date: selectedDate };
+      // EMPLOYEE cannot publish events
+      let eventData = { ...eventForm, date: selectedDate };
+      if (!isManager) {
+        eventData.isPublished = false;
+      }
       if (editingEvent) {
         await calendarAPI.updateEvent(editingEvent._id, eventData);
         showSuccess('Event updated successfully');
