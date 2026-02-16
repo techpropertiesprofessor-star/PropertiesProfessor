@@ -19,7 +19,8 @@ export const useObservabilitySocket = (userRole, timeRange = '1h') => {
   
   const socketRef = useRef(null);
   const pollingIntervalRef = useRef(null);
-  const reconnectTimeoutRef = useRef(null);
+
+
   
   /**
    * Fetch metrics via HTTP (fallback polling)
