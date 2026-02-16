@@ -97,7 +97,8 @@ export const useActivityTracker = () => {
       
       previousRoute.current = currentRoute;
     }
-  }, [location]);
+  }, [location, logActivity]);
+
 
   // Track clicks
   useEffect(() => {
@@ -124,7 +125,8 @@ export const useActivityTracker = () => {
 
     document.addEventListener('click', handleClick, true);
     return () => document.removeEventListener('click', handleClick, true);
-  }, [location]);
+  }, [location, logActivity]);
+
 
   // Track errors
   useEffect(() => {
@@ -141,7 +143,8 @@ export const useActivityTracker = () => {
 
     window.addEventListener('error', handleError);
     return () => window.removeEventListener('error', handleError);
-  }, [location]);
+  }, [location, logActivity]);
+
 
   // Cleanup on unmount
   useEffect(() => {

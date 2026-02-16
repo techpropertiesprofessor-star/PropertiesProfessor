@@ -82,6 +82,17 @@ export const useActivityTracker = () => {
   const previousRoute = useRef(location.pathname);
   const sessionId = useRef(Math.random().toString(36).substring(7));
 
+  // ✅ DEFINE FIRST
+  const logActivity = useCallback((activity) => {
+    try {
+      activity.timestamp = new Date().toISOString();
+      activityQueue.enqueue(activity);
+    } catch (error) {}
+  }, []);
+
+  // 🔽 Then all useEffects
+
+
   // Track navigation
   useEffect(() => {
     const currentRoute = location.pathname;
@@ -97,7 +108,8 @@ export const useActivityTracker = () => {
       
       previousRoute.current = currentRoute;
     }
-  }, [location]);
+  }, [location, logActivity]);
+
 
   // Track clicks
   useEffect(() => {
@@ -125,7 +137,8 @@ export const useActivityTracker = () => {
 
     document.addEventListener('click', handleClick, true);
     return () => document.removeEventListener('click', handleClick, true);
-  }, [location]);
+  }, [location, logActivity]);
+
 
   // Track errors
   useEffect(() => {
@@ -142,7 +155,8 @@ export const useActivityTracker = () => {
 
     window.addEventListener('error', handleError);
     return () => window.removeEventListener('error', handleError);
-  }, [location]);
+  }, [location, logActivity]);
+
 
   // Cleanup on unmount
   useEffect(() => {
@@ -151,17 +165,6 @@ export const useActivityTracker = () => {
     };
   }, []);
 
-  const logActivity = useCallback((activity) => {
-    try {
-      // Add timestamp
-      activity.timestamp = new Date().toISOString();
-      
-      // Queue for async sending
-      activityQueue.enqueue(activity);
-    } catch (error) {
-      // Never throw
-    }
-  }, []);
 
   return { logActivity };
 };
