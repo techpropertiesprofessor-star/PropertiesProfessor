@@ -56,7 +56,7 @@
   "display": "standalone",
   "theme_color": "#4F46E5",
   "background_color": "#F0F4FF",
-  "orientation": "any",
+  "orientation": "portrait",
   "scope": "/",
   "categories": ["business", "productivity"],
   "prefer_related_applications": false

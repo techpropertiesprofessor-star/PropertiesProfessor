@@ -18,6 +18,13 @@ exports.createLeaveRequest = async (req, res, next) => {
       status: 'PENDING',
     });
     await leave.save();
+
+    // Broadcast to all clients for real-time update
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('leave-created', { leave });
+    }
+
     res.status(201).json({ message: 'Leave request submitted', leave });
   } catch (err) {
     next(err);
@@ -110,6 +117,8 @@ exports.approveLeave = async (req, res, next) => {
       io.to(leave.userId._id.toString()).emit('notification', {
         message: `Your leave request from ${leave.fromDate.toDateString()} to ${leave.toDate.toDateString()} has been approved.`
       });
+      // Broadcast to all clients for real-time update
+      io.emit('leave-updated', { leave });
     }
 
     res.json({ message: 'Leave approved', leave });
@@ -139,6 +148,8 @@ exports.rejectLeave = async (req, res, next) => {
       io.to(leave.userId._id.toString()).emit('notification', {
         message: `Your leave request from ${leave.fromDate.toDateString()} to ${leave.toDate.toDateString()} has been rejected.`
       });
+      // Broadcast to all clients for real-time update
+      io.emit('leave-updated', { leave });
     }
 
     res.json({ message: 'Leave rejected', leave });

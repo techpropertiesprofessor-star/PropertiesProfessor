@@ -5,7 +5,7 @@ import ManagerAnalyticsDashboard from './manager-analytics/ManagerAnalyticsDashb
 import React, { useEffect } from 'react';
 import { unlockAudio } from './utils/sound';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, AuthContext } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ProtectedRoute } from './context/ProtectedRoute';
 import { useActivityTracker } from './hooks/useActivityTracker';
@@ -39,6 +39,21 @@ import { PermissionRoute } from './context/PermissionRoute';
 import NotificationsPage from './pages/NotificationsPage';
 
 function App() {
+  // Lock screen orientation to portrait on mobile
+  useEffect(() => {
+    const lockOrientation = async () => {
+      try {
+        const s = window.screen;
+        if (s.orientation && s.orientation.lock) {
+          await s.orientation.lock('portrait-primary');
+        }
+      } catch (e) {
+        // Screen orientation lock not supported or not in fullscreen - handled by manifest + CSS overlay
+      }
+    };
+    lockOrientation();
+  }, []);
+
   useEffect(() => {
     const unlock = () => {
       unlockAudio();
@@ -70,14 +85,15 @@ function AppContent() {
   useActivityTracker(); // Track all dashboard activities
   useRealtimeNotifications(); // Connect real-time notification toasts
   const { toasts, removeToast } = useNotificationToast();
+  const { user } = React.useContext(AuthContext);
   const { reminders, showPopup, reminderCount, dismissReminder, dismissAll, closePopup, openPopup } = useReminderPopups();
   
   return (
     <>
       <PWAInstallPrompt />
       <NotificationToastContainer toasts={toasts} onRemove={removeToast} />
-      {/* Reminder Warning Popups */}
-      {showPopup && (
+      {/* Reminder Warning Popups - only show when user is logged in */}
+      {user && showPopup && (
         <ReminderPopup
           reminders={reminders}
           onDismiss={dismissReminder}
@@ -85,7 +101,7 @@ function AppContent() {
           onClose={closePopup}
         />
       )}
-      {!showPopup && <ReminderBadge count={reminderCount} onClick={openPopup} />}
+      {user && !showPopup && <ReminderBadge count={reminderCount} onClick={openPopup} />}
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/dashboard" element={<ProtectedRoute><PermissionRoute permission="Dashboard"><DashboardPage /></PermissionRoute></ProtectedRoute>} />

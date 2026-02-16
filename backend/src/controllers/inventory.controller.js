@@ -290,17 +290,15 @@ exports.updateUnit = async (req, res, next) => {
     if (!unit) return res.status(404).json({ message: 'Unit not found' });
     // Emit real-time update so other connected clients can refresh
     try {
-      if (req && req.io && typeof req.io.emit === 'function') {
-        req.io.emit('unit-updated', {
-          unitId: unit._id,
-          listing_type: unit.listing_type,
-          status: unit.status,
-          project: unit.project,
-          tower: unit.tower,
-          updatedAt: unit.updatedAt,
-          unit: unit
-        });
-      }
+      emitToAll('unit-updated', {
+        unitId: unit._id,
+        listing_type: unit.listing_type,
+        status: unit.status,
+        project: unit.project,
+        tower: unit.tower,
+        updatedAt: unit.updatedAt,
+        unit: unit
+      });
     } catch (emitErr) {
       console.warn('Failed to emit unit-updated socket event:', emitErr);
     }

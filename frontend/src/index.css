@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Show overlay when mobile is in landscape, prompting user to rotate back */
+@media screen and (max-width: 900px) and (orientation: landscape) {
+  #landscape-warning {
+    display: flex !important;
+  }
+}
+
 * {
   margin: 0;
   padding: 0;

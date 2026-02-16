@@ -50,6 +50,20 @@ export default function useReminderPopups() {
   const intervalRef = useRef(null);
   const hasFetchedRef = useRef(false);
 
+  // Reset everything when user logs out
+  useEffect(() => {
+    if (!user) {
+      setReminders([]);
+      setAllReminders([]);
+      setShowPopup(false);
+      hasFetchedRef.current = false;
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    }
+  }, [user]);
+
   const fetchReminders = useCallback(async () => {
     if (!user) return;
     try {

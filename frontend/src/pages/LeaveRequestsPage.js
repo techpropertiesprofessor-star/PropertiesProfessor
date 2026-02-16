@@ -44,7 +44,7 @@ function LeaveRequestsPage() {
 
   // Real-time leave request updates
   const refreshLeaves = useCallback(() => fetchLeaves(), []);
-  useRealtimeData(['notification', 'new-notification'], refreshLeaves);
+  useRealtimeData(['notification', 'new-notification', 'leave-created', 'leave-updated'], refreshLeaves);
 
   const handleAction = async (id, action) => {
     setActionLoading(id + action);

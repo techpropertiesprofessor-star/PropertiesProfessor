@@ -79,7 +79,7 @@ export default function CallersPage() {
 
   // Real-time callers updates
   const refreshCallers = useCallback(() => loadCallers(), []);
-  useRealtimeData(['lead-created', 'lead-updated', 'lead-remarks-updated'], refreshCallers);
+  useRealtimeData(['lead-created', 'lead-updated', 'lead-remarks-updated', 'caller-created', 'caller-updated', 'caller-deleted'], refreshCallers);
 
   const handleChange = (e) => {
     const { name, value } = e.target;

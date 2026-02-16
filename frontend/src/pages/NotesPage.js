@@ -30,11 +30,16 @@ export default function NotesPage() {
     reminder: ""
   });
 
-  useEffect(() => {
+  // Load notes from localStorage whenever user or page is visited
+  const loadNotes = React.useCallback(() => {
     if (user?._id) {
       setNotes(getUserNotes(user._id));
     }
   }, [user?._id]);
+
+  useEffect(() => {
+    loadNotes();
+  }, [loadNotes]);
 
   // Reminder alert
   useEffect(() => {
@@ -83,8 +88,8 @@ export default function NotesPage() {
     } else {
       updated.unshift({ ...form, created: new Date().toISOString(), reminded: false });
     }
-    setNotes(updated);
     saveUserNotes(user._id, updated);
+    setNotes([...updated]); // Force fresh state with new array reference
     closeModal();
   };
 

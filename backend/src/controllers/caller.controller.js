@@ -1,6 +1,6 @@
 const Caller = require('../models/Caller');
 const Notification = require('../models/Notification');
-const { emitToUser } = require('../utils/socket.util');
+const { emitToUser, emitToAll } = require('../utils/socket.util');
 
 exports.createCaller = async (req, res, next) => {
   try {
@@ -32,6 +32,9 @@ exports.createCaller = async (req, res, next) => {
       });
     }
     
+    // Broadcast to all clients for real-time update
+    emitToAll('caller-created', { caller });
+
     res.status(201).json(caller);
   } catch (err) {
     next(err);
@@ -115,6 +118,9 @@ exports.updateCaller = async (req, res, next) => {
       });
     }
     
+    // Broadcast to all clients for real-time update
+    emitToAll('caller-updated', { caller });
+
     res.json(caller);
   } catch (err) {
     next(err);
@@ -126,6 +132,10 @@ exports.deleteCaller = async (req, res, next) => {
     const id = req.params.id;
     const caller = await Caller.findByIdAndDelete(id);
     if (!caller) return res.status(404).json({ message: 'Caller not found' });
+
+    // Broadcast to all clients for real-time update
+    emitToAll('caller-deleted', { callerId: id });
+
     res.json({ message: 'Caller deleted' });
   } catch (err) {
     next(err);
