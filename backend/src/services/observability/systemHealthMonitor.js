@@ -52,7 +52,8 @@ class SystemHealthMonitor {
       await Promise.all([
         this.checkDatabase(),
         this.checkBackend(),
-        this.checkSystem()
+        this.checkSystem(),
+        this.checkWebSocket()
       ]);
     } catch (error) {
       console.error('[SystemHealthMonitor] Health check error:', error.message);
@@ -214,6 +215,62 @@ class SystemHealthMonitor {
     }
   }
   
+  /**
+   * Check WebSocket health
+   */
+  async checkWebSocket() {
+    const startTime = Date.now();
+    let status = 'GREEN';
+    let errorMessage = null;
+    let metrics = {};
+
+    try {
+      const { getIO } = require('../../config/socket');
+      const io = getIO();
+
+      // Get connected sockets count
+      const sockets = await io.fetchSockets();
+      const activeConnections = sockets.length;
+      metrics.activeConnections = activeConnections;
+
+      // Check if engine is running
+      if (!io.engine) {
+        status = 'RED';
+        errorMessage = 'WebSocket engine not initialized';
+      } else {
+        // Socket.IO is working
+        metrics.transport = 'websocket';
+        metrics.clientsCount = io.engine.clientsCount || 0;
+
+        // All good
+        status = 'GREEN';
+      }
+    } catch (error) {
+      if (error.message === 'Socket.io not initialized!') {
+        status = 'YELLOW';
+        errorMessage = 'Socket.IO not yet initialized';
+        metrics.activeConnections = 0;
+      } else {
+        status = 'RED';
+        errorMessage = error.message;
+        metrics.activeConnections = 0;
+      }
+    }
+
+    const responseTime = Date.now() - startTime;
+
+    // Queue health check log
+    loggingQueue.enqueue('health', {
+      timestamp: new Date(),
+      component: 'WEBSOCKET',
+      status,
+      responseTime,
+      message: status === 'GREEN' ? 'WebSocket healthy' : errorMessage,
+      errorMessage: status !== 'GREEN' ? errorMessage : null,
+      metrics
+    });
+  }
+
   /**
    * Emit real-time system metrics to connected clients
    */

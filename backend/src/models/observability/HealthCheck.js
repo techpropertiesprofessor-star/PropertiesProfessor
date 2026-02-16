@@ -15,7 +15,7 @@ const healthCheckSchema = new mongoose.Schema({
   // Component being checked
   component: {
     type: String,
-    enum: ['FRONTEND', 'BACKEND', 'DATABASE', 'WEBSOCKET', 'REDIS', 'DISK', 'NETWORK'],
+    enum: ['FRONTEND', 'BACKEND', 'DATABASE', 'WEBSOCKET', 'REDIS', 'DISK', 'NETWORK', 'SYSTEM'],
     required: true,
     index: true
   },

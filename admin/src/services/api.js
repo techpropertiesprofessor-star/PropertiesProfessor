@@ -56,6 +56,20 @@ export const adminApi = {
   // Queue stats
   getQueueStats: () => api.get('/api/admin/queue/stats'),
   
+  // BIOS
+  getBiosStatus: () => api.get('/api/bios/status'),
+  getBiosComponentHealth: (component) => api.get(`/api/bios/health/${component}`),
+  getBiosCrashes: () => api.get('/api/bios/crashes'),
+  getBiosCrashTimeline: () => api.get('/api/bios/crashes/timeline'),
+  getBiosDatabaseDiagnostics: () => api.get('/api/bios/diagnostics/database'),
+  getBiosProcessMetrics: () => api.get('/api/bios/diagnostics/process'),
+  getBiosFullDiagnostics: () => api.get('/api/bios/diagnostics/full'),
+  getBiosApiHealth: () => api.get('/api/bios/api-health'),
+  getBiosStorage: () => api.get('/api/bios/storage'),
+  getBiosDiagnose: () => api.get('/api/bios/diagnose'),
+  getBiosErrorLogs: (hours = 24, type = 'all') => api.get(`/api/bios/error-logs?hours=${hours}&type=${type}&limit=100`),
+  getBiosDiagnosticReport: () => api.get('/api/bios/diagnostic-report'),
+
   // Auth
   login: (credentials) => api.post('/api/auth/login', credentials),
 };

@@ -14,7 +14,7 @@ const requireSuperAdmin = (req, res, next) => {
     return res.status(401).json({ success: false, message: 'Authentication required' });
   }
   
-  const superAdminRoles = ['super_admin', 'superadmin'];
+  const superAdminRoles = ['super_admin', 'superadmin', 'admin'];
   if (!superAdminRoles.includes(req.user.role?.toLowerCase())) {
     // Log unauthorized BIOS access attempt
     const activityLogger = require('../../services/observability/activityLogger');
@@ -57,5 +57,23 @@ router.get('/diagnostics/database', protect, requireSuperAdmin, biosController.g
 
 // Process metrics
 router.get('/diagnostics/process', protect, requireSuperAdmin, biosController.getProcessMetrics);
+
+// Full diagnostics (all-in-one)
+router.get('/diagnostics/full', protect, requireSuperAdmin, biosController.getFullDiagnostics);
+
+// API health check (checks all endpoints)
+router.get('/api-health', protect, requireSuperAdmin, biosController.getApiHealth);
+
+// Storage details
+router.get('/storage', protect, requireSuperAdmin, biosController.getStorageDetails);
+
+// Smart Diagnostic Engine
+router.get('/diagnose', protect, requireSuperAdmin, biosController.runDiagnosis);
+
+// Error Logs (API errors, activity errors, crashes)
+router.get('/error-logs', protect, requireSuperAdmin, biosController.getErrorLogs);
+
+// Diagnostic Report Generator (full report with solutions)
+router.get('/diagnostic-report', protect, requireSuperAdmin, biosController.generateDiagnosticReport);
 
 module.exports = router;

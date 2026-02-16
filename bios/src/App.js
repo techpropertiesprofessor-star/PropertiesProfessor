@@ -6,6 +6,7 @@ const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 function App() {
   const [systemStatus, setSystemStatus] = useState(null);
   const [authenticated, setAuthenticated] = useState(false);
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -43,7 +44,7 @@ function App() {
     try {
       // Try to login
       const response = await axios.post(`${API_BASE}/api/auth/login`, {
-        email: 'admin@example.com', // Replace with actual credentials
+        email,
         password
       });
 
@@ -102,6 +103,22 @@ ERROR: {error}
 
         <form onSubmit={handleLogin}>
           <pre>
+EMAIL:    <input
+              type="text"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              style={{
+                background: '#000',
+                color: '#0f0',
+                border: '1px solid #0f0',
+                padding: '5px',
+                fontFamily: 'inherit',
+                width: '300px'
+              }}
+              autoFocus
+            />
+          </pre>
+          <pre>
 PASSWORD: <input
               type="password"
               value={password}
@@ -114,7 +131,6 @@ PASSWORD: <input
                 fontFamily: 'inherit',
                 width: '300px'
               }}
-              autoFocus
             />
           </pre>
           <pre style={{ marginTop: '10px' }}>
