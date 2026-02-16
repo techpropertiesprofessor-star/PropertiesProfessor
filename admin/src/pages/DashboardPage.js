@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { adminApi } from '../services/api';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useObservabilitySocket } from '../hooks/useObservabilitySocket';
 import ConnectionStatus from '../components/ConnectionStatus';
 
@@ -27,16 +26,7 @@ const DashboardPage = () => {
     isConnected
   } = useObservabilitySocket(userRole, timeRange);
 
-  useEffect(() => {
-    loadData();
-    // Only poll if socket not connected
-    if (!isConnected) {
-      const interval = setInterval(loadData, 30000);
-      return () => clearInterval(interval);
-    }
-  }, [timeRange, isConnected]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const [analyticsRes, healthRes, queueRes] = await Promise.all([
         adminApi.getAnalytics({ timeRange }),
@@ -52,7 +42,16 @@ const DashboardPage = () => {
       console.error('Failed to load dashboard data:', error);
       setLoading(false);
     }
-  };
+  }, [timeRange]);
+
+  useEffect(() => {
+    loadData();
+    // Only poll if socket not connected
+    if (!isConnected) {
+      const interval = setInterval(loadData, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [loadData, isConnected]);
 
   const getStatusColor = (status) => {
     switch (status) {

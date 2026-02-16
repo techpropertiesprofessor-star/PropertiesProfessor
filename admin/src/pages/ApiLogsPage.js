@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { adminApi } from '../services/api';
 import { format } from 'date-fns';
 
@@ -12,11 +12,7 @@ const ApiLogsPage = () => {
     isError: ''
   });
 
-  useEffect(() => {
-    loadLogs();
-  }, [pagination.page, filters]);
-
-  const loadLogs = async () => {
+  const loadLogs = useCallback(async () => {
     setLoading(true);
     try {
       const response = await adminApi.getApiLogs({
@@ -31,7 +27,11 @@ const ApiLogsPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [pagination.page, pagination.limit, filters]);
+
+  useEffect(() => {
+    loadLogs();
+  }, [loadLogs]);
 
   const getStatusColor = (statusCode) => {
     if (statusCode < 300) return 'text-green-400';

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { format } from 'date-fns';
 import { adminApi } from '../services/api';
 import { io } from 'socket.io-client';
@@ -47,11 +47,7 @@ const BandwidthPage = () => {
     };
   }, [isLive, timeRange]);
 
-  useEffect(() => {
-    loadBandwidthData();
-  }, [timeRange]);
-
-  const loadBandwidthData = async () => {
+  const loadBandwidthData = useCallback(async () => {
     setLoading(true);
     try {
       const response = await adminApi.getBandwidthByUser({ timeRange });
@@ -61,7 +57,11 @@ const BandwidthPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [timeRange]);
+
+  useEffect(() => {
+    loadBandwidthData();
+  }, [loadBandwidthData]);
 
   const formatBytes = (bytes) => {
     const k = 1024;

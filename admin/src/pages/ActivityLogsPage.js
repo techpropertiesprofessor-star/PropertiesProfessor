@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { adminApi } from '../services/api';
 import { format } from 'date-fns';
 import { io } from 'socket.io-client';
@@ -58,11 +58,7 @@ const ActivityLogsPage = () => {
     };
   }, [isLive, pagination.page, pagination.limit, filters]);
 
-  useEffect(() => {
-    loadLogs();
-  }, [pagination.page, filters]);
-
-  const loadLogs = async () => {
+  const loadLogs = useCallback(async () => {
     setLoading(true);
     try {
       const params = {
@@ -79,7 +75,11 @@ const ActivityLogsPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [pagination.page, pagination.limit, filters]);
+
+  useEffect(() => {
+    loadLogs();
+  }, [loadLogs]);
 
   const handleFilterChange = (key, value) => {
     setFilters(prev => ({ ...prev, [key]: value }));
@@ -333,6 +333,7 @@ const ActivityLogsPage = () => {
       )}
     </div>
   );
-};
+}, [pagination.page, pagination.limit, filters]);
+
 
 export default ActivityLogsPage;
