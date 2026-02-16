@@ -12,6 +12,18 @@ const BandwidthPage = () => {
   const [isLive, setIsLive] = useState(true);
   const socketRef = useRef(null);
 
+  const loadBandwidthData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await adminApi.getBandwidthByUser({ timeRange });
+      setBandwidthData(response.data.data);
+    } catch (error) {
+      console.error('Failed to load bandwidth data:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [timeRange]);
+
   // Setup socket connection for real-time updates
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -34,7 +46,6 @@ const BandwidthPage = () => {
     socket.on('bandwidthUpdate', (data) => {
       if (!isLive) return;
       console.log('[Bandwidth] Update received:', data);
-      // Reload data when bandwidth updates
       loadBandwidthData();
     });
 
@@ -45,19 +56,7 @@ const BandwidthPage = () => {
     return () => {
       socket.disconnect();
     };
-  }, [isLive, timeRange]);
-
-  const loadBandwidthData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await adminApi.getBandwidthByUser({ timeRange });
-      setBandwidthData(response.data.data);
-    } catch (error) {
-      console.error('Failed to load bandwidth data:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [timeRange]);
+  }, [isLive, timeRange, loadBandwidthData]);
 
   useEffect(() => {
     loadBandwidthData();
