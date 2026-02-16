@@ -333,7 +333,6 @@ const ActivityLogsPage = () => {
       )}
     </div>
   );
-}, [pagination.page, pagination.limit, filters]);
-
+};
 
 export default ActivityLogsPage;
