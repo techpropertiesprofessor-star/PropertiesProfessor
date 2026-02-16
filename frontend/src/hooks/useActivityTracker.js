@@ -83,6 +83,18 @@ export const useActivityTracker = () => {
   const previousRoute = useRef(location.pathname);
   const sessionId = useRef(Math.random().toString(36).substring(7));
 
+  const logActivity = useCallback((activity) => {
+    try {
+      // Add timestamp
+      activity.timestamp = new Date().toISOString();
+      
+      // Queue for async sending
+      activityQueue.enqueue(activity);
+    } catch (error) {
+      // Never throw
+    }
+  }, []);
+
   // Track navigation
   useEffect(() => {
     const currentRoute = location.pathname;
@@ -151,18 +163,6 @@ export const useActivityTracker = () => {
     return () => {
       activityQueue.destroy();
     };
-  }, []);
-
-  const logActivity = useCallback((activity) => {
-    try {
-      // Add timestamp
-      activity.timestamp = new Date().toISOString();
-      
-      // Queue for async sending
-      activityQueue.enqueue(activity);
-    } catch (error) {
-      // Never throw
-    }
   }, []);
 
   return { logActivity };
