@@ -6,6 +6,7 @@ import ApiLogsPage from './pages/ApiLogsPage';
 import MetricsPage from './pages/MetricsPage';
 import BandwidthPage from './pages/BandwidthPage';
 import CrashLogsPage from './pages/CrashLogsPage';
+import BiosPage from './pages/BiosPage';
 import LoginPage from './pages/LoginPage';
 import Layout from './components/Layout';
 import { useActivityTracker } from './hooks/useActivityTracker';
@@ -22,7 +23,7 @@ function App() {
     if (token && userData) {
       const parsedUser = JSON.parse(userData);
       // Check if user has admin access
-      const adminRoles = ['admin', 'super_admin', 'superadmin', 'manager'];
+      const adminRoles = ['admin', 'super_admin', 'superadmin', 'manager', 'SUPER_ADMIN', 'ADMIN'];
       if (adminRoles.includes(parsedUser.role?.toLowerCase())) {
         setIsAuthenticated(true);
         setUser(parsedUser);
@@ -69,6 +70,7 @@ function AppContent({ user, onLogout }) {
         <Route path="/metrics" element={<MetricsPage />} />
         <Route path="/bandwidth" element={<BandwidthPage />} />
         <Route path="/crashes" element={<CrashLogsPage />} />
+        <Route path="/bios" element={<BiosPage />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </Layout>

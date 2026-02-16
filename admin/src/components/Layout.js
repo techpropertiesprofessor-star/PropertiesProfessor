@@ -11,6 +11,7 @@ const Layout = ({ children, user, onLogout }) => {
     { path: '/metrics', label: 'Metrics', icon: '📈' },
     { path: '/bandwidth', label: 'Bandwidth', icon: '📡' },
     { path: '/crashes', label: 'Crashes', icon: '💥' },
+    { path: '/bios', label: 'BIOS System', icon: '🖥️' },
   ];
 
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);

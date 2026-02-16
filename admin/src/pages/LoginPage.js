@@ -19,7 +19,7 @@ const LoginPage = ({ onLogin }) => {
         const { token, user } = response.data;
         
         // Check if user has admin access
-        const adminRoles = ['admin', 'super_admin', 'superadmin', 'manager'];
+        const adminRoles = ['admin', 'super_admin', 'superadmin', 'manager', 'SUPER_ADMIN', 'ADMIN'];
         if (!adminRoles.includes(user.role?.toLowerCase())) {
           setError('Access denied. Admin privileges required.');
           setLoading(false);

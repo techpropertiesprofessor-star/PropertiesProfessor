@@ -43,7 +43,7 @@ async function createAdmin() {
       console.log('\n🔄 Updating password...');
       const hashedPassword = await bcrypt.hash('Properties@professor7030', 10);
       existingAdmin.password = hashedPassword;
-      existingAdmin.role = 'ADMIN';
+      existingAdmin.role = 'SUPER_ADMIN';
       await existingAdmin.save();
       console.log('✅ Password updated!');
     } else {
@@ -55,7 +55,7 @@ async function createAdmin() {
         name: 'Admin User',
         email: 'admin@propertiesprofessor.com',
         password: hashedPassword,
-        role: 'ADMIN'
+        role: 'SUPER_ADMIN'
       });
 
       await adminUser.save();
