@@ -6,7 +6,7 @@
 import axios from 'axios';
 
 // Analytics API base URL (backend routes are at /api/manager-analytics)
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://propertiesprofessor.onrender.com/api';
 const ANALYTICS_BASE = `${API_BASE_URL}/manager-analytics`;
 
 // Create axios instance with auth token

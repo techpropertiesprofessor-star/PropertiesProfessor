@@ -10,7 +10,7 @@ import analyticsService from '../services/analyticsService';
 // Socket.IO connects to base URL (not /api path)
 const SOCKET_URL = process.env.REACT_APP_API_URL
   ? process.env.REACT_APP_API_URL.replace('/api', '')
-  : 'http://localhost:5000';
+  : 'https://propertiesprofessor.onrender.com';
 
 export const useManagerAnalytics = () => {
   const [loading, setLoading] = useState(true);
