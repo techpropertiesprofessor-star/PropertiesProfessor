@@ -1,11 +1,12 @@
-import React, { useContext, useRef, useState } from 'react';
+import React, { useContext, useRef, useState, useEffect } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import useSidebarCollapsed from '../hooks/useSidebarCollapsed';
 import defaultLogo from '../assets/companyLogo';
 import defaultPhoto from '../assets/userPhoto';
-import { FiCamera } from 'react-icons/fi';
+import { FiCamera, FiMail, FiPhone, FiCalendar, FiShield, FiClock, FiUser, FiBriefcase, FiHash, FiCheckCircle } from 'react-icons/fi';
+import { employeeAPI } from '../api/client';
 
 const AVATAR_COLORS = [
   '#3b82f6', '#6366f1', '#10b981', '#f59e42', '#ef4444', '#a855f7', '#fbbf24', '#14b8a6'
@@ -33,6 +34,21 @@ export default function ProfilePage() {
   const [logo] = useState(defaultLogo);
   const [photo, setPhoto] = useState(defaultPhoto);
   const [isFlipped, setIsFlipped] = useState(false);
+  const [employeeDetails, setEmployeeDetails] = useState(null);
+
+  // Fetch linked employee details for extra info (permissions, status, etc.)
+  useEffect(() => {
+    const fetchEmployeeDetails = async () => {
+      if (!user?.employeeId) return;
+      try {
+        const res = await employeeAPI.getById(user.employeeId);
+        setEmployeeDetails(res.data);
+      } catch (err) {
+        console.error('Failed to fetch employee details:', err);
+      }
+    };
+    fetchEmployeeDetails();
+  }, [user]);
 
   // Determine theme colors based on role
   const isManager = user?.role === 'MANAGER' || user?.role === 'ADMIN';
@@ -237,7 +253,7 @@ export default function ProfilePage() {
         `}</style>
         
         <main className={`flex-1 flex flex-col items-center justify-center py-8 px-2 overflow-y-auto bg-gradient-to-br ${themeColors.bgGradient}`}>
-          <div className="w-full max-w-xs flex flex-col items-center mt-8">
+          <div className="w-full max-w-md flex flex-col items-center mt-8">
             {/* Flip Card */}
             <div 
               ref={cardRef}
@@ -541,6 +557,147 @@ export default function ProfilePage() {
             
             <div className="mt-4 text-center text-sm text-gray-600 print:hidden">
               <span className="text-xs">Click card to flip • QR code on back</span>
+            </div>
+
+            {/* Detailed Profile Information */}
+            <div className="w-full max-w-md mt-8 print:hidden">
+              <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-100/50 overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-100" style={{background: `linear-gradient(90deg, ${themeColors.gradient1} 0%, ${themeColors.gradient2} 100%)`}}>
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <FiUser size={18} /> Profile Details
+                  </h3>
+                </div>
+                <div className="p-5 space-y-4">
+                  {/* Full Name */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{background: `${themeColors.primary}15`}}>
+                      <FiUser size={16} style={{color: themeColors.primary}} />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-500 font-medium">Full Name</p>
+                      <p className="text-sm font-semibold text-gray-800">{user.name || '-'}</p>
+                    </div>
+                  </div>
+
+                  {/* Role / Designation */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{background: `${themeColors.primary}15`}}>
+                      <FiBriefcase size={16} style={{color: themeColors.primary}} />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-500 font-medium">Designation</p>
+                      <p className="text-sm font-semibold text-gray-800">{user.role || 'EMPLOYEE'}</p>
+                    </div>
+                  </div>
+
+                  {/* Employee ID */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{background: `${themeColors.primary}15`}}>
+                      <FiHash size={16} style={{color: themeColors.primary}} />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-500 font-medium">Employee ID</p>
+                      <p className="text-sm font-semibold text-gray-800 font-mono">{(user._id || user.id || '-').substring(0, 12).toUpperCase()}</p>
+                    </div>
+                  </div>
+
+                  {/* Email */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{background: `${themeColors.primary}15`}}>
+                      <FiMail size={16} style={{color: themeColors.primary}} />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-500 font-medium">Email Address</p>
+                      <p className="text-sm font-semibold text-gray-800 break-all">{user.email || '-'}</p>
+                    </div>
+                  </div>
+
+                  {/* Phone */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{background: `${themeColors.primary}15`}}>
+                      <FiPhone size={16} style={{color: themeColors.primary}} />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-500 font-medium">Phone Number</p>
+                      <p className="text-sm font-semibold text-gray-800">{user.phone || '-'}</p>
+                    </div>
+                  </div>
+
+                  {/* Joining Date */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{background: `${themeColors.primary}15`}}>
+                      <FiCalendar size={16} style={{color: themeColors.primary}} />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-500 font-medium">Joining Date</p>
+                      <p className="text-sm font-semibold text-gray-800">
+                        {user.createdAt ? new Date(user.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : '-'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* ID Valid Until */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{background: `${themeColors.primary}15`}}>
+                      <FiClock size={16} style={{color: themeColors.primary}} />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-500 font-medium">ID Valid Until</p>
+                      <p className="text-sm font-semibold text-gray-800">{expiry}</p>
+                    </div>
+                  </div>
+
+                  {/* Account Status */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{background: `${themeColors.primary}15`}}>
+                      <FiCheckCircle size={16} style={{color: themeColors.primary}} />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-500 font-medium">Account Status</p>
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                        (employeeDetails?.status || 'active') === 'active' 
+                          ? 'bg-green-100 text-green-700' 
+                          : 'bg-red-100 text-red-700'
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${
+                          (employeeDetails?.status || 'active') === 'active' ? 'bg-green-500' : 'bg-red-500'
+                        }`}></span>
+                        {(employeeDetails?.status || 'active').charAt(0).toUpperCase() + (employeeDetails?.status || 'active').slice(1)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Permissions */}
+                  {employeeDetails?.permissions && employeeDetails.permissions.length > 0 && (
+                    <div className="flex items-start gap-3">
+                      <div className="w-9 h-9 rounded-lg flex items-center justify-center mt-0.5" style={{background: `${themeColors.primary}15`}}>
+                        <FiShield size={16} style={{color: themeColors.primary}} />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-500 font-medium mb-1.5">Permissions</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {employeeDetails.permissions.map((perm, i) => (
+                            <span key={i} className="px-2.5 py-1 rounded-full text-xs font-medium border" style={{
+                              background: `${themeColors.primary}10`,
+                              borderColor: `${themeColors.primary}30`,
+                              color: themeColors.primary
+                            }}>
+                              {perm}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer */}
+                <div className="px-6 py-3 bg-gray-50 border-t border-gray-100">
+                  <p className="text-xs text-gray-400 text-center">
+                    Properties Professor • Employee Management System
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </main>

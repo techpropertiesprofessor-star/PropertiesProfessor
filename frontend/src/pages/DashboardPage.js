@@ -146,19 +146,19 @@ export default function DashboardPage() {
       try {
         console.log('🔄 Fetching users count...');
         const response = await userAPI.getAll();
-        console.log('✅ User API response:', response);
-        console.log('📊 Response data:', response.data);
         
+        let usersArr = [];
         if (Array.isArray(response.data)) {
-          console.log('✅ Setting user count:', response.data.length);
-          setUserCount(response.data.length);
+          usersArr = response.data;
         } else if (response.data?.data && Array.isArray(response.data.data)) {
-          console.log('✅ Setting user count from nested data:', response.data.data.length);
-          setUserCount(response.data.data.length);
-        } else {
-          console.log('⚠️ Invalid response format, setting to 0');
-          setUserCount(0);
+          usersArr = response.data.data;
         }
+        
+        // Only count company employees/managers (exclude website users, super admins etc.)
+        const companyRoles = ['EMPLOYEE', 'MANAGER', 'ADMIN', 'CALLER'];
+        const companyUsers = usersArr.filter(u => u.role && companyRoles.includes(u.role.toUpperCase()));
+        console.log('✅ Company team count:', companyUsers.length, '(filtered from', usersArr.length, 'total users)');
+        setUserCount(companyUsers.length);
       } catch (err) {
         console.error('❌ Failed to load users in DashboardPage:', err, err?.response);
         setUserCount(0);
