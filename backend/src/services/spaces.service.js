@@ -26,6 +26,19 @@ const path = require('path');
 // ─── S3 Client (DO Spaces) ────────────────────────────────────────────
 const spacesEndpoint = process.env.SPACES_ENDPOINT || `https://${process.env.SPACES_REGION || 'sgp1'}.digitaloceanspaces.com`;
 
+// Log Spaces configuration status on startup
+console.log('[SPACES_SERVICE] Configuration check:', {
+  endpoint: spacesEndpoint,
+  region: process.env.SPACES_REGION || 'sgp1',
+  bucket: process.env.SPACES_NAME || 'properties-media',
+  keyConfigured: !!process.env.SPACES_KEY,
+  secretConfigured: !!process.env.SPACES_SECRET,
+});
+
+if (!process.env.SPACES_KEY || !process.env.SPACES_SECRET) {
+  console.error('[SPACES_SERVICE] WARNING: SPACES_KEY or SPACES_SECRET not set! File uploads will fail.');
+}
+
 const s3 = new S3Client({
   endpoint: spacesEndpoint,
   region: process.env.SPACES_REGION || 'sgp1',

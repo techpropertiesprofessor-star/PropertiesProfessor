@@ -172,7 +172,7 @@ createTower: (projectId, data) =>
 
   uploadUnitMedia: (id, formData) =>
     api.post(`/inventory/units/${id}/media`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+      headers: { 'Content-Type': undefined },
     }),
 
   deleteUnitMedia: (id, mediaId) =>
@@ -194,7 +194,7 @@ export const storageAPI = {
   // Upload files via backend to Spaces
   upload: (inventoryId, formData) =>
     api.post(`/storage/upload/${inventoryId}`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+      headers: { 'Content-Type': undefined },
     }),
 
   // List files for an inventory unit

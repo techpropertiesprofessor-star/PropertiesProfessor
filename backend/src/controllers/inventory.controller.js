@@ -447,18 +447,23 @@ exports.uploadUnitMedia = async (req, res, next) => {
   try {
     const { id } = req.params;
     const files = req.files;
+    console.log(`[UPLOAD_MEDIA] Unit ${id} — received ${files ? files.length : 0} files`);
     if (!files || files.length === 0) {
-      return res.status(400).json({ message: 'No files uploaded' });
+      console.error('[UPLOAD_MEDIA] No files in req.files. Content-Type:', req.headers['content-type']);
+      return res.status(400).json({ message: 'No files uploaded. Make sure Content-Type boundary is set correctly.' });
     }
     const unit = await InventoryUnit.findById(id);
     if (!unit) return res.status(404).json({ message: 'Unit not found' });
 
     // Upload each file to DO Spaces under Dashboard/{unitId}/
+    console.log(`[UPLOAD_MEDIA] Uploading ${files.length} files to DO Spaces for unit ${id}...`);
     const results = await Promise.all(
-      files.map(file =>
-        spacesService.uploadFile(id, file.originalname, file.buffer, file.mimetype)
-      )
+      files.map(file => {
+        console.log(`[UPLOAD_MEDIA] Uploading: ${file.originalname} (${file.mimetype}, ${file.size} bytes)`);
+        return spacesService.uploadFile(id, file.originalname, file.buffer, file.mimetype);
+      })
     );
+    console.log(`[UPLOAD_MEDIA] Successfully uploaded ${results.length} files`);
 
     res.status(201).json({ message: 'Files uploaded to DigitalOcean Spaces', files: results });
   } catch (err) {

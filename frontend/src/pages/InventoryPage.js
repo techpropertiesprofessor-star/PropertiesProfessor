@@ -1118,7 +1118,7 @@ function InventoryPage() {
                         const payload = {
                           project: projectId,
                           tower: towerId,
-                          unitNumber: form.unitNumber || `${form.configType}-${Date.now()}`,
+                          unitNumber: form.unitNumber,
                           property_type: form.propertyType,
                           looking_to: form.lookingTo,
                           city: form.city,
@@ -1160,6 +1160,7 @@ function InventoryPage() {
                         const unitId = res.data?._id || res.data?.id || res.data?.id;
 
                         // If photos were provided, upload them separately to the media endpoint
+                        let mediaUploadFailed = false;
                         if (unitId && form.photos && form.photos.length > 0) {
                           try {
                             const mediaForm = new FormData();
@@ -1168,11 +1169,14 @@ function InventoryPage() {
                             console.log('Media upload success:', uploadRes.data);
                           } catch (mediaErr) {
                             console.error('Failed to upload photos to DigitalOcean Spaces:', mediaErr);
-                            setCreateError('Unit created but media upload failed: ' + (mediaErr.response?.data?.message || mediaErr.message));
+                            mediaUploadFailed = true;
+                            setCreateError('Unit created but media upload failed: ' + (mediaErr.response?.data?.message || mediaErr.message || 'Check backend logs'));
                           }
                         }
 
-                        setCreateModalOpen(false);
+                        if (!mediaUploadFailed) {
+                          setCreateModalOpen(false);
+                        }
                         await fetchProjects();
                         await fetchUnits();
                         await fetchStats();
