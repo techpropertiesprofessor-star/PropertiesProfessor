@@ -831,17 +831,24 @@ function InventoryPage() {
                           <div className="flex items-center justify-between mb-2">
                             <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Media ({unitMedia.length} files)</span>
                             <button
-                              onClick={() => {
-                                unitMedia.forEach((m) => {
-                                  const a = document.createElement('a');
-                                  a.href = m.downloadUrl;
-                                  a.download = m.name;
-                                  a.target = '_blank';
-                                  a.rel = 'noopener noreferrer';
-                                  document.body.appendChild(a);
-                                  a.click();
-                                  document.body.removeChild(a);
-                                });
+                              onClick={async () => {
+                                for (const m of unitMedia) {
+                                  try {
+                                    const response = await fetch(m.downloadUrl);
+                                    const blob = await response.blob();
+                                    const url = window.URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    a.download = m.name || `file_${Date.now()}`;
+                                    document.body.appendChild(a);
+                                    a.click();
+                                    document.body.removeChild(a);
+                                    window.URL.revokeObjectURL(url);
+                                    await new Promise(r => setTimeout(r, 500));
+                                  } catch (err) {
+                                    console.error('Download failed for:', m.name, err);
+                                  }
+                                }
                               }}
                               className="inline-flex items-center gap-1 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-all"
                             >
@@ -864,17 +871,29 @@ function InventoryPage() {
                                 )}
                                 {/* Download overlay */}
                                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                                  <a
-                                    href={m.downloadUrl}
-                                    download={m.name}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
+                                  <button
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      try {
+                                        const response = await fetch(m.downloadUrl);
+                                        const blob = await response.blob();
+                                        const url = window.URL.createObjectURL(blob);
+                                        const a = document.createElement('a');
+                                        a.href = url;
+                                        a.download = m.name || `file_${Date.now()}`;
+                                        document.body.appendChild(a);
+                                        a.click();
+                                        document.body.removeChild(a);
+                                        window.URL.revokeObjectURL(url);
+                                      } catch (err) {
+                                        console.error('Download failed:', err);
+                                      }
+                                    }}
                                     className="p-1.5 bg-white rounded-full shadow hover:bg-blue-100 transition-colors"
                                     title="Download"
-                                    onClick={(e) => e.stopPropagation()}
                                   >
                                     <FiDownload className="text-blue-600 text-sm" />
-                                  </a>
+                                  </button>
                                   <button
                                     onClick={(e) => { e.stopPropagation(); handleDeleteMedia(m.key); }}
                                     className="p-1.5 bg-white rounded-full shadow hover:bg-red-100 transition-colors"
@@ -1145,9 +1164,11 @@ function InventoryPage() {
                           try {
                             const mediaForm = new FormData();
                             form.photos.forEach((file) => mediaForm.append('files', file));
-                            await inventoryAPI.uploadUnitMedia(unitId, mediaForm);
+                            const uploadRes = await inventoryAPI.uploadUnitMedia(unitId, mediaForm);
+                            console.log('Media upload success:', uploadRes.data);
                           } catch (mediaErr) {
-                            console.warn('Failed to upload photos after unit creation', mediaErr);
+                            console.error('Failed to upload photos to DigitalOcean Spaces:', mediaErr);
+                            setCreateError('Unit created but media upload failed: ' + (mediaErr.response?.data?.message || mediaErr.message));
                           }
                         }
 

@@ -202,7 +202,7 @@ export default function AddInventoryForm({ onSubmit }) {
       if (!form.pricePerSqft || isNaN(form.pricePerSqft) || Number(form.pricePerSqft) <= 0) e.pricePerSqft = 'Price per sqft required.';
     }
     if (currentStep === 5) {
-      if (!form.photos || form.photos.length === 0) e.photos = 'At least one photo is required.';
+      // Photos are optional — user can upload later from detail modal
     }
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -774,30 +774,103 @@ export default function AddInventoryForm({ onSubmit }) {
         </div>
       )}
 
-      {/* SECTION 5: Photos */}
+      {/* SECTION 5: Photos & Videos */}
       {step === 5 && (
         <div className="bg-white rounded-2xl shadow-lg border border-blue-100 p-6 sm:p-8 mb-2 animate-fadein">
-          <h2 className="text-xl font-bold mb-6 text-blue-900 tracking-tight flex items-center gap-2"><span className="inline-block w-1.5 h-6 bg-blue-600 rounded-full mr-2"></span>Photos & Videos</h2>
-          <div className="mb-4">
-            <label className="block font-medium mb-1">Upload Photos & Videos <span className="text-red-500">*</span></label>
-            <input
-              type="file"
-              accept="image/*,video/*"
-              multiple
-              onChange={e => {
-                const files = Array.from(e.target.files || []);
-                handleChange('photos', files);
-              }}
-            />
-            {errors.photos && <div className="text-red-500 text-xs mt-1">{errors.photos}</div>}
-            {form.photos && form.photos.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-2">
+          <h2 className="text-xl font-bold mb-6 text-blue-900 tracking-tight flex items-center gap-2">
+            <span className="inline-block w-1.5 h-6 bg-blue-600 rounded-full mr-2"></span>Photos & Videos
+          </h2>
+
+          {/* Upload Zone */}
+          <div className="mb-4 p-4 bg-blue-50 rounded-xl border-2 border-dashed border-blue-200 hover:border-blue-400 transition-colors">
+            <label className="flex flex-col items-center justify-center cursor-pointer py-6">
+              <input
+                type="file"
+                accept="image/*,video/*"
+                multiple
+                className="hidden"
+                onChange={e => {
+                  const newFiles = Array.from(e.target.files || []);
+                  handleChange('photos', [...(form.photos || []), ...newFiles]);
+                  e.target.value = '';
+                }}
+              />
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-10 h-10 text-blue-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <span className="text-sm text-blue-700 font-semibold">Click to upload photos & videos</span>
+              <span className="text-xs text-blue-400 mt-1">Files are stored on DigitalOcean Spaces</span>
+              <span className="text-[10px] text-gray-400 mt-1">Supports: JPG, PNG, GIF, WebP, MP4, MOV, AVI, MKV</span>
+            </label>
+          </div>
+
+          {/* File Preview Grid */}
+          {form.photos && form.photos.length > 0 && (
+            <div className="mt-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                  {form.photos.length} file(s) selected
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleChange('photos', [])}
+                  className="text-xs text-red-500 hover:text-red-700 font-semibold"
+                >
+                  Clear All
+                </button>
+              </div>
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                 {form.photos.map((file, idx) => (
-                  <div key={idx} className="border rounded p-1 text-xs bg-gray-50">{file.name}</div>
+                  <div key={idx} className="relative group aspect-square overflow-hidden rounded-lg border border-gray-200 bg-gray-100">
+                    {file.type && file.type.startsWith('image/') ? (
+                      <img
+                        src={URL.createObjectURL(file)}
+                        alt={file.name}
+                        className="w-full h-full object-cover"
+                        onLoad={(e) => { URL.revokeObjectURL(e.target.src); }}
+                      />
+                    ) : file.type && file.type.startsWith('video/') ? (
+                      <div className="w-full h-full flex items-center justify-center bg-gray-800 relative">
+                        <video className="w-full h-full object-cover" muted>
+                          <source src={URL.createObjectURL(file)} />
+                        </video>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="w-8 h-8 bg-white/80 rounded-full flex items-center justify-center text-blue-600 text-sm">&#9654;</div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                    )}
+                    {/* Remove button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updated = form.photos.filter((_, i) => i !== idx);
+                        handleChange('photos', updated);
+                      }}
+                      className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity shadow"
+                    >
+                      &times;
+                    </button>
+                    {/* File name */}
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[9px] px-1.5 py-0.5 truncate">
+                      {file.name}
+                    </div>
+                    {/* File size badge */}
+                    <div className="absolute top-1 left-1 bg-black/60 text-white text-[8px] px-1 py-0.5 rounded">
+                      {file.size > 1048576 ? `${(file.size / 1048576).toFixed(1)} MB` : `${(file.size / 1024).toFixed(0)} KB`}
+                    </div>
+                  </div>
                 ))}
               </div>
-            )}
-          </div>
+            </div>
+          )}
+
+          {errors.photos && <div className="text-red-500 text-xs mt-2">{errors.photos}</div>}
         </div>
       )}
 
