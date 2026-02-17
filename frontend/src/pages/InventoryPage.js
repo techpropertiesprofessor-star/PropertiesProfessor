@@ -1099,7 +1099,7 @@ function InventoryPage() {
                         const payload = {
                           project: projectId,
                           tower: towerId,
-                          unitNumber: `${form.configType}-${Date.now()}`,
+                          unitNumber: form.unitNumber || `${form.configType}-${Date.now()}`,
                           property_type: form.propertyType,
                           looking_to: form.lookingTo,
                           city: form.city,

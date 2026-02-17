@@ -113,6 +113,7 @@ export default function AddInventoryForm({ onSubmit }) {
     lookingTo: '',
     city: '',
     buildingName: '',
+    unitNumber: '',
     // Section 2
     configType: '',
     bhk: '',
@@ -161,6 +162,7 @@ export default function AddInventoryForm({ onSubmit }) {
       if (!form.lookingTo) e.lookingTo = 'Please select an option.';
       if (!form.city) e.city = 'City is required.';
       if (!form.buildingName) e.buildingName = 'Building/Society name is required.';
+      if (!form.unitNumber || !form.unitNumber.trim()) e.unitNumber = 'Unit number is required.';
     }
     if (currentStep === 2) {
       if (!form.configType) e.configType = 'Select property configuration.';
@@ -273,7 +275,7 @@ export default function AddInventoryForm({ onSubmit }) {
               {n}
             </div>
             <div className={`font-semibold text-xs sm:text-sm ${step === n ? 'text-blue-700' : 'text-gray-500'} transition-all duration-200`}>
-              {['Basic Details','Configuration','Address','Pricing','Photos','Review'][idx]}
+              {['Basic Details','Configuration','Address','Pricing','Photos & Videos','Review'][idx]}
             </div>
             {n < 6 && <div className="h-0.5 w-6 sm:w-10 bg-gray-300" />}
           </React.Fragment>
@@ -331,6 +333,17 @@ export default function AddInventoryForm({ onSubmit }) {
               placeholder="Enter name"
             />
             {errors.buildingName && <div className="text-red-500 text-xs mt-1">{errors.buildingName}</div>}
+          </div>
+          <div className="mb-4">
+            <label className="block font-medium mb-1">Unit Number <span className="text-red-500">*</span></label>
+            <input
+              type="text"
+              className="w-full px-3 py-2 border rounded-md"
+              value={form.unitNumber}
+              onChange={e => handleChange('unitNumber', e.target.value)}
+              placeholder="Enter unit number (e.g. A-101)"
+            />
+            {errors.unitNumber && <div className="text-red-500 text-xs mt-1">{errors.unitNumber}</div>}
           </div>
         </div>
       )}
@@ -764,12 +777,12 @@ export default function AddInventoryForm({ onSubmit }) {
       {/* SECTION 5: Photos */}
       {step === 5 && (
         <div className="bg-white rounded-2xl shadow-lg border border-blue-100 p-6 sm:p-8 mb-2 animate-fadein">
-          <h2 className="text-xl font-bold mb-6 text-blue-900 tracking-tight flex items-center gap-2"><span className="inline-block w-1.5 h-6 bg-blue-600 rounded-full mr-2"></span>Photos</h2>
+          <h2 className="text-xl font-bold mb-6 text-blue-900 tracking-tight flex items-center gap-2"><span className="inline-block w-1.5 h-6 bg-blue-600 rounded-full mr-2"></span>Photos & Videos</h2>
           <div className="mb-4">
-            <label className="block font-medium mb-1">Upload Photos <span className="text-red-500">*</span></label>
+            <label className="block font-medium mb-1">Upload Photos & Videos <span className="text-red-500">*</span></label>
             <input
               type="file"
-              accept="image/*"
+              accept="image/*,video/*"
               multiple
               onChange={e => {
                 const files = Array.from(e.target.files || []);

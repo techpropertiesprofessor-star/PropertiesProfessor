@@ -11,10 +11,10 @@ router.patch('/:id/approve', auth, role(['ADMIN', 'MANAGER']), leaveController.a
 router.patch('/:id/reject', auth, role(['ADMIN', 'MANAGER']), leaveController.rejectLeave);
 
 
-// Allow any authenticated user with Leave Request permission to submit
-router.post('/', auth, requirePermission('Leave Request'), leaveController.createLeaveRequest);
+// Allow any authenticated user to submit leave request (basic employee right)
+router.post('/', auth, leaveController.createLeaveRequest);
 
 // Employee can view only their own leave requests
-router.get('/my', auth, requirePermission('Leave Request'), leaveController.getMyLeaves);
+router.get('/my', auth, leaveController.getMyLeaves);
 
 module.exports = router;
