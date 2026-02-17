@@ -252,8 +252,10 @@ export default function ProfilePage() {
           }
         `}</style>
         
-        <main className={`flex-1 flex flex-col items-center justify-center py-8 px-2 overflow-y-auto bg-gradient-to-br ${themeColors.bgGradient}`}>
-          <div className="w-full max-w-md flex flex-col items-center mt-8">
+        <main className={`flex-1 flex flex-col items-center py-8 px-4 md:px-8 overflow-y-auto bg-gradient-to-br ${themeColors.bgGradient}`}>
+          <div className="w-full max-w-4xl flex flex-col md:flex-row items-start gap-8 mt-4">
+            {/* Left Column - ID Card */}
+            <div className="flex flex-col items-center w-full md:w-auto shrink-0">
             {/* Flip Card */}
             <div 
               ref={cardRef}
@@ -558,9 +560,10 @@ export default function ProfilePage() {
             <div className="mt-4 text-center text-sm text-gray-600 print:hidden">
               <span className="text-xs">Click card to flip • QR code on back</span>
             </div>
+            </div>
 
-            {/* Detailed Profile Information */}
-            <div className="w-full max-w-md mt-8 print:hidden">
+            {/* Right Column - Profile Details */}
+            <div className="w-full md:flex-1 print:hidden">
               <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-100/50 overflow-hidden">
                 <div className="px-6 py-4 border-b border-gray-100" style={{background: `linear-gradient(90deg, ${themeColors.gradient1} 0%, ${themeColors.gradient2} 100%)`}}>
                   <h3 className="text-lg font-bold text-white flex items-center gap-2">
