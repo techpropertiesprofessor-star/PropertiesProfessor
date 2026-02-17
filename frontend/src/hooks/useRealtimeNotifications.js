@@ -25,6 +25,8 @@ export const useRealtimeNotifications = () => {
   useEffect(() => {
     if (!user || !on || !off || !connected) return;
 
+    const currentUserId = user.id || user._id || user.employeeId;
+
     // Helper to format notification data
     const formatNotification = (data) => ({
       type: data.type || 'notification',
@@ -36,7 +38,11 @@ export const useRealtimeNotifications = () => {
     });
 
     const handleNewNotification = (data) => {
-      playNotificationSound();
+      // Don't play sound if current user triggered the notification
+      const createdBy = data?.createdBy || data?.senderId || data?.sender_id;
+      if (!createdBy || String(createdBy) !== String(currentUserId)) {
+        playNotificationSound();
+      }
       showToast(formatNotification(data));
     };
 
@@ -65,12 +71,20 @@ export const useRealtimeNotifications = () => {
     };
 
     const handleNotification = (data) => {
-      playNotificationSound();
+      // Don't play sound if current user triggered the notification
+      const createdBy = data?.createdBy || data?.senderId || data?.sender_id;
+      if (!createdBy || String(createdBy) !== String(currentUserId)) {
+        playNotificationSound();
+      }
       showToast(formatNotification(data));
     };
 
     const handleAnnouncement = (data) => {
-      playNotificationSound();
+      // Don't play sound if current user created the announcement
+      const createdBy = data?.createdBy;
+      if (!createdBy || String(createdBy) !== String(currentUserId)) {
+        playNotificationSound();
+      }
       showToast({
         type: 'ANNOUNCEMENT',
         title: '📢 New Announcement',
@@ -81,7 +95,13 @@ export const useRealtimeNotifications = () => {
       });
     };
 
-    const handleChat = () => playNotificationSound();
+    const handleChat = (data) => {
+      // Don't play sound if current user sent the message
+      const senderId = data?.sender_id || data?.senderId;
+      if (!senderId || String(senderId) !== String(currentUserId)) {
+        playNotificationSound();
+      }
+    };
 
     const handleLeadAssigned = (data) => {
       playNotificationSound();

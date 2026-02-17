@@ -49,6 +49,7 @@ exports.create = async (req, res) => {
         id: announcement._id,
         text: announcement.text,
         date: announcement.date,
+        createdBy: req.user?.id || req.user?._id || null,
       });
       
       // Also emit notification event to all users
@@ -57,7 +58,8 @@ exports.create = async (req, res) => {
         title: 'New Announcement',
         message: text.length > 100 ? text.substring(0, 100) + '...' : text,
         announcementId: announcement._id,
-        createdAt: announcement.createdAt
+        createdAt: announcement.createdAt,
+        createdBy: req.user?.id || req.user?._id || null,
       });
     }
     

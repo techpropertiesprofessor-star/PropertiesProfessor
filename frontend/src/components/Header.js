@@ -293,16 +293,39 @@ export default function Header({ user, onLogout, onSearch, notificationCount = 0
   useEffect(() => {
     if (!user || !on || !off || !connected) return;
 
-    const handleChat = () => playNotificationSound({ freq: 900, duration: 140, volume: 0.06 });
-    const handlePrivate = () => playNotificationSound({ freq: 760, duration: 160, volume: 0.07 });
+    const currentUserId = user.id || user._id || user.employeeId;
+
+    const handleChat = (data) => {
+      // Don't play sound if current user sent the message
+      const senderId = data?.sender_id || data?.senderId;
+      if (senderId && String(senderId) === String(currentUserId)) return;
+      playNotificationSound({ freq: 900, duration: 140, volume: 0.06 });
+    };
+    const handlePrivate = (data) => {
+      // Don't play sound if current user sent the message
+      const senderId = data?.sender_id || data?.senderId;
+      if (senderId && String(senderId) === String(currentUserId)) return;
+      playNotificationSound({ freq: 760, duration: 160, volume: 0.07 });
+    };
     const handleLeadAssigned = () => playNotificationSound({ freq: 520, duration: 220, volume: 0.07 });
-    const handleAnnouncement = () => {
+    const handleAnnouncement = (data) => {
+      // Don't play sound if current user created the announcement
+      const createdBy = data?.createdBy;
+      if (createdBy && String(createdBy) === String(currentUserId)) return;
       playNotificationSound({ freq: 700, duration: 180, volume: 0.08 });
       setTimeout(() => playNotificationSound({ freq: 880, duration: 120, volume: 0.06 }), 200);
     };
     const handleTaskAssigned = () => playNotificationSound({ freq: 600, duration: 200, volume: 0.07 });
-    const handleNotification = () => playNotificationSound({ freq: 640, duration: 140, volume: 0.06 });
-    const handleNewNotification = async () => {
+    const handleNotification = (data) => {
+      // Don't play sound if current user triggered the notification
+      const createdBy = data?.createdBy || data?.senderId || data?.sender_id;
+      if (createdBy && String(createdBy) === String(currentUserId)) return;
+      playNotificationSound({ freq: 640, duration: 140, volume: 0.06 });
+    };
+    const handleNewNotification = async (data) => {
+      // Don't play sound if current user triggered the notification
+      const createdBy = data?.createdBy || data?.senderId || data?.sender_id;
+      if (createdBy && String(createdBy) === String(currentUserId)) return;
       playNotificationSound({ freq: 640, duration: 140, volume: 0.06 });
       try {
         const res = await notificationAPI.getAll();

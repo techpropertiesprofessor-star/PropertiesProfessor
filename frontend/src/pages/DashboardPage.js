@@ -487,7 +487,15 @@ useEffect(() => {
     const handleNewLead = (data) => handleNewNotification({ type: 'LEAD', ...data });
     const handleNewNotif = (data) => { handleNewNotification(data); loadNotifications(); };
     const handleNotification = (data) => handleNewNotification({ type: 'IMPORTANT', ...data });
-    const handleAnnouncement = (data) => { playNotificationSound(); handleNewNotification({ type: 'ANNOUNCEMENT', ...data }); };
+    const handleAnnouncement = (data) => { 
+      // Don't play sound if current user created the announcement
+      const currentUserId = user?.id || user?._id || user?.employeeId;
+      const createdBy = data?.createdBy;
+      if (!createdBy || String(createdBy) !== String(currentUserId)) {
+        playNotificationSound(); 
+      }
+      handleNewNotification({ type: 'ANNOUNCEMENT', ...data }); 
+    };
 
     on('taskAssigned', handleTaskAssigned);
     on('new-lead', handleNewLead);
