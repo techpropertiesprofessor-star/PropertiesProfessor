@@ -166,21 +166,52 @@ createTower: (projectId, data) =>
   getStats: () =>
     api.get("/inventory/stats"),
 
-  // Media
+  // Media — DigitalOcean Spaces
   listUnitMedia: (id) =>
     api.get(`/inventory/units/${id}/media`),
 
   uploadUnitMedia: (id, formData) =>
-    api.post(`/inventory/units/${id}/media`, formData),
+    api.post(`/inventory/units/${id}/media`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
 
   deleteUnitMedia: (id, mediaId) =>
-    api.delete(`/inventory/units/${id}/media/${mediaId}`),
+    api.delete(`/inventory/units/${id}/media/${encodeURIComponent(mediaId)}`),
 
   // PDF
   generatePDF: (id) =>
     api.get(`/inventory/units/${id}/pdf`, {
       responseType: "blob",
     }),
+};
+
+/**
+ * =====================================================
+ * STORAGE APIs (DigitalOcean Spaces)
+ * =====================================================
+ */
+export const storageAPI = {
+  // Upload files via backend to Spaces
+  upload: (inventoryId, formData) =>
+    api.post(`/storage/upload/${inventoryId}`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+
+  // List files for an inventory unit
+  list: (inventoryId) =>
+    api.get(`/storage/list/${inventoryId}`),
+
+  // Get presigned download URL
+  getDownloadUrl: (key) =>
+    api.get(`/storage/download`, { params: { key } }),
+
+  // Delete a file
+  delete: (key) =>
+    api.delete(`/storage/delete`, { params: { key } }),
+
+  // Get presigned upload URL (for direct browser upload)
+  presignUpload: (inventoryId, filename, contentType) =>
+    api.post(`/storage/presign-upload`, { inventoryId, filename, contentType }),
 };
 
 /**

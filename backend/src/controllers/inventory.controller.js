@@ -3,6 +3,7 @@ const Tower = require('../models/Tower');
 const InventoryUnit = require('../models/InventoryUnit');
 const InventoryPriceHistory = require('../models/InventoryPriceHistory');
 const { emitToAll } = require('../utils/socket.util');
+const spacesService = require('../services/spaces.service');
 
 // Project CRUD
 exports.createProject = async (req, res, next) => {
@@ -441,7 +442,7 @@ exports.getStats = async (req, res, next) => {
   }
 };
 
-// Media upload handlers
+// Media upload handlers — uploads to DigitalOcean Spaces
 exports.uploadUnitMedia = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -451,9 +452,15 @@ exports.uploadUnitMedia = async (req, res, next) => {
     }
     const unit = await InventoryUnit.findById(id);
     if (!unit) return res.status(404).json({ message: 'Unit not found' });
-    
-    const mediaUrls = files.map(file => `/uploads/inventory/${file.filename}`);
-    res.status(201).json({ message: 'Files uploaded successfully', files: mediaUrls });
+
+    // Upload each file to DO Spaces under Dashboard/{unitId}/
+    const results = await Promise.all(
+      files.map(file =>
+        spacesService.uploadFile(id, file.originalname, file.buffer, file.mimetype)
+      )
+    );
+
+    res.status(201).json({ message: 'Files uploaded to DigitalOcean Spaces', files: results });
   } catch (err) {
     next(err);
   }
@@ -464,8 +471,10 @@ exports.getUnitMedia = async (req, res, next) => {
     const { id } = req.params;
     const unit = await InventoryUnit.findById(id);
     if (!unit) return res.status(404).json({ message: 'Unit not found' });
-    // Always return an array for media
-    res.json({ media: [] });
+
+    // List files from DO Spaces under Dashboard/{unitId}/
+    const files = await spacesService.listFiles(id);
+    res.json({ media: files });
   } catch (err) {
     next(err);
   }
@@ -476,7 +485,11 @@ exports.deleteUnitMedia = async (req, res, next) => {
     const { id, mediaId } = req.params;
     const unit = await InventoryUnit.findById(id);
     if (!unit) return res.status(404).json({ message: 'Unit not found' });
-    res.json({ message: 'Media deleted successfully' });
+
+    // mediaId is the URL-encoded object key
+    const key = decodeURIComponent(mediaId);
+    await spacesService.deleteFile(key);
+    res.json({ message: 'Media deleted from DigitalOcean Spaces', key });
   } catch (err) {
     next(err);
   }

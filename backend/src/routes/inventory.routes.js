@@ -4,18 +4,21 @@ const inventoryController = require('../controllers/inventory.controller');
 const auth = require('../middlewares/auth.middleware');
 const role = require('../middlewares/role.middleware');
 const multer = require('multer');
-const path = require('path');
 
-// Media upload setup
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, path.join('uploads', 'inventory'));
+// Media upload setup — use memory storage (files go to DO Spaces, not local disk)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB per file
+  fileFilter: (req, file, cb) => {
+    const allowed = /jpeg|jpg|png|gif|webp|bmp|svg|mp4|mov|avi|mkv|webm|pdf/;
+    const ext = file.originalname.split('.').pop().toLowerCase();
+    if (allowed.test(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`File type .${ext} not allowed`));
+    }
   },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + '-' + file.originalname);
-  }
 });
-const upload = multer({ storage });
 
 const requirePermission = require('../middlewares/permission.middleware');
 

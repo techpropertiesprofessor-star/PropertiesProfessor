@@ -50,6 +50,7 @@ app.use('/api/tasks', require('./routes/task.routes'));
 app.use('/api/leaves', require('./routes/leave.routes'));
 app.use('/api/leads', require('./routes/lead.routes'));
 app.use('/api/inventory', require('./routes/inventory.routes'));
+app.use('/api/storage', require('./routes/storage.routes'));
 app.use('/api/notifications', require('./routes/notification.routes'));
 app.use('/api/announcements', require('./routes/announcement.routes'));
 app.use('/api/calendar', require('./routes/contentCalendar.routes'));

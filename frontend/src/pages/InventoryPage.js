@@ -336,10 +336,10 @@ function InventoryPage() {
     }
   };
 
-  const handleDeleteMedia = async (mediaId) => {
+  const handleDeleteMedia = async (mediaKey) => {
     if (!selectedUnit) return;
     try {
-      await inventoryAPI.deleteUnitMedia(selectedUnit.id || selectedUnit._id, mediaId);
+      await inventoryAPI.deleteUnitMedia(selectedUnit.id || selectedUnit._id, mediaKey);
       await viewUnit(selectedUnit.id || selectedUnit._id);
     } catch (err) {
       console.error('Delete media failed:', err);
@@ -807,14 +807,14 @@ function InventoryPage() {
 
                 <div className="overflow-y-auto max-h-[calc(92vh-68px)]">
                   <div className="flex flex-col lg:flex-row">
-                    {/* Left: Image Gallery */}
+                    {/* Left: Image Gallery (DigitalOcean Spaces) */}
                     <div className="lg:w-1/2 p-5">
                       <div className="rounded-xl overflow-hidden bg-gray-100 aspect-video shadow-inner">
-                        {unitMedia && unitMedia.length > 0 && unitMedia[0].media_type === 'image' ? (
-                          <img src={buildMediaUrl(unitMedia[0].url)} alt={unitMedia[0].caption || ''} className="w-full h-full object-cover" />
-                        ) : unitMedia && unitMedia.length > 0 && unitMedia[0].media_type !== 'image' ? (
+                        {unitMedia && unitMedia.length > 0 && unitMedia[0].type === 'image' ? (
+                          <img src={unitMedia[0].downloadUrl} alt={unitMedia[0].name || ''} className="w-full h-full object-cover" />
+                        ) : unitMedia && unitMedia.length > 0 && unitMedia[0].type === 'video' ? (
                           <video controls className="w-full h-full object-cover">
-                            <source src={buildMediaUrl(unitMedia[0].url)} />
+                            <source src={unitMedia[0].downloadUrl} />
                           </video>
                         ) : selectedUnit.thumbnail ? (
                           <img src={selectedUnit.thumbnail} alt={selectedUnit.name || ''} className="w-full h-full object-cover" />
@@ -825,22 +825,90 @@ function InventoryPage() {
                           </div>
                         )}
                       </div>
-                      {/* Thumbnail Grid */}
+                      {/* Thumbnail Grid with Download */}
                       {unitMedia.length > 0 && (
-                        <div className="grid grid-cols-4 gap-2 mt-3">
-                          {unitMedia.map((m) => (
-                            <div key={m.id} className="aspect-square overflow-hidden rounded-lg border-2 border-transparent hover:border-blue-400 cursor-pointer transition-all shadow-sm">
-                              {m.media_type === 'image' ? (
-                                <img src={buildMediaUrl(m.url)} alt={m.caption || ''} className="w-full h-full object-cover" />
-                              ) : (
-                                <video className="w-full h-full object-cover">
-                                  <source src={buildMediaUrl(m.url)} />
-                                </video>
-                              )}
-                            </div>
-                          ))}
+                        <div className="mt-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Media ({unitMedia.length} files)</span>
+                            <button
+                              onClick={() => {
+                                unitMedia.forEach((m) => {
+                                  const a = document.createElement('a');
+                                  a.href = m.downloadUrl;
+                                  a.download = m.name;
+                                  a.target = '_blank';
+                                  a.rel = 'noopener noreferrer';
+                                  document.body.appendChild(a);
+                                  a.click();
+                                  document.body.removeChild(a);
+                                });
+                              }}
+                              className="inline-flex items-center gap-1 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-all"
+                            >
+                              <FiDownload className="text-xs" /> Download All
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-4 gap-2">
+                            {unitMedia.map((m, idx) => (
+                              <div key={m.key || idx} className="relative group aspect-square overflow-hidden rounded-lg border-2 border-transparent hover:border-blue-400 cursor-pointer transition-all shadow-sm">
+                                {m.type === 'image' ? (
+                                  <img src={m.downloadUrl} alt={m.name || ''} className="w-full h-full object-cover" />
+                                ) : m.type === 'video' ? (
+                                  <video className="w-full h-full object-cover">
+                                    <source src={m.downloadUrl} />
+                                  </video>
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center bg-gray-200 text-gray-500 text-xs">
+                                    <FiFileText className="text-2xl" />
+                                  </div>
+                                )}
+                                {/* Download overlay */}
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                  <a
+                                    href={m.downloadUrl}
+                                    download={m.name}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="p-1.5 bg-white rounded-full shadow hover:bg-blue-100 transition-colors"
+                                    title="Download"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <FiDownload className="text-blue-600 text-sm" />
+                                  </a>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); handleDeleteMedia(m.key); }}
+                                    className="p-1.5 bg-white rounded-full shadow hover:bg-red-100 transition-colors"
+                                    title="Delete"
+                                  >
+                                    <FiX className="text-red-600 text-sm" />
+                                  </button>
+                                </div>
+                                {/* File size badge */}
+                                <div className="absolute bottom-1 left-1 bg-black/60 text-white text-[9px] px-1.5 py-0.5 rounded">
+                                  {m.size ? (m.size > 1048576 ? `${(m.size / 1048576).toFixed(1)} MB` : `${(m.size / 1024).toFixed(0)} KB`) : ''}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
+
+                      {/* Upload Section */}
+                      <div className="mt-4 p-3 bg-blue-50 rounded-xl border border-blue-100">
+                        <label className="flex flex-col items-center justify-center cursor-pointer py-3">
+                          <input
+                            type="file"
+                            multiple
+                            accept="image/*,video/*,.pdf"
+                            className="hidden"
+                            onChange={(e) => handleUploadMedia(e.target.files)}
+                            disabled={uploading}
+                          />
+                          <FiDownload className="text-blue-500 text-xl mb-1 rotate-180" />
+                          <span className="text-xs text-blue-700 font-semibold">{uploading ? 'Uploading...' : 'Click to upload photos/videos'}</span>
+                          <span className="text-[10px] text-blue-400 mt-0.5">Files are stored on DigitalOcean Spaces</span>
+                        </label>
+                      </div>
 
                       {/* Price Card */}
                       <div className="mt-4 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl p-4 border border-emerald-100">
