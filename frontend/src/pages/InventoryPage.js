@@ -360,7 +360,18 @@ function InventoryPage() {
       const uploadedCount = res.data?.files?.length || files.length;
       setUploadSuccess(`${uploadedCount} file(s) uploaded successfully!`);
       setTimeout(() => setUploadSuccess(''), 5000);
+      // Refresh unit media in modal
       await viewUnit(selectedUnit.id || selectedUnit._id);
+      // Refresh thumbnail for this unit card
+      const unitId = selectedUnit.id || selectedUnit._id;
+      inventoryAPI.getUnitThumbnails([unitId])
+        .then((thumbRes) => {
+          const thumbs = thumbRes.data?.thumbnails || {};
+          if (Object.keys(thumbs).length > 0) {
+            setUnitThumbnails(prev => ({ ...prev, ...thumbs }));
+          }
+        })
+        .catch(() => {});
       setCaption('');
     } catch (err) {
       console.error('Upload media failed:', err);
@@ -380,6 +391,23 @@ function InventoryPage() {
     try {
       await inventoryAPI.deleteUnitMedia(selectedUnit.id || selectedUnit._id, mediaKey);
       await viewUnit(selectedUnit.id || selectedUnit._id);
+      // Refresh thumbnail for this unit card after deletion
+      const unitId = selectedUnit.id || selectedUnit._id;
+      inventoryAPI.getUnitThumbnails([unitId])
+        .then((thumbRes) => {
+          const thumbs = thumbRes.data?.thumbnails || {};
+          // If no thumbnail left, clear it from state
+          setUnitThumbnails(prev => {
+            const updated = { ...prev };
+            if (Object.keys(thumbs).length > 0) {
+              Object.assign(updated, thumbs);
+            } else {
+              delete updated[unitId];
+            }
+            return updated;
+          });
+        })
+        .catch(() => {});
     } catch (err) {
       console.error('Delete media failed:', err);
     }

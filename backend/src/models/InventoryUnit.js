@@ -68,6 +68,14 @@ const InventoryUnitSchema = new mongoose.Schema({
   is_pre_leased: { type: String },
   commercial_amenities: [{ type: String }],
   maintenance_charges: { type: String },
+  // DigitalOcean Spaces media references
+  mediaFiles: [{
+    key: { type: String, required: true },   // full object key in Spaces
+    name: { type: String },                  // original filename
+    type: { type: String, enum: ['image', 'video', 'file'], default: 'file' },
+    size: { type: Number },
+    uploadedAt: { type: Date, default: Date.now }
+  }],
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });

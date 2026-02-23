@@ -490,18 +490,31 @@ exports.getUnitThumbnails = async (req, res, next) => {
     const ids = unitIds.slice(0, 50);
     const thumbnails = {};
 
-    // Fetch first image for each unit in parallel
+    // Fetch first image key from DB-stored mediaFiles, then generate presigned URL
+    const units = await InventoryUnit.find({ _id: { $in: ids } }).select('_id mediaFiles');
+
     await Promise.all(
-      ids.map(async (id) => {
+      units.map(async (unit) => {
         try {
-          const files = await spacesService.listFiles(id);
-          // Find first image file
-          const firstImage = files.find(f => f.type === 'image');
-          if (firstImage && firstImage.downloadUrl) {
-            thumbnails[id] = firstImage.downloadUrl;
+          const id = unit._id.toString();
+          const mediaFiles = unit.mediaFiles || [];
+          // Find first stored image
+          const firstImage = mediaFiles.find(f => f.type === 'image');
+          if (firstImage && firstImage.key) {
+            const downloadUrl = await spacesService.getPresignedDownloadUrl(firstImage.key, 3600);
+            thumbnails[id] = downloadUrl;
+          } else {
+            // Fallback: list from Spaces (handles legacy units without DB references)
+            try {
+              const files = await spacesService.listFiles(id);
+              const firstSpacesImage = files.find(f => f.type === 'image');
+              if (firstSpacesImage && firstSpacesImage.downloadUrl) {
+                thumbnails[id] = firstSpacesImage.downloadUrl;
+              }
+            } catch (e) { /* silent */ }
           }
         } catch (err) {
-          // Silently skip units with no media
+          // Silently skip units with errors
         }
       })
     );
@@ -538,12 +551,27 @@ exports.uploadUnitMedia = async (req, res, next) => {
     console.log(`[UPLOAD_MEDIA] Uploading ${files.length} files to DO Spaces for unit ${id}...`);
     const results = [];
     const errors = [];
+    const newMediaEntries = [];
 
     for (const file of files) {
       try {
         console.log(`[UPLOAD_MEDIA] Uploading: ${file.originalname} (${file.mimetype}, ${file.size} bytes)`);
         const result = await spacesService.uploadFile(id, file.originalname, file.buffer, file.mimetype);
         results.push(result);
+
+        // Determine file type
+        const ext = file.originalname.split('.').pop().toLowerCase();
+        const isVideo = ['.mp4', '.mov', '.avi', '.mkv', '.webm'].map(e => e.replace('.', '')).includes(ext);
+        const isImage = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'].map(e => e.replace('.', '')).includes(ext);
+        const fileType = isVideo ? 'video' : isImage ? 'image' : 'file';
+
+        newMediaEntries.push({
+          key: result.key,
+          name: file.originalname,
+          type: fileType,
+          size: file.size,
+          uploadedAt: new Date()
+        });
         console.log(`[UPLOAD_MEDIA] ✓ Uploaded: ${file.originalname} → ${result.key}`);
       } catch (fileErr) {
         console.error(`[UPLOAD_MEDIA] ✗ Failed to upload ${file.originalname}:`, fileErr.message);
@@ -559,10 +587,31 @@ exports.uploadUnitMedia = async (req, res, next) => {
       });
     }
 
+    // Persist media references in MongoDB so thumbnails/media work reliably
+    if (newMediaEntries.length > 0) {
+      await InventoryUnit.findByIdAndUpdate(
+        id,
+        { $push: { mediaFiles: { $each: newMediaEntries } } }
+      );
+      console.log(`[UPLOAD_MEDIA] Saved ${newMediaEntries.length} media reference(s) to DB for unit ${id}`);
+    }
+
+    // Generate presigned download URLs for the uploaded files
+    const filesWithUrls = await Promise.all(
+      results.map(async (r) => {
+        try {
+          const downloadUrl = await spacesService.getPresignedDownloadUrl(r.key, 3600);
+          return { ...r, downloadUrl };
+        } catch {
+          return r;
+        }
+      })
+    );
+
     console.log(`[UPLOAD_MEDIA] Completed: ${results.length} succeeded, ${errors.length} failed`);
     res.status(201).json({
       message: `${results.length} file(s) uploaded to DigitalOcean Spaces`,
-      files: results,
+      files: filesWithUrls,
       ...(errors.length > 0 ? { errors } : {}),
     });
   } catch (err) {
@@ -577,9 +626,34 @@ exports.getUnitMedia = async (req, res, next) => {
     const unit = await InventoryUnit.findById(id);
     if (!unit) return res.status(404).json({ message: 'Unit not found' });
 
-    // List files from DO Spaces under Dashboard/{unitId}/
-    const files = await spacesService.listFiles(id);
-    res.json({ media: files });
+    const storedFiles = unit.mediaFiles || [];
+
+    if (storedFiles.length > 0) {
+      // Generate fresh presigned URLs from stored keys
+      const files = await Promise.all(
+        storedFiles.map(async (mf) => {
+          try {
+            const downloadUrl = await spacesService.getPresignedDownloadUrl(mf.key, 3600);
+            return {
+              key: mf.key,
+              name: mf.name || mf.key.split('/').pop(),
+              size: mf.size || 0,
+              lastModified: mf.uploadedAt,
+              type: mf.type || 'file',
+              downloadUrl,
+            };
+          } catch (err) {
+            console.error(`[GET_MEDIA] Failed to generate URL for key ${mf.key}:`, err.message);
+            return null;
+          }
+        })
+      );
+      res.json({ media: files.filter(Boolean) });
+    } else {
+      // Fallback: list directly from DO Spaces (for units without DB-stored references)
+      const files = await spacesService.listFiles(id);
+      res.json({ media: files });
+    }
   } catch (err) {
     next(err);
   }
@@ -593,7 +667,16 @@ exports.deleteUnitMedia = async (req, res, next) => {
 
     // mediaId is the URL-encoded object key
     const key = decodeURIComponent(mediaId);
+
+    // Delete from DO Spaces
     await spacesService.deleteFile(key);
+
+    // Remove reference from MongoDB
+    await InventoryUnit.findByIdAndUpdate(
+      id,
+      { $pull: { mediaFiles: { key: key } } }
+    );
+
     res.json({ message: 'Media deleted from DigitalOcean Spaces', key });
   } catch (err) {
     next(err);
