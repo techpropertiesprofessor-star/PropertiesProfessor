@@ -27,9 +27,9 @@ api.interceptors.request.use(
         config.headers.Authorization = `Bearer ${token}`;
       }
     }
-    // Auto-detect FormData and set correct Content-Type for file uploads
+    // Auto-detect FormData — DELETE Content-Type so browser sets it with boundary
     if (config.data instanceof FormData) {
-      config.headers['Content-Type'] = 'multipart/form-data';
+      delete config.headers['Content-Type'];
     }
     return config;
   },
@@ -180,7 +180,6 @@ createTower: (projectId, data) =>
 
   uploadUnitMedia: (id, formData) =>
     api.post(`/inventory/units/${id}/media`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 120000, // 2 min for large files
     }),
 
@@ -203,7 +202,6 @@ export const storageAPI = {
   // Upload files via backend to Spaces
   upload: (inventoryId, formData) =>
     api.post(`/storage/upload/${inventoryId}`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 120000, // 2 min for large files
     }),
 
