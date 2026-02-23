@@ -7,6 +7,7 @@ const UserSchema = new mongoose.Schema({
   password: { type: String, required: true },
   role: { type: String, enum: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'EMPLOYEE', 'CALLER'], default: 'EMPLOYEE' },
   phone: { type: String },
+  photoUrl: { type: String, default: null },
   employeeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', default: null },
   createdAt: { type: Date, default: Date.now },
 });

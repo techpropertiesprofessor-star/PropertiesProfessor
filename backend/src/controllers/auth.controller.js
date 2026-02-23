@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const { jwtSecret } = require('../config/env');
+const spacesService = require('../services/spaces.service');
 
 const Employee = require('../models/Employee');
 function generateToken(user, employeeId = null) {
@@ -52,7 +53,7 @@ exports.register = async (req, res, next) => {
     res.status(201).json({ 
       success: true, 
       token, 
-      user: { id: user._id, name: user.name, email: user.email, phone: user.phone, role: user.role, employeeId } 
+      user: { id: user._id, name: user.name, email: user.email, phone: user.phone, role: user.role, photoUrl: user.photoUrl, employeeId } 
     });
   } catch (err) {
     next(err);
@@ -86,7 +87,7 @@ exports.login = async (req, res, next) => {
     res.json({ 
       success: true, 
       token, 
-      user: { id: user._id, name: user.name, email: user.email, phone: user.phone, role: user.role, employeeId, permissions } 
+      user: { id: user._id, name: user.name, email: user.email, phone: user.phone, role: user.role, photoUrl: user.photoUrl, employeeId, permissions } 
     });
   } catch (err) {
     next(err);
@@ -184,6 +185,60 @@ exports.changePassword = async (req, res, next) => {
       message: 'Password changed successfully' 
     });
     
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Update own profile (email, phone, photo)
+exports.updateProfile = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    const { email, phone } = req.body;
+    const updateFields = {};
+
+    if (email && email !== user.email) {
+      // Check if email is already taken
+      const existing = await User.findOne({ email, _id: { $ne: user._id } });
+      if (existing) return res.status(409).json({ success: false, message: 'Email already in use' });
+      updateFields.email = email;
+    }
+    if (phone !== undefined) updateFields.phone = phone;
+
+    // Handle photo upload
+    if (req.file) {
+      const key = `profiles/${user._id}/${Date.now()}_${req.file.originalname}`;
+      const result = await spacesService.uploadRaw(key, req.file.buffer, req.file.mimetype, 'public-read');
+      updateFields.photoUrl = result.url;
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(user._id, updateFields, { new: true }).select('-password');
+
+    // Also update Employee record if linked
+    if (user.employeeId) {
+      const empUpdate = {};
+      if (updateFields.email) empUpdate.email = updateFields.email;
+      if (updateFields.phone !== undefined) empUpdate.phone = updateFields.phone;
+      if (Object.keys(empUpdate).length > 0) {
+        await Employee.findByIdAndUpdate(user.employeeId, empUpdate);
+      }
+    }
+
+    res.json({
+      success: true,
+      user: {
+        id: updatedUser._id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        phone: updatedUser.phone,
+        role: updatedUser.role,
+        photoUrl: updatedUser.photoUrl,
+        employeeId: updatedUser.employeeId,
+        createdAt: updatedUser.createdAt
+      }
+    });
   } catch (err) {
     next(err);
   }

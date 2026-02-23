@@ -281,7 +281,7 @@ export default function AddInventoryForm({ onSubmit }) {
       } else {
       if (!form.basePrice || isNaN(form.basePrice) || Number(form.basePrice) <= 0) e.basePrice = 'Base price required.';
       if (!form.finalPrice || isNaN(form.finalPrice) || Number(form.finalPrice) <= 0) e.finalPrice = 'Final price required.';
-      if (!form.pricePerSqft || isNaN(form.pricePerSqft) || Number(form.pricePerSqft) <= 0) e.pricePerSqft = 'Price per sqft required.';
+      // pricePerSqft is auto-calculated, no validation needed
       }
     }
     if (currentStep === 5) {
@@ -292,7 +292,26 @@ export default function AddInventoryForm({ onSubmit }) {
   }
 
   function handleChange(field, value) {
-    setForm(f => ({ ...f, [field]: value }));
+    setForm(f => {
+      const updated = { ...f, [field]: value };
+      // Auto-calculate Price per Sq.ft when finalPrice or builtUpArea changes (residential)
+      if (field === 'finalPrice' || field === 'builtUpArea') {
+        const price = parseFloat(field === 'finalPrice' ? value : updated.finalPrice);
+        const area = parseFloat(field === 'builtUpArea' ? value : updated.builtUpArea);
+        if (price > 0 && area > 0) {
+          updated.pricePerSqft = Math.round(price / area);
+        }
+      }
+      // Auto-calculate for commercial properties
+      if (field === 'commercialPrice' || field === 'commercialBuiltUpArea') {
+        const price = parseFloat(field === 'commercialPrice' ? value : updated.commercialPrice);
+        const area = parseFloat(field === 'commercialBuiltUpArea' ? value : updated.commercialBuiltUpArea);
+        if (price > 0 && area > 0) {
+          updated.commercialPricePerSqft = Math.round(price / area);
+        }
+      }
+      return updated;
+    });
     setErrors(e => ({ ...e, [field]: undefined }));
   }
 
@@ -1340,14 +1359,19 @@ export default function AddInventoryForm({ onSubmit }) {
             {errors.finalPrice && <div className="text-red-500 text-xs mt-1">{errors.finalPrice}</div>}
           </div>
           <div className="mb-4">
-            <label className="block font-medium mb-1">Price per Sq.ft (₹) <span className="text-red-500">*</span></label>
+            <label className="block font-medium mb-1">Price per Sq.ft (₹) <span className="text-gray-400 text-xs font-normal">(auto-calculated)</span></label>
             <input
               type="number"
-              className="w-full px-3 py-2 border rounded-md"
+              className="w-full px-3 py-2 border rounded-md bg-gray-50 text-gray-600"
               value={form.pricePerSqft}
-              onChange={e => handleChange('pricePerSqft', e.target.value)}
-              placeholder="Enter price per sqft"
+              readOnly
+              placeholder="Auto-calculated from Final Price ÷ Built Up Area"
             />
+            {form.finalPrice && form.builtUpArea && form.pricePerSqft ? (
+              <div className="text-green-600 text-xs mt-1">₹{Number(form.finalPrice).toLocaleString('en-IN')} ÷ {form.builtUpArea} sq.ft = ₹{Number(form.pricePerSqft).toLocaleString('en-IN')}/sq.ft</div>
+            ) : (
+              <div className="text-gray-400 text-xs mt-1">Enter Final Price and Built Up Area to auto-calculate</div>
+            )}
             {errors.pricePerSqft && <div className="text-red-500 text-xs mt-1">{errors.pricePerSqft}</div>}
           </div>
         </div>

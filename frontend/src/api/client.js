@@ -48,6 +48,7 @@ export const authAPI = {
   logout: () => api.post("/auth/logout"),
   getProfile: () => api.get("/auth/profile"),
   verifyToken: () => api.post("/auth/verify-token"),
+  updateProfile: (formData) => api.put("/auth/update-profile", formData),
   changePassword: ({ userId, oldPassword, newPassword }) =>
     api.post("/auth/change-password", {
       userId,

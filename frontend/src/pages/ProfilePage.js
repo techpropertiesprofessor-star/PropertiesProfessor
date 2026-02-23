@@ -5,8 +5,8 @@ import Header from '../components/Header';
 import useSidebarCollapsed from '../hooks/useSidebarCollapsed';
 import defaultLogo from '../assets/companyLogo';
 import defaultPhoto from '../assets/userPhoto';
-import { FiCamera, FiMail, FiPhone, FiCalendar, FiShield, FiClock, FiUser, FiBriefcase, FiHash, FiCheckCircle } from 'react-icons/fi';
-import { employeeAPI } from '../api/client';
+import { FiCamera, FiMail, FiPhone, FiCalendar, FiShield, FiClock, FiUser, FiBriefcase, FiHash, FiCheckCircle, FiEdit2, FiSave, FiX } from 'react-icons/fi';
+import { employeeAPI, authAPI } from '../api/client';
 
 const AVATAR_COLORS = [
   '#3b82f6', '#6366f1', '#10b981', '#f59e42', '#ef4444', '#a855f7', '#fbbf24', '#14b8a6'
@@ -28,13 +28,22 @@ function formatDate(dateStr) {
 
 export default function ProfilePage() {
   const sidebarCollapsed = useSidebarCollapsed();
-  const { user, loading } = useContext(AuthContext);
+  const { user, loading, updateUser } = useContext(AuthContext);
   const cardRef = useRef();
   const fileInputRef = useRef();
   const [logo] = useState(defaultLogo);
   const [photo, setPhoto] = useState(defaultPhoto);
   const [isFlipped, setIsFlipped] = useState(false);
   const [employeeDetails, setEmployeeDetails] = useState(null);
+  const [uploading, setUploading] = useState(false);
+
+  // Editable fields
+  const [editingEmail, setEditingEmail] = useState(false);
+  const [editingPhone, setEditingPhone] = useState(false);
+  const [editEmail, setEditEmail] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [saveMsg, setSaveMsg] = useState('');
+  const [saveError, setSaveError] = useState('');
 
   // Fetch linked employee details for extra info (permissions, status, etc.)
   useEffect(() => {
@@ -59,6 +68,14 @@ export default function ProfilePage() {
   // If user has a photo, use it
   React.useEffect(() => {
     if (user && user.photoUrl) setPhoto(user.photoUrl);
+  }, [user]);
+
+  // Initialize edit fields when user loads
+  useEffect(() => {
+    if (user) {
+      setEditEmail(user.email || '');
+      setEditPhone(user.phone || '');
+    }
   }, [user]);
 
   if (loading) return <div className="flex items-center justify-center min-h-screen">Loading profile...</div>;
@@ -120,14 +137,78 @@ export default function ProfilePage() {
     setTimeout(() => win.print(), 400);
   };
 
-  // Photo upload handler
-  const handlePhotoChange = (e) => {
+  // Photo upload handler - uploads to server and persists
+  const handlePhotoChange = async (e) => {
     const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (ev) => setPhoto(ev.target.result);
-      reader.readAsDataURL(file);
+    if (!file) return;
+    
+    // Show preview immediately
+    const reader = new FileReader();
+    reader.onload = (ev) => setPhoto(ev.target.result);
+    reader.readAsDataURL(file);
+
+    // Upload to backend
+    setUploading(true);
+    setSaveMsg('');
+    setSaveError('');
+    try {
+      const formData = new FormData();
+      formData.append('photo', file);
+      const res = await authAPI.updateProfile(formData);
+      if (res.data?.user) {
+        updateUser(res.data.user);
+        setPhoto(res.data.user.photoUrl || defaultPhoto);
+        setSaveMsg('Photo updated successfully!');
+      }
+    } catch (err) {
+      setSaveError('Failed to upload photo. Please try again.');
+      console.error('Photo upload error:', err);
+    } finally {
+      setUploading(false);
+      setTimeout(() => { setSaveMsg(''); setSaveError(''); }, 3000);
     }
+  };
+
+  // Save email handler
+  const handleSaveEmail = async () => {
+    if (!editEmail || editEmail === user.email) {
+      setEditingEmail(false);
+      return;
+    }
+    setSaveMsg('');
+    setSaveError('');
+    try {
+      const res = await authAPI.updateProfile({ email: editEmail });
+      if (res.data?.user) {
+        updateUser(res.data.user);
+        setSaveMsg('Email updated successfully!');
+      }
+      setEditingEmail(false);
+    } catch (err) {
+      setSaveError(err.response?.data?.message || 'Failed to update email');
+    }
+    setTimeout(() => { setSaveMsg(''); setSaveError(''); }, 3000);
+  };
+
+  // Save phone handler
+  const handleSavePhone = async () => {
+    if (editPhone === user.phone) {
+      setEditingPhone(false);
+      return;
+    }
+    setSaveMsg('');
+    setSaveError('');
+    try {
+      const res = await authAPI.updateProfile({ phone: editPhone });
+      if (res.data?.user) {
+        updateUser(res.data.user);
+        setSaveMsg('Phone updated successfully!');
+      }
+      setEditingPhone(false);
+    } catch (err) {
+      setSaveError(err.response?.data?.message || 'Failed to update phone');
+    }
+    setTimeout(() => { setSaveMsg(''); setSaveError(''); }, 3000);
   };
 
   // Avatar fallback if no photo
@@ -570,6 +651,18 @@ export default function ProfilePage() {
                     <FiUser size={18} /> Profile Details
                   </h3>
                 </div>
+
+                {/* Success/Error messages */}
+                {saveMsg && (
+                  <div className="mx-5 mt-4 px-3 py-2 bg-green-50 text-green-700 text-sm rounded-lg border border-green-200">{saveMsg}</div>
+                )}
+                {saveError && (
+                  <div className="mx-5 mt-4 px-3 py-2 bg-red-50 text-red-700 text-sm rounded-lg border border-red-200">{saveError}</div>
+                )}
+                {uploading && (
+                  <div className="mx-5 mt-4 px-3 py-2 bg-blue-50 text-blue-700 text-sm rounded-lg border border-blue-200">Uploading photo...</div>
+                )}
+
                 <div className="p-5 space-y-4">
                   {/* Full Name */}
                   <div className="flex items-center gap-3">
@@ -604,25 +697,71 @@ export default function ProfilePage() {
                     </div>
                   </div>
 
-                  {/* Email */}
+                  {/* Email - Editable */}
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{background: `${themeColors.primary}15`}}>
                       <FiMail size={16} style={{color: themeColors.primary}} />
                     </div>
                     <div className="flex-1">
                       <p className="text-xs text-gray-500 font-medium">Email Address</p>
-                      <p className="text-sm font-semibold text-gray-800 break-all">{user.email || '-'}</p>
+                      {editingEmail ? (
+                        <div className="flex items-center gap-2 mt-1">
+                          <input
+                            type="email"
+                            value={editEmail}
+                            onChange={e => setEditEmail(e.target.value)}
+                            className="text-sm font-semibold text-gray-800 border border-gray-300 rounded-md px-2 py-1 flex-1 focus:outline-none focus:border-blue-500"
+                            autoFocus
+                          />
+                          <button onClick={handleSaveEmail} className="p-1.5 rounded-full bg-green-100 text-green-600 hover:bg-green-200 transition-colors" title="Save">
+                            <FiSave size={14} />
+                          </button>
+                          <button onClick={() => { setEditingEmail(false); setEditEmail(user.email || ''); }} className="p-1.5 rounded-full bg-red-100 text-red-600 hover:bg-red-200 transition-colors" title="Cancel">
+                            <FiX size={14} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-semibold text-gray-800 break-all">{user.email || '-'}</p>
+                          <button onClick={() => setEditingEmail(true)} className="p-1 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors" title="Edit email">
+                            <FiEdit2 size={13} />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  {/* Phone */}
+                  {/* Phone - Editable */}
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{background: `${themeColors.primary}15`}}>
                       <FiPhone size={16} style={{color: themeColors.primary}} />
                     </div>
                     <div className="flex-1">
                       <p className="text-xs text-gray-500 font-medium">Phone Number</p>
-                      <p className="text-sm font-semibold text-gray-800">{user.phone || '-'}</p>
+                      {editingPhone ? (
+                        <div className="flex items-center gap-2 mt-1">
+                          <input
+                            type="tel"
+                            value={editPhone}
+                            onChange={e => setEditPhone(e.target.value)}
+                            className="text-sm font-semibold text-gray-800 border border-gray-300 rounded-md px-2 py-1 flex-1 focus:outline-none focus:border-blue-500"
+                            autoFocus
+                          />
+                          <button onClick={handleSavePhone} className="p-1.5 rounded-full bg-green-100 text-green-600 hover:bg-green-200 transition-colors" title="Save">
+                            <FiSave size={14} />
+                          </button>
+                          <button onClick={() => { setEditingPhone(false); setEditPhone(user.phone || ''); }} className="p-1.5 rounded-full bg-red-100 text-red-600 hover:bg-red-200 transition-colors" title="Cancel">
+                            <FiX size={14} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-semibold text-gray-800">{user.phone || '-'}</p>
+                          <button onClick={() => setEditingPhone(true)} className="p-1 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors" title="Edit phone">
+                            <FiEdit2 size={13} />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
 

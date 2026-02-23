@@ -656,8 +656,14 @@ export default function Header({ user, onLogout, onSearch, notificationCount = 0
               className="flex items-center space-x-2 pl-3 border-l border-gray-200 cursor-pointer hover:bg-white/50 rounded-r-lg p-2 transition-colors duration-200"
               onClick={() => setShowProfileMenu(!showProfileMenu)}
             >
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                {user?.first_name?.charAt(0) || user?.name?.charAt(0) || 'U'}
+              <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0 overflow-hidden">
+                {user?.photoUrl ? (
+                  <img src={user.photoUrl} alt="Profile" className="w-8 h-8 rounded-full object-cover" />
+                ) : (
+                  <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                    {user?.first_name?.charAt(0) || user?.name?.charAt(0) || 'U'}
+                  </div>
+                )}
               </div>
               <div className="hidden md:block text-left">
                 <p className="text-xs font-semibold text-gray-900">

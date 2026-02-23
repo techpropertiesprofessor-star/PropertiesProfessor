@@ -668,14 +668,15 @@ function InventoryPage() {
             </button>
           </div>
 
-          {/* Stats Cards (live computed from current units) */}
+          {/* Stats Cards (from backend database counts) */}
           {(() => {
-            const displayStats = liveStats || stats || {};
+            const displayStats = stats || liveStats || {};
+            const unspecified = Math.max(0, (displayStats.total_units || 0) - (displayStats.for_sale || 0) - (displayStats.for_rent || 0));
             const cards = [
               { label: 'Total Units', value: displayStats.total_units || 0, bg: 'bg-white', text: 'text-gray-900', sub: 'text-gray-500', border: 'border-gray-200', icon: '📊' },
               { label: 'For Sale', value: displayStats.for_sale || 0, bg: 'bg-blue-50', text: 'text-blue-700', sub: 'text-blue-500', border: 'border-blue-200', icon: '🏷️' },
               { label: 'For Rent', value: displayStats.for_rent || 0, bg: 'bg-orange-50', text: 'text-orange-700', sub: 'text-orange-500', border: 'border-orange-200', icon: '🔑' },
-              { label: 'Unspecified', value: displayStats.unspecified_listing || 0, bg: 'bg-gray-50', text: 'text-gray-700', sub: 'text-gray-500', border: 'border-gray-200', icon: '❓' },
+              { label: 'Unspecified', value: displayStats.unspecified_listing || unspecified, bg: 'bg-gray-50', text: 'text-gray-700', sub: 'text-gray-500', border: 'border-gray-200', icon: '❓' },
               { label: 'Available', value: displayStats.available || 0, bg: 'bg-green-50', text: 'text-green-700', sub: 'text-green-500', border: 'border-green-200', icon: '✅' },
               { label: 'On Hold', value: displayStats.on_hold || 0, bg: 'bg-yellow-50', text: 'text-yellow-700', sub: 'text-yellow-500', border: 'border-yellow-200', icon: '⏸️' },
               { label: 'Booked', value: displayStats.booked || 0, bg: 'bg-purple-50', text: 'text-purple-700', sub: 'text-purple-500', border: 'border-purple-200', icon: '📋' },

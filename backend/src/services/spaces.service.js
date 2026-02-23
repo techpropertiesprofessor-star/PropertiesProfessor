@@ -145,6 +145,42 @@ async function uploadFile(inventoryId, originalFilename, body, contentType) {
   return { key, url: buildPublicUrl(key), size: body.length };
 }
 
+/**
+ * Upload a buffer/stream to Spaces with an explicit key (no auto key building).
+ * Used for profile photos and other non-inventory uploads.
+ * @param {string} key - Full key path in the bucket
+ * @param {Buffer} body
+ * @param {string} contentType
+ * @param {string} acl - ACL string (default: 'public-read')
+ * @returns {{ key, url, size }}
+ */
+async function uploadRaw(key, body, contentType, acl = 'public-read') {
+  console.log(`[SPACES_SERVICE] Uploading raw: Bucket=${BUCKET}, Key=${key}, Size=${body.length}, Type=${contentType}`);
+
+  const params = {
+    Bucket: BUCKET,
+    Key: key,
+    Body: body,
+    ContentType: contentType,
+  };
+
+  try {
+    await s3.send(new PutObjectCommand({ ...params, ACL: acl }));
+  } catch (aclErr) {
+    if (aclErr.name === 'AccessControlListNotSupported' ||
+        aclErr.Code === 'AccessControlListNotSupported' ||
+        (aclErr.message && aclErr.message.includes('ACL'))) {
+      console.warn('[SPACES_SERVICE] ACL not supported, uploading without ACL...');
+      await s3.send(new PutObjectCommand(params));
+    } else {
+      throw aclErr;
+    }
+  }
+
+  console.log(`[SPACES_SERVICE] ✓ Uploaded raw successfully: ${key}`);
+  return { key, url: buildPublicUrl(key), size: body.length };
+}
+
 // ─── Get presigned upload URL (for direct browser upload) ─────────────
 
 /**
@@ -251,6 +287,7 @@ module.exports = {
   buildKey,
   buildPublicUrl,
   uploadFile,
+  uploadRaw,
   getPresignedUploadUrl,
   getPresignedDownloadUrl,
   listFiles,
