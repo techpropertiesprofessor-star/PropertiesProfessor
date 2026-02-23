@@ -32,31 +32,69 @@ const upload = multer({
 // All routes require authentication
 router.use(auth);
 
+// ─── Health check for DO Spaces ──────────────────────────────────────
+router.get('/health', async (req, res) => {
+  try {
+    const connected = await spacesService.testConnection();
+    if (connected) {
+      res.json({ status: 'ok', message: 'DigitalOcean Spaces connected', bucket: spacesService.BUCKET });
+    } else {
+      res.status(503).json({ status: 'error', message: 'Cannot connect to DigitalOcean Spaces' });
+    }
+  } catch (err) {
+    res.status(503).json({ status: 'error', message: err.message });
+  }
+});
+
 // ─── Upload files to Spaces ──────────────────────────────────────────
 router.post('/upload/:inventoryId', upload.array('files', 20), async (req, res) => {
   try {
     const { inventoryId } = req.params;
+    console.log(`[STORAGE_UPLOAD] Inventory ${inventoryId} — Content-Type: ${req.headers['content-type']}`);
+    console.log(`[STORAGE_UPLOAD] Files received: ${req.files ? req.files.length : 0}`);
+
     if (!req.files || req.files.length === 0) {
-      return res.status(400).json({ message: 'No files provided' });
+      return res.status(400).json({
+        message: 'No files provided',
+        hint: 'Ensure Content-Type is multipart/form-data and files are sent with field name "files".',
+        contentType: req.headers['content-type'],
+      });
     }
 
-    const results = await Promise.all(
-      req.files.map(file =>
-        spacesService.uploadFile(
+    const results = [];
+    const errors = [];
+
+    for (const file of req.files) {
+      try {
+        console.log(`[STORAGE_UPLOAD] Uploading: ${file.originalname} (${file.mimetype}, ${file.size} bytes)`);
+        const result = await spacesService.uploadFile(
           inventoryId,
           file.originalname,
           file.buffer,
           file.mimetype
-        )
-      )
-    );
+        );
+        results.push(result);
+      } catch (fileErr) {
+        console.error(`[STORAGE_UPLOAD] Failed: ${file.originalname}:`, fileErr.message);
+        errors.push({ filename: file.originalname, error: fileErr.message });
+      }
+    }
+
+    if (results.length === 0) {
+      return res.status(500).json({
+        message: 'All uploads failed',
+        errors,
+        hint: 'Check SPACES_KEY, SPACES_SECRET, and bucket permissions',
+      });
+    }
 
     res.status(201).json({
       message: `${results.length} file(s) uploaded to DigitalOcean Spaces`,
       files: results,
+      ...(errors.length > 0 ? { errors } : {}),
     });
   } catch (err) {
-    console.error('Spaces upload error:', err);
+    console.error('[STORAGE_UPLOAD] Error:', err.message, err.stack);
     res.status(500).json({ message: 'Upload failed', error: err.message });
   }
 });

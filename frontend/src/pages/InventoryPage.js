@@ -9,7 +9,7 @@ import AddInventoryForm from '../components/AddInventoryForm';
 import InventoryCard from '../components/InventoryCard';
 import useRealtimeData from '../hooks/useRealtimeData';
 import { useSocket } from '../context/SocketContext';
-import { FiX, FiHome, FiMapPin, FiLayers, FiMaximize, FiGrid, FiSun, FiUser, FiPhone, FiCalendar, FiFileText, FiEdit2, FiEye, FiDownload, FiKey, FiTruck, FiCheckCircle, FiDollarSign, FiMessageSquare } from 'react-icons/fi';
+import { FiX, FiHome, FiMapPin, FiLayers, FiMaximize, FiGrid, FiSun, FiUser, FiPhone, FiCalendar, FiFileText, FiEdit2, FiEye, FiDownload, FiKey, FiTruck, FiCheckCircle, FiDollarSign, FiMessageSquare, FiShield, FiTag, FiBriefcase, FiWifi, FiNavigation, FiBox, FiPackage, FiActivity, FiAward, FiClipboard } from 'react-icons/fi';
 
 function InventoryPage() {
   const sidebarCollapsed = useSidebarCollapsed();
@@ -18,12 +18,15 @@ function InventoryPage() {
   const { user } = useContext(AuthContext);
 
   const [units, setUnits] = useState([]);
+  const [unitThumbnails, setUnitThumbnails] = useState({});
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState(null);
   const [selectedUnit, setSelectedUnit] = useState(null);
   const [unitMedia, setUnitMedia] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const [uploadSuccess, setUploadSuccess] = useState('');
   const [caption, setCaption] = useState('');
   const [shareUrl, setShareUrl] = useState('');
   const [debounceTimer, setDebounceTimer] = useState(null);
@@ -182,6 +185,21 @@ function InventoryPage() {
 
       setUnits(normalized);
 
+      // Fetch thumbnails from DO Spaces for all units (non-blocking)
+      const unitIds = normalized.map(u => u._id || u.id).filter(Boolean);
+      if (unitIds.length > 0) {
+        inventoryAPI.getUnitThumbnails(unitIds)
+          .then((thumbRes) => {
+            const thumbs = thumbRes.data?.thumbnails || {};
+            if (Object.keys(thumbs).length > 0) {
+              setUnitThumbnails(prev => ({ ...prev, ...thumbs }));
+            }
+          })
+          .catch((err) => {
+            console.warn('Failed to fetch thumbnails:', err.message);
+          });
+      }
+
     } catch (err) {
       console.error('Failed to fetch units:', err);
       setUnits([]);
@@ -194,6 +212,15 @@ function InventoryPage() {
     fetchProjects();
     fetchUnits();
     fetchStats();
+  }, [fetchUnits]);
+
+  // Auto-refresh stats every 30 seconds for real-time accuracy
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchUnits();
+      fetchStats();
+    }, 30000);
+    return () => clearInterval(interval);
   }, [fetchUnits]);
 
   // Real-time: listen for unit updates and inventory creation via shared socket
@@ -304,6 +331,7 @@ function InventoryPage() {
           tenant_contact: u.tenant_contact || u.raw?.tenant_contact || u.tenantContact || '',
           tenant_start_date: u.tenant_start_date || u.raw?.tenant_start_date || u.tenantStartDate || '',
           tenant_end_date: u.tenant_end_date || u.raw?.tenant_end_date || u.tenantEndDate || '',
+          thumbnail: u.thumbnail || u.cover_image || unitThumbnails[u._id || u.id] || null,
           raw: u
         };
         setSelectedUnit(normalized);
@@ -322,15 +350,26 @@ function InventoryPage() {
   const handleUploadMedia = async (files) => {
     if (!selectedUnit) return;
     setUploading(true);
+    setUploadError('');
+    setUploadSuccess('');
     try {
       const formData = new FormData();
       Array.from(files).forEach((f) => formData.append('files', f));
       if (caption) formData.append('caption', caption);
-      await inventoryAPI.uploadUnitMedia(selectedUnit.id || selectedUnit._id, formData);
+      const res = await inventoryAPI.uploadUnitMedia(selectedUnit.id || selectedUnit._id, formData);
+      const uploadedCount = res.data?.files?.length || files.length;
+      setUploadSuccess(`${uploadedCount} file(s) uploaded successfully!`);
+      setTimeout(() => setUploadSuccess(''), 5000);
       await viewUnit(selectedUnit.id || selectedUnit._id);
       setCaption('');
     } catch (err) {
       console.error('Upload media failed:', err);
+      const errorMsg = err.response?.data?.message
+        || err.response?.data?.hint
+        || err.message
+        || 'Upload failed. Please try again.';
+      setUploadError(errorMsg);
+      setTimeout(() => setUploadError(''), 10000);
     } finally {
       setUploading(false);
     }
@@ -602,42 +641,30 @@ function InventoryPage() {
           </div>
 
           {/* Stats Cards (live computed from current units) */}
-          {(liveStats || stats) && (() => {
+          {(() => {
             const displayStats = liveStats || stats || {};
+            const cards = [
+              { label: 'Total Units', value: displayStats.total_units || 0, bg: 'bg-white', text: 'text-gray-900', sub: 'text-gray-500', border: 'border-gray-200', icon: '📊' },
+              { label: 'For Sale', value: displayStats.for_sale || 0, bg: 'bg-blue-50', text: 'text-blue-700', sub: 'text-blue-500', border: 'border-blue-200', icon: '🏷️' },
+              { label: 'For Rent', value: displayStats.for_rent || 0, bg: 'bg-orange-50', text: 'text-orange-700', sub: 'text-orange-500', border: 'border-orange-200', icon: '🔑' },
+              { label: 'Unspecified', value: displayStats.unspecified_listing || 0, bg: 'bg-gray-50', text: 'text-gray-700', sub: 'text-gray-500', border: 'border-gray-200', icon: '❓' },
+              { label: 'Available', value: displayStats.available || 0, bg: 'bg-green-50', text: 'text-green-700', sub: 'text-green-500', border: 'border-green-200', icon: '✅' },
+              { label: 'On Hold', value: displayStats.on_hold || 0, bg: 'bg-yellow-50', text: 'text-yellow-700', sub: 'text-yellow-500', border: 'border-yellow-200', icon: '⏸️' },
+              { label: 'Booked', value: displayStats.booked || 0, bg: 'bg-purple-50', text: 'text-purple-700', sub: 'text-purple-500', border: 'border-purple-200', icon: '📋' },
+              { label: 'Sold', value: displayStats.sold || 0, bg: 'bg-red-50', text: 'text-red-700', sub: 'text-red-500', border: 'border-red-200', icon: '🏠' },
+            ];
             return (
-              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-4 mb-6">
-                <div className="bg-white rounded-lg shadow p-4">
-                  <p className="text-sm text-gray-500">Total Units</p>
-                  <p className="text-2xl font-bold text-gray-900">{displayStats.total_units || 0}</p>
-                </div>
-                <div className="bg-blue-50 rounded-lg shadow p-4">
-                  <p className="text-sm text-blue-600">For Sale</p>
-                  <p className="text-2xl font-bold text-blue-700">{displayStats.for_sale || 0}</p>
-                </div>
-                <div className="bg-orange-50 rounded-lg shadow p-4">
-                  <p className="text-sm text-orange-600">For Rent</p>
-                  <p className="text-2xl font-bold text-orange-700">{displayStats.for_rent || 0}</p>
-                </div>
-                <div className="bg-gray-50 rounded-lg shadow p-4">
-                  <p className="text-sm text-gray-600">Unspecified</p>
-                  <p className="text-2xl font-bold text-gray-700">{displayStats.unspecified_listing || 0}</p>
-                </div>
-                <div className="bg-green-50 rounded-lg shadow p-4">
-                  <p className="text-sm text-green-600">Available</p>
-                  <p className="text-2xl font-bold text-green-700">{displayStats.available || 0}</p>
-                </div>
-                <div className="bg-yellow-50 rounded-lg shadow p-4">
-                  <p className="text-sm text-yellow-600">On Hold</p>
-                  <p className="text-2xl font-bold text-yellow-700">{displayStats.on_hold || 0}</p>
-                </div>
-                <div className="bg-purple-50 rounded-lg shadow p-4">
-                  <p className="text-sm text-purple-600">Booked</p>
-                  <p className="text-2xl font-bold text-purple-700">{displayStats.booked || 0}</p>
-                </div>
-                <div className="bg-gray-50 rounded-lg shadow p-4">
-                  <p className="text-sm text-gray-600">Sold</p>
-                  <p className="text-2xl font-bold text-gray-700">{displayStats.sold || 0}</p>
-                </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-3 mb-6">
+                {cards.map((card, idx) => (
+                  <div key={idx} className={`${card.bg} rounded-xl shadow-sm border ${card.border} p-4 hover:shadow-md transition-all duration-200 group`}>
+                    <div className="flex items-center justify-between mb-1">
+                      <p className={`text-xs font-medium ${card.sub} uppercase tracking-wider`}>{card.label}</p>
+                      <span className="text-sm opacity-60 group-hover:opacity-100 transition-opacity">{card.icon}</span>
+                    </div>
+                    <p className={`text-2xl font-extrabold ${card.text} tabular-nums`}>{card.value}</p>
+                    <div className={`mt-2 h-0.5 rounded-full ${card.border} opacity-40`}></div>
+                  </div>
+                ))}
               </div>
             );
           })()}
@@ -754,15 +781,19 @@ function InventoryPage() {
             ) : (
               <div className="p-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {displayedUnits.map((u) => (
-                    <InventoryCard
-                      key={u._id || u.id}
-                      data={u}
-                      user={user}
-                      onView={() => viewUnit(u._id || u.id)}
-                      onEdit={() => startEditUnit(u._id || u.id)}
-                    />
-                  ))}
+                  {displayedUnits.map((u) => {
+                    const unitId = u._id || u.id;
+                    const thumb = u.thumbnail || unitThumbnails[unitId] || null;
+                    return (
+                      <InventoryCard
+                        key={unitId}
+                        data={thumb ? { ...u, thumbnail: thumb } : u}
+                        user={user}
+                        onView={() => viewUnit(unitId)}
+                        onEdit={() => startEditUnit(unitId)}
+                      />
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -927,6 +958,16 @@ function InventoryPage() {
                           <span className="text-xs text-blue-700 font-semibold">{uploading ? 'Uploading...' : 'Click to upload photos/videos'}</span>
                           <span className="text-[10px] text-blue-400 mt-0.5">Files are stored on DigitalOcean Spaces</span>
                         </label>
+                        {uploadError && (
+                          <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg">
+                            <p className="text-xs text-red-600 font-medium">Upload Failed: {uploadError}</p>
+                          </div>
+                        )}
+                        {uploadSuccess && (
+                          <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-lg">
+                            <p className="text-xs text-green-600 font-medium">{uploadSuccess}</p>
+                          </div>
+                        )}
                       </div>
 
                       {/* Price Card */}
@@ -950,7 +991,31 @@ function InventoryPage() {
                           <FiFileText className="text-blue-500" /> Property Information
                         </h4>
                         <div className="grid grid-cols-2 gap-3">
-                          {[
+                          {(selectedUnit.property_type === 'commercial' ? [
+                            { icon: <FiHome className="text-blue-500" />, label: 'Property Type', value: 'Commercial' },
+                            { icon: <FiBriefcase className="text-purple-500" />, label: 'Config Type', value: selectedUnit.config_type },
+                            { icon: <FiMapPin className="text-red-500" />, label: 'Building', value: selectedUnit.building_name || selectedUnit.project_name },
+                            { icon: <FiTag className="text-indigo-500" />, label: 'Looking To', value: selectedUnit.looking_to },
+                            { icon: <FiMapPin className="text-pink-500" />, label: 'City', value: selectedUnit.city },
+                            { icon: <FiNavigation className="text-rose-500" />, label: 'Locality', value: selectedUnit.locality },
+                            { icon: <FiActivity className="text-amber-500" />, label: 'Possession Status', value: selectedUnit.possession_status?.replace(/_/g, ' ') },
+                            { icon: <FiGrid className="text-teal-500" />, label: 'Zone Type', value: selectedUnit.zone_type?.replace(/_/g, ' ') },
+                            { icon: <FiBriefcase className="text-blue-600" />, label: 'Location Hub', value: selectedUnit.location_hub?.replace(/_/g, ' ') },
+                            { icon: <FiBox className="text-green-500" />, label: 'Property Condition', value: selectedUnit.property_condition?.replace(/_/g, ' ') },
+                            { icon: <FiMaximize className="text-cyan-500" />, label: 'Built-up Area', value: selectedUnit.built_up_area ? `${selectedUnit.built_up_area} sqft` : null },
+                            { icon: <FiShield className="text-violet-500" />, label: 'Ownership', value: selectedUnit.ownership?.replace(/_/g, ' ') },
+                            { icon: <FiDollarSign className="text-emerald-500" />, label: 'Price', value: selectedUnit.base_price ? `₹${Number(selectedUnit.base_price).toLocaleString('en-IN')}` : null },
+                            { icon: <FiTag className="text-green-600" />, label: 'Negotiable', value: selectedUnit.negotiable },
+                            { icon: <FiClipboard className="text-gray-500" />, label: 'Tax & Govt. Included', value: selectedUnit.tax_govt_included },
+                            { icon: <FiActivity className="text-orange-500" />, label: 'DG & UPS Included', value: selectedUnit.dg_ups_included },
+                            { icon: <FiLayers className="text-purple-500" />, label: 'Floor', value: selectedUnit.your_floor ? `${selectedUnit.your_floor}${selectedUnit.total_floors ? ` / ${selectedUnit.total_floors}` : ''}` : null },
+                            { icon: <FiLayers className="text-blue-400" />, label: 'Staircases', value: selectedUnit.number_of_staircase },
+                            { icon: <FiNavigation className="text-indigo-500" />, label: 'Passenger Lifts', value: selectedUnit.passenger_lifts },
+                            { icon: <FiPackage className="text-gray-600" />, label: 'Service Lifts', value: selectedUnit.service_lifts },
+                            { icon: <FiTruck className="text-blue-500" />, label: 'Private Parking', value: selectedUnit.private_parking },
+                            { icon: <FiTruck className="text-gray-500" />, label: 'Public Parking', value: selectedUnit.public_parking },
+                            { icon: <FiAward className="text-amber-600" />, label: 'Pre-leased/Pre-rented', value: selectedUnit.is_pre_leased },
+                          ] : [
                             { icon: <FiHome className="text-blue-500" />, label: 'Property Type', value: selectedUnit.bhk },
                             { icon: <FiLayers className="text-purple-500" />, label: 'Floor', value: selectedUnit.floor_number ? `${selectedUnit.floor_number}${selectedUnit.total_floors ? ` / ${selectedUnit.total_floors}` : ''}` : null },
                             { icon: <FiMapPin className="text-red-500" />, label: 'Building', value: selectedUnit.building_name || selectedUnit.project_name },
@@ -961,12 +1026,13 @@ function InventoryPage() {
                             { icon: <FiGrid className="text-green-500" />, label: 'Furnished', value: selectedUnit.furnished_status },
                             { icon: <FiTruck className="text-gray-500" />, label: 'Parking', value: selectedUnit.parking_slots },
                             { icon: <FiCalendar className="text-orange-500" />, label: 'Available', value: selectedUnit.availability_date ? new Date(selectedUnit.availability_date).toLocaleDateString() : null },
-                          ].filter(item => item.value).map((item, idx) => (
+                            { icon: <FiDollarSign className="text-emerald-500" />, label: 'Maintenance', value: selectedUnit.maintenance_charges?.replace(/_/g, ' ') },
+                          ]).filter(item => item.value).map((item, idx) => (
                             <div key={idx} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
                               <div className="mt-0.5">{item.icon}</div>
                               <div>
                                 <div className="text-[11px] text-gray-400 uppercase font-semibold tracking-wide">{item.label}</div>
-                                <div className="text-sm font-medium text-gray-800">{item.value}</div>
+                                <div className="text-sm font-medium text-gray-800 capitalize">{item.value}</div>
                               </div>
                             </div>
                           ))}
@@ -1006,7 +1072,7 @@ function InventoryPage() {
                         </div>
                       )}
 
-                      {/* Amenities */}
+                      {/* Amenities (Residential) */}
                       {selectedUnit.amenities && selectedUnit.amenities.length > 0 && (
                         <div className="mb-5">
                           <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
@@ -1016,6 +1082,22 @@ function InventoryPage() {
                             {selectedUnit.amenities.map((a, idx) => (
                               <span key={idx} className="inline-flex items-center gap-1 bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 text-xs font-medium px-3 py-1.5 rounded-full border border-blue-100">
                                 <FiCheckCircle className="text-blue-400 text-[10px]" /> {a}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Commercial Amenities */}
+                      {selectedUnit.commercial_amenities && selectedUnit.commercial_amenities.length > 0 && (
+                        <div className="mb-5">
+                          <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                            <FiCheckCircle className="text-purple-500" /> Commercial Amenities
+                          </h4>
+                          <div className="flex flex-wrap gap-2">
+                            {selectedUnit.commercial_amenities.map((a, idx) => (
+                              <span key={idx} className="inline-flex items-center gap-1 bg-gradient-to-r from-purple-50 to-violet-50 text-purple-700 text-xs font-medium px-3 py-1.5 rounded-full border border-purple-100 capitalize">
+                                <FiCheckCircle className="text-purple-400 text-[10px]" /> {a.replace(/_/g, ' ')}
                               </span>
                             ))}
                           </div>
@@ -1088,7 +1170,7 @@ function InventoryPage() {
                       try {
                         // Create project/tower/unit as the original code intended
                         let projectId;
-                        const projectName = form.buildingName || form.city || 'Default Project';
+                        const projectName = form.buildingName || form.commercialBuilding || form.city || 'Default Project';
                         const existingProjects = await inventoryAPI.getProjects();
                         const existingProject = (existingProjects.data || []).find((p) => p.name === projectName);
 
@@ -1105,7 +1187,7 @@ function InventoryPage() {
 
                         // towers
                         let towerId;
-                        const towerName = form.buildingName || 'Main Tower';
+                        const towerName = form.buildingName || form.commercialBuilding || 'Main Tower';
                         const existingTowers = await inventoryAPI.getTowers(projectId);
                         const existingTower = (existingTowers.data || []).find((t) => t.name === towerName);
                         if (existingTower) {
@@ -1118,23 +1200,24 @@ function InventoryPage() {
                         const payload = {
                           project: projectId,
                           tower: towerId,
-                          unitNumber: form.unitNumber,
+                          unitNumber: form.unitNumber || form.configType + '-' + Date.now(),
                           property_type: form.propertyType,
                           looking_to: form.lookingTo,
                           city: form.city,
-                          building_name: form.buildingName,
+                          building_name: form.buildingName || form.commercialBuilding || '',
                           config_type: form.configType,
                           bhk: form.bhk,
-                          built_up_area: Number(form.builtUpArea) || 0,
+                          built_up_area: Number(form.builtUpArea || form.commercialBuiltUpArea) || 0,
                           super_area: Number(form.superArea) || 0,
                           floor_number: Number(form.floorNumber) || 0,
-                          total_floors: Number(form.totalFloors) || 0,
+                          total_floors: Number(form.totalFloors || form.commercialTotalFloors) || 0,
                           age: Number(form.age) || 0,
                           bathrooms: Number(form.bathrooms) || 0,
                           balconies: Number(form.balconies) || 0,
                           parking_slots: Number(form.parking) || 0,
                           facing: form.facing,
                           furnished_status: form.furnishType,
+                          maintenance_charges: form.maintenanceCharges || '',
                           amenities: form.amenities || [],
                           keys_location: form.keysLocation,
                           keys_remarks: form.keysRemarks,
@@ -1142,15 +1225,33 @@ function InventoryPage() {
                           owner_name: form.ownerDetails?.name || '',
                           owner_phone: form.ownerDetails?.phone || '',
                           owner_email: form.ownerDetails?.email || '',
-                          location: `${form.addressLine1}, ${form.addressLine2}, ${form.city}, ${form.state}`,
+                          location: `${form.addressLine1 || ''}, ${form.addressLine2 || ''}, ${form.city}, ${form.state || ''}`,
                           address_line1: form.addressLine1,
                           address_line2: form.addressLine2,
                           pincode: form.pincode,
                           landmark: form.landmark,
                           state: form.state,
-                          base_price: Number(form.basePrice) || 0,
-                          final_price: Number(form.finalPrice) || 0,
+                          base_price: Number(form.basePrice || form.commercialPrice) || 0,
+                          final_price: Number(form.finalPrice || form.commercialPrice) || 0,
                           price_per_sqft: Number(form.pricePerSqft) || 0,
+                          // Commercial-specific fields
+                          locality: form.commercialLocality || '',
+                          possession_status: form.possessionStatus || '',
+                          zone_type: form.zoneType || '',
+                          location_hub: form.locationHub || '',
+                          property_condition: form.propertyCondition || '',
+                          ownership: form.ownership || '',
+                          negotiable: form.negotiable || '',
+                          tax_govt_included: form.taxGovtIncluded || '',
+                          dg_ups_included: form.dgUpsIncluded || '',
+                          your_floor: form.yourFloor || '',
+                          number_of_staircase: Number(form.numberOfStaircase) || 0,
+                          passenger_lifts: Number(form.passengerLifts) || 0,
+                          service_lifts: Number(form.serviceLifts) || 0,
+                          private_parking: Number(form.privateParking) || 0,
+                          public_parking: Number(form.publicParking) || 0,
+                          is_pre_leased: form.isPreLeased || '',
+                          commercial_amenities: form.commercialAmenities || [],
                           status: 'available'
 
                         };

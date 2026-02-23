@@ -140,27 +140,25 @@ export default function DashboardPage() {
     // const [employees, setEmployees] = useState([]); // Unused
     // User collection state
     const [userCount, setUserCount] = useState(0);
-    // Fetch employees (removed, not used)
-    // Fetch users from User collection
+    // Fetch employees from Employee collection (where actual employee records live)
     const loadUsers = useCallback(async () => {
       try {
-        console.log('🔄 Fetching users count...');
-        const response = await userAPI.getAll();
+        console.log('🔄 Fetching employee count from Employee collection...');
+        const response = await employeeAPI.getAll();
         
-        let usersArr = [];
+        let empArr = [];
         if (Array.isArray(response.data)) {
-          usersArr = response.data;
+          empArr = response.data;
         } else if (response.data?.data && Array.isArray(response.data.data)) {
-          usersArr = response.data.data;
+          empArr = response.data.data;
         }
         
-        // Only count company employees/managers (exclude website users, super admins etc.)
-        const companyRoles = ['EMPLOYEE', 'MANAGER', 'ADMIN', 'CALLER'];
-        const companyUsers = usersArr.filter(u => u.role && companyRoles.includes(u.role.toUpperCase()));
-        console.log('✅ Company team count:', companyUsers.length, '(filtered from', usersArr.length, 'total users)');
-        setUserCount(companyUsers.length);
+        // Only count active employees with EMPLOYEE role
+        const actualEmployees = empArr.filter(e => e.role && e.role.toUpperCase() === 'EMPLOYEE' && e.status !== 'inactive');
+        console.log('✅ Employee count:', actualEmployees.length, '(from', empArr.length, 'total records)');
+        setUserCount(actualEmployees.length);
       } catch (err) {
-        console.error('❌ Failed to load users in DashboardPage:', err, err?.response);
+        console.error('❌ Failed to load employees in DashboardPage:', err, err?.response);
         setUserCount(0);
       }
     }, []);
@@ -169,17 +167,25 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const { canViewDashboard, loading } = usePermissions();
 
-  // Load user count on mount (only for MANAGER)
+  // Load user count on mount (for MANAGER and ADMIN)
   useEffect(() => {
     console.log('🎯 useEffect for loadUsers triggered');
     console.log('👤 Current user:', user);
     console.log('🔑 User role:', user?.role);
     
-    if (user && user.role === 'MANAGER') {
-      console.log('✅ User is MANAGER, calling loadUsers...');
+    if (user && (user.role === 'MANAGER' || user.role === 'ADMIN')) {
+      console.log('✅ User is MANAGER/ADMIN, calling loadUsers...');
       loadUsers();
     } else {
-      console.log('⚠️ User is not MANAGER or user is null');
+      console.log('⚠️ User is not MANAGER/ADMIN or user is null');
+    }
+  }, [user, loadUsers]);
+
+  // Auto-refresh employee count every 30 seconds
+  useEffect(() => {
+    if (user && (user.role === 'MANAGER' || user.role === 'ADMIN')) {
+      const interval = setInterval(() => loadUsers(), 30000);
+      return () => clearInterval(interval);
     }
   }, [user, loadUsers]);
 
@@ -880,11 +886,12 @@ useEffect(() => {
                   <div className="bg-white/80 rounded-2xl shadow-xl p-8 border border-blue-100">
                     <h2 className="text-lg font-extrabold text-blue-700 mb-4 flex items-center gap-2 tracking-tight">
                       <span role="img" aria-label="bell">🔔</span> Recent Notifications
+                      <span className="ml-auto text-xs font-medium text-gray-400">{allNotifications.length} total</span>
                     </h2>
                     {allNotifications.length === 0 ? (
                       <div className="p-4 text-center text-gray-500">No notifications found.</div>
                     ) : (
-                      <div className="space-y-3 max-h-60 overflow-y-auto scrollbar-thin scrollbar-thumb-blue-200 scrollbar-track-blue-50 pr-1">
+                      <div className="space-y-3 max-h-[500px] overflow-y-auto scrollbar-thin scrollbar-thumb-blue-200 scrollbar-track-blue-50 pr-1">
                         {allNotifications.map((notif, idx) => (
                           <div
                             key={notif._id || notif.id || idx}
@@ -1216,7 +1223,7 @@ useEffect(() => {
                     {allNotifications.length === 0 ? (
                       <div className="p-4 text-center text-gray-500 relative z-10">No notifications found.</div>
                     ) : (
-                      <div className="space-y-3 max-h-56 overflow-y-auto pr-1 relative z-10">
+                      <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1 relative z-10">
                         {allNotifications.map((notif, idx) => {
                           let icon = '🔔', iconColor = 'text-blue-500';
                           if ((notif.type || '').toLowerCase().includes('lead')) { icon = '📋'; iconColor = 'text-purple-500'; }

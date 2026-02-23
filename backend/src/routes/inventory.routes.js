@@ -47,8 +47,25 @@ router.post('/units/:id/price-history', role(['ADMIN', 'MANAGER', 'EMPLOYEE']), 
 router.get('/search', inventoryController.searchUnits);
 router.get('/stats', inventoryController.getStats);
 
-// Media upload routes
-router.post('/units/:id/media', role(['ADMIN', 'MANAGER', 'EMPLOYEE']), upload.array('files', 10), inventoryController.uploadUnitMedia);
+// Batch thumbnails (first image from DO Spaces per unit)
+router.post('/units/thumbnails', inventoryController.getUnitThumbnails);
+
+// Media upload routes — with multer error handling
+router.post('/units/:id/media', role(['ADMIN', 'MANAGER', 'EMPLOYEE']), (req, res, next) => {
+  upload.array('files', 10)(req, res, (err) => {
+    if (err) {
+      console.error('[INVENTORY_ROUTE] Multer error:', err.message, err.code);
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({ message: 'File too large. Maximum size is 50MB per file.' });
+      }
+      if (err.code === 'LIMIT_FILE_COUNT') {
+        return res.status(400).json({ message: 'Too many files. Maximum 10 files per upload.' });
+      }
+      return res.status(400).json({ message: err.message || 'File upload error' });
+    }
+    next();
+  });
+}, inventoryController.uploadUnitMedia);
 router.get('/units/:id/media', inventoryController.getUnitMedia);
 router.delete('/units/:id/media/:mediaId', role(['ADMIN', 'MANAGER', 'EMPLOYEE']), inventoryController.deleteUnitMedia);
 

@@ -27,6 +27,10 @@ api.interceptors.request.use(
         config.headers.Authorization = `Bearer ${token}`;
       }
     }
+    // Auto-detect FormData and set correct Content-Type for file uploads
+    if (config.data instanceof FormData) {
+      config.headers['Content-Type'] = 'multipart/form-data';
+    }
     return config;
   },
   (error) => Promise.reject(error)
@@ -166,13 +170,18 @@ createTower: (projectId, data) =>
   getStats: () =>
     api.get("/inventory/stats"),
 
+  // Batch thumbnails from DO Spaces
+  getUnitThumbnails: (unitIds) =>
+    api.post('/inventory/units/thumbnails', { unitIds }),
+
   // Media — DigitalOcean Spaces
   listUnitMedia: (id) =>
     api.get(`/inventory/units/${id}/media`),
 
   uploadUnitMedia: (id, formData) =>
     api.post(`/inventory/units/${id}/media`, formData, {
-      headers: { 'Content-Type': undefined },
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000, // 2 min for large files
     }),
 
   deleteUnitMedia: (id, mediaId) =>
@@ -194,7 +203,8 @@ export const storageAPI = {
   // Upload files via backend to Spaces
   upload: (inventoryId, formData) =>
     api.post(`/storage/upload/${inventoryId}`, formData, {
-      headers: { 'Content-Type': undefined },
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000, // 2 min for large files
     }),
 
   // List files for an inventory unit

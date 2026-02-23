@@ -19,6 +19,7 @@ const {
   GetObjectCommand,
   DeleteObjectCommand,
   HeadObjectCommand,
+  HeadBucketCommand,
 } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const path = require('path');
@@ -33,24 +34,56 @@ console.log('[SPACES_SERVICE] Configuration check:', {
   bucket: process.env.SPACES_NAME || 'properties-media',
   keyConfigured: !!process.env.SPACES_KEY,
   secretConfigured: !!process.env.SPACES_SECRET,
+  keyLength: process.env.SPACES_KEY ? process.env.SPACES_KEY.length : 0,
 });
 
 if (!process.env.SPACES_KEY || !process.env.SPACES_SECRET) {
-  console.error('[SPACES_SERVICE] WARNING: SPACES_KEY or SPACES_SECRET not set! File uploads will fail.');
+  console.error('[SPACES_SERVICE] ⚠ CRITICAL: SPACES_KEY or SPACES_SECRET not set! File uploads will fail.');
 }
 
 const s3 = new S3Client({
   endpoint: spacesEndpoint,
   region: process.env.SPACES_REGION || 'sgp1',
   credentials: {
-    accessKeyId: process.env.SPACES_KEY,
-    secretAccessKey: process.env.SPACES_SECRET,
+    accessKeyId: process.env.SPACES_KEY || '',
+    secretAccessKey: process.env.SPACES_SECRET || '',
   },
   forcePathStyle: false, // DO Spaces uses virtual-hosted style
 });
 
 const BUCKET = process.env.SPACES_NAME || 'properties-media';
 const ROOT_FOLDER = process.env.SPACES_ROOT_FOLDER || 'Dashboard';
+
+// ─── Connection Test ──────────────────────────────────────────────────
+
+/**
+ * Verify DO Spaces connectivity on startup.
+ * Runs async — does not block server start.
+ */
+async function testConnection() {
+  if (!process.env.SPACES_KEY || !process.env.SPACES_SECRET) {
+    console.error('[SPACES_SERVICE] ⚠ Skipping connection test — credentials not configured');
+    return false;
+  }
+  try {
+    await s3.send(new HeadBucketCommand({ Bucket: BUCKET }));
+    console.log(`[SPACES_SERVICE] ✓ Connected to bucket "${BUCKET}" successfully`);
+    return true;
+  } catch (err) {
+    console.error(`[SPACES_SERVICE] ✗ Failed to connect to bucket "${BUCKET}":`, err.message);
+    if (err.name === 'NotFound' || err.$metadata?.httpStatusCode === 404) {
+      console.error('[SPACES_SERVICE]   → Bucket does not exist. Create it at https://cloud.digitalocean.com/spaces');
+    } else if (err.name === 'Forbidden' || err.$metadata?.httpStatusCode === 403) {
+      console.error('[SPACES_SERVICE]   → Access denied. Check SPACES_KEY and SPACES_SECRET credentials.');
+    } else {
+      console.error('[SPACES_SERVICE]   → Error details:', err.name, err.$metadata?.httpStatusCode);
+    }
+    return false;
+  }
+}
+
+// Run connection test on module load (non-blocking)
+testConnection();
 
 // ─── Helpers ──────────────────────────────────────────────────────────
 
@@ -84,13 +117,31 @@ function buildPublicUrl(key) {
  */
 async function uploadFile(inventoryId, originalFilename, body, contentType) {
   const key = buildKey(inventoryId, originalFilename);
-  await s3.send(new PutObjectCommand({
+  console.log(`[SPACES_SERVICE] Uploading: Bucket=${BUCKET}, Key=${key}, Size=${body.length}, Type=${contentType}`);
+
+  const params = {
     Bucket: BUCKET,
     Key: key,
     Body: body,
     ContentType: contentType,
-    ACL: 'private', // keep files private; serve via signed URLs
-  }));
+  };
+
+  // Try with ACL first; if the bucket doesn't support ACL, retry without it
+  try {
+    await s3.send(new PutObjectCommand({ ...params, ACL: 'private' }));
+  } catch (aclErr) {
+    if (aclErr.name === 'AccessControlListNotSupported' ||
+        aclErr.Code === 'AccessControlListNotSupported' ||
+        (aclErr.message && aclErr.message.includes('ACL'))) {
+      console.warn('[SPACES_SERVICE] ACL not supported on this bucket, uploading without ACL...');
+      await s3.send(new PutObjectCommand(params));
+    } else {
+      console.error(`[SPACES_SERVICE] Upload failed for key ${key}:`, aclErr.message, aclErr.name, aclErr.$metadata?.httpStatusCode);
+      throw aclErr;
+    }
+  }
+
+  console.log(`[SPACES_SERVICE] ✓ Uploaded successfully: ${key}`);
   return { key, url: buildPublicUrl(key), size: body.length };
 }
 
@@ -110,7 +161,7 @@ async function getPresignedUploadUrl(inventoryId, filename, contentType, expires
     Bucket: BUCKET,
     Key: key,
     ContentType: contentType,
-    ACL: 'private',
+    // Note: ACL removed — not all DO Spaces configs support canned ACLs
   });
   const uploadUrl = await getSignedUrl(s3, command, { expiresIn });
   return { uploadUrl, key };
@@ -205,4 +256,5 @@ module.exports = {
   listFiles,
   deleteFile,
   headFile,
+  testConnection,
 };

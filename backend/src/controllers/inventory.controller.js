@@ -104,6 +104,25 @@ exports.createUnit = async (req, res, next) => {
     const landmark = req.body.landmark;
     const state = req.body.state;
 
+    // Commercial-specific fields
+    const locality = req.body.locality;
+    const possession_status = req.body.possession_status;
+    const zone_type = req.body.zone_type;
+    const location_hub = req.body.location_hub;
+    const property_condition = req.body.property_condition;
+    const ownership = req.body.ownership;
+    const negotiable = req.body.negotiable;
+    const tax_govt_included = req.body.tax_govt_included;
+    const dg_ups_included = req.body.dg_ups_included;
+    const your_floor = req.body.your_floor;
+    const number_of_staircase = req.body.number_of_staircase;
+    const passenger_lifts = req.body.passenger_lifts;
+    const service_lifts = req.body.service_lifts;
+    const private_parking = req.body.private_parking;
+    const public_parking = req.body.public_parking;
+    const is_pre_leased = req.body.is_pre_leased;
+    const commercial_amenities = req.body.commercial_amenities;
+
     if (!unitNumber || !project || !tower) return res.status(400).json({ message: 'Required fields missing' });
     const unit = new InventoryUnit({
       project,
@@ -150,7 +169,24 @@ exports.createUnit = async (req, res, next) => {
       address_line2,
       pincode,
       landmark,
-      state
+      state,
+      locality,
+      possession_status,
+      zone_type,
+      location_hub,
+      property_condition,
+      ownership,
+      negotiable,
+      tax_govt_included,
+      dg_ups_included,
+      your_floor,
+      number_of_staircase,
+      passenger_lifts,
+      service_lifts,
+      private_parking,
+      public_parking,
+      is_pre_leased,
+      commercial_amenities
     });
     await unit.save();
 
@@ -442,31 +478,95 @@ exports.getStats = async (req, res, next) => {
   }
 };
 
+// Batch thumbnails — return the first image URL from DO Spaces for each unit ID
+exports.getUnitThumbnails = async (req, res, next) => {
+  try {
+    const { unitIds } = req.body;
+    if (!Array.isArray(unitIds) || unitIds.length === 0) {
+      return res.json({ thumbnails: {} });
+    }
+
+    // Limit to 50 units per request to prevent abuse
+    const ids = unitIds.slice(0, 50);
+    const thumbnails = {};
+
+    // Fetch first image for each unit in parallel
+    await Promise.all(
+      ids.map(async (id) => {
+        try {
+          const files = await spacesService.listFiles(id);
+          // Find first image file
+          const firstImage = files.find(f => f.type === 'image');
+          if (firstImage && firstImage.downloadUrl) {
+            thumbnails[id] = firstImage.downloadUrl;
+          }
+        } catch (err) {
+          // Silently skip units with no media
+        }
+      })
+    );
+
+    res.json({ thumbnails });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // Media upload handlers — uploads to DigitalOcean Spaces
 exports.uploadUnitMedia = async (req, res, next) => {
   try {
     const { id } = req.params;
     const files = req.files;
     console.log(`[UPLOAD_MEDIA] Unit ${id} — received ${files ? files.length : 0} files`);
+    console.log(`[UPLOAD_MEDIA] Request Content-Type: ${req.headers['content-type']}`);
+
     if (!files || files.length === 0) {
-      console.error('[UPLOAD_MEDIA] No files in req.files. Content-Type:', req.headers['content-type']);
-      return res.status(400).json({ message: 'No files uploaded. Make sure Content-Type boundary is set correctly.' });
+      console.error('[UPLOAD_MEDIA] No files in req.files.');
+      console.error('[UPLOAD_MEDIA] Content-Type:', req.headers['content-type']);
+      console.error('[UPLOAD_MEDIA] Body keys:', Object.keys(req.body || {}));
+      return res.status(400).json({
+        message: 'No files uploaded.',
+        hint: 'Ensure Content-Type is multipart/form-data and files are sent with field name "files".',
+        contentType: req.headers['content-type'],
+      });
     }
+
     const unit = await InventoryUnit.findById(id);
     if (!unit) return res.status(404).json({ message: 'Unit not found' });
 
     // Upload each file to DO Spaces under Dashboard/{unitId}/
     console.log(`[UPLOAD_MEDIA] Uploading ${files.length} files to DO Spaces for unit ${id}...`);
-    const results = await Promise.all(
-      files.map(file => {
-        console.log(`[UPLOAD_MEDIA] Uploading: ${file.originalname} (${file.mimetype}, ${file.size} bytes)`);
-        return spacesService.uploadFile(id, file.originalname, file.buffer, file.mimetype);
-      })
-    );
-    console.log(`[UPLOAD_MEDIA] Successfully uploaded ${results.length} files`);
+    const results = [];
+    const errors = [];
 
-    res.status(201).json({ message: 'Files uploaded to DigitalOcean Spaces', files: results });
+    for (const file of files) {
+      try {
+        console.log(`[UPLOAD_MEDIA] Uploading: ${file.originalname} (${file.mimetype}, ${file.size} bytes)`);
+        const result = await spacesService.uploadFile(id, file.originalname, file.buffer, file.mimetype);
+        results.push(result);
+        console.log(`[UPLOAD_MEDIA] ✓ Uploaded: ${file.originalname} → ${result.key}`);
+      } catch (fileErr) {
+        console.error(`[UPLOAD_MEDIA] ✗ Failed to upload ${file.originalname}:`, fileErr.message);
+        errors.push({ filename: file.originalname, error: fileErr.message });
+      }
+    }
+
+    if (results.length === 0) {
+      return res.status(500).json({
+        message: 'All file uploads failed to DigitalOcean Spaces',
+        errors,
+        hint: 'Check SPACES_KEY, SPACES_SECRET, and bucket name in .env',
+      });
+    }
+
+    console.log(`[UPLOAD_MEDIA] Completed: ${results.length} succeeded, ${errors.length} failed`);
+    res.status(201).json({
+      message: `${results.length} file(s) uploaded to DigitalOcean Spaces`,
+      files: results,
+      ...(errors.length > 0 ? { errors } : {}),
+    });
   } catch (err) {
+    console.error('[UPLOAD_MEDIA] Unexpected error:', err.message, err.stack);
     next(err);
   }
 };
