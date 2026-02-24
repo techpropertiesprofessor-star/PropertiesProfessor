@@ -338,10 +338,19 @@ function InventoryPage() {
       } else {
         setSelectedUnit(null);
       }
-      const mediaRes = await inventoryAPI.listUnitMedia(unitId);
-      // backend may return { media: [] } or an array directly
-      const mediaData = mediaRes?.data;
-      setUnitMedia(Array.isArray(mediaData) ? mediaData : (mediaData?.media || []));
+      try {
+        const mediaRes = await inventoryAPI.listUnitMedia(unitId);
+        // backend may return { media: [] } or an array directly
+        const mediaData = mediaRes?.data;
+        const mediaList = Array.isArray(mediaData) ? mediaData : (mediaData?.media || []);
+        // Only update if we got valid media with downloadUrls
+        if (mediaList.length > 0) {
+          setUnitMedia(mediaList);
+        }
+      } catch (mediaErr) {
+        console.warn('Failed to fetch unit media:', mediaErr.message);
+        // Don't clear unitMedia — keep whatever was set from upload response
+      }
     } catch (err) {
       console.error('Failed to view unit:', err);
     }
@@ -382,15 +391,19 @@ function InventoryPage() {
         }
       }
 
-      // Also refresh from server (background — to get canonical data)
-      try {
-        await viewUnit(selectedUnit.id || selectedUnit._id);
-      } catch (e) {
-        console.warn('Background media refresh failed:', e.message);
-      }
-
-      // Refresh thumbnail for this unit card (background)
+      // Also refresh media from server in background (don't overwrite immediately)
       const unitId = selectedUnit.id || selectedUnit._id;
+      inventoryAPI.listUnitMedia(unitId)
+        .then((mediaRes) => {
+          const mediaData = mediaRes?.data;
+          const mediaList = Array.isArray(mediaData) ? mediaData : (mediaData?.media || []);
+          if (mediaList.length > 0) {
+            setUnitMedia(mediaList);
+          }
+        })
+        .catch(() => {});
+
+      // Refresh thumbnail for this unit card (background, silently fail)
       inventoryAPI.getUnitThumbnails([unitId])
         .then((thumbRes) => {
           const thumbs = thumbRes.data?.thumbnails || {};
@@ -903,20 +916,29 @@ function InventoryPage() {
                     {/* Left: Image Gallery (DigitalOcean Spaces) */}
                     <div className="lg:w-1/2 p-5">
                       <div className="rounded-xl overflow-hidden bg-gray-100 aspect-video shadow-inner">
-                        {unitMedia && unitMedia.length > 0 && unitMedia[0].type === 'image' ? (
-                          <img src={unitMedia[0].downloadUrl} alt={unitMedia[0].name || ''} className="w-full h-full object-cover" />
-                        ) : unitMedia && unitMedia.length > 0 && unitMedia[0].type === 'video' ? (
-                          <video controls className="w-full h-full object-cover">
-                            <source src={unitMedia[0].downloadUrl} />
-                          </video>
-                        ) : selectedUnit.thumbnail ? (
-                          <img src={selectedUnit.thumbnail} alt={selectedUnit.name || ''} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
-                            <FiHome className="text-4xl mb-2" />
-                            <span className="text-sm">No image available</span>
-                          </div>
-                        )}
+                        {(() => {
+                          // Find first displayable media item
+                          const firstImage = unitMedia?.find(m => m.type === 'image' && (m.downloadUrl || m.url));
+                          const firstVideo = unitMedia?.find(m => m.type === 'video' && (m.downloadUrl || m.url));
+                          const imgSrc = firstImage ? (firstImage.downloadUrl || firstImage.url) : null;
+                          const vidSrc = firstVideo ? (firstVideo.downloadUrl || firstVideo.url) : null;
+                          const thumbSrc = selectedUnit?.thumbnail || unitThumbnails[selectedUnit?._id || selectedUnit?.id];
+
+                          if (imgSrc) {
+                            return <img src={imgSrc} alt={firstImage.name || ''} className="w-full h-full object-cover" onError={(e) => { e.target.style.display='none'; }} />;
+                          } else if (vidSrc) {
+                            return <video controls className="w-full h-full object-cover"><source src={vidSrc} /></video>;
+                          } else if (thumbSrc) {
+                            return <img src={thumbSrc} alt={selectedUnit?.name || ''} className="w-full h-full object-cover" onError={(e) => { e.target.style.display='none'; }} />;
+                          } else {
+                            return (
+                              <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
+                                <FiHome className="text-4xl mb-2" />
+                                <span className="text-sm">No image available</span>
+                              </div>
+                            );
+                          }
+                        })()}
                       </div>
                       {/* Thumbnail Grid with Download */}
                       {unitMedia.length > 0 && (
@@ -927,7 +949,9 @@ function InventoryPage() {
                               onClick={async () => {
                                 for (const m of unitMedia) {
                                   try {
-                                    const response = await fetch(m.downloadUrl);
+                                    const dlUrl = m.downloadUrl || m.url;
+                                    if (!dlUrl) continue;
+                                    const response = await fetch(dlUrl);
                                     const blob = await response.blob();
                                     const url = window.URL.createObjectURL(blob);
                                     const a = document.createElement('a');
@@ -949,13 +973,15 @@ function InventoryPage() {
                             </button>
                           </div>
                           <div className="grid grid-cols-4 gap-2">
-                            {unitMedia.map((m, idx) => (
+                            {unitMedia.map((m, idx) => {
+                              const mediaSrc = m.downloadUrl || m.url || '';
+                              return (
                               <div key={m.key || idx} className="relative group aspect-square overflow-hidden rounded-lg border-2 border-transparent hover:border-blue-400 cursor-pointer transition-all shadow-sm">
-                                {m.type === 'image' ? (
-                                  <img src={m.downloadUrl} alt={m.name || ''} className="w-full h-full object-cover" />
-                                ) : m.type === 'video' ? (
+                                {m.type === 'image' && mediaSrc ? (
+                                  <img src={mediaSrc} alt={m.name || ''} className="w-full h-full object-cover" onError={(e) => { e.target.style.display='none'; }} />
+                                ) : m.type === 'video' && mediaSrc ? (
                                   <video className="w-full h-full object-cover">
-                                    <source src={m.downloadUrl} />
+                                    <source src={mediaSrc} />
                                   </video>
                                 ) : (
                                   <div className="w-full h-full flex items-center justify-center bg-gray-200 text-gray-500 text-xs">
@@ -968,7 +994,9 @@ function InventoryPage() {
                                     onClick={async (e) => {
                                       e.stopPropagation();
                                       try {
-                                        const response = await fetch(m.downloadUrl);
+                                        const dlUrl = m.downloadUrl || m.url;
+                                        if (!dlUrl) return;
+                                        const response = await fetch(dlUrl);
                                         const blob = await response.blob();
                                         const url = window.URL.createObjectURL(blob);
                                         const a = document.createElement('a');
@@ -1000,7 +1028,7 @@ function InventoryPage() {
                                   {m.size ? (m.size > 1048576 ? `${(m.size / 1048576).toFixed(1)} MB` : `${(m.size / 1024).toFixed(0)} KB`) : ''}
                                 </div>
                               </div>
-                            ))}
+                            ); })}
                           </div>
                         </div>
                       )}

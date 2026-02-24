@@ -195,9 +195,12 @@ createTower: (projectId, data) =>
   getStats: () =>
     api.get("/inventory/stats"),
 
-  // Batch thumbnails from DO Spaces (uses /inventory/thumbnails — NOT under /units/ to avoid route collision)
+  // Batch thumbnails from DO Spaces — try both paths (old & new) for backward compatibility
   getUnitThumbnails: (unitIds) =>
-    retryRequest(() => api.post('/inventory/thumbnails', { unitIds })),
+    retryRequest(() =>
+      api.post('/inventory/thumbnails', { unitIds })
+        .catch(() => api.post('/inventory/units/thumbnails', { unitIds }))
+    ),
 
   // Media — DigitalOcean Spaces
   listUnitMedia: (id) =>
