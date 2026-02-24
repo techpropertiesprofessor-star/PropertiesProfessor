@@ -607,14 +607,16 @@ exports.uploadUnitMedia = async (req, res, next) => {
       results.map(async (r) => {
         try {
           const downloadUrl = await spacesService.getPresignedDownloadUrl(r.key, 3600);
+          console.log(`[UPLOAD_MEDIA] Generated presigned URL for ${r.key}: ${downloadUrl ? downloadUrl.substring(0, 80) + '...' : 'NONE'}`);
           return { ...r, downloadUrl };
-        } catch {
-          return r;
+        } catch (urlErr) {
+          console.error(`[UPLOAD_MEDIA] Failed to generate presigned URL for ${r.key}:`, urlErr.message);
+          return { ...r, downloadUrl: r.url }; // fallback to public URL
         }
       })
     );
 
-    console.log(`[UPLOAD_MEDIA] Completed: ${results.length} succeeded, ${errors.length} failed`);
+    console.log(`[UPLOAD_MEDIA] Completed: ${results.length} succeeded, ${errors.length} failed, files:`, filesWithUrls.map(f => ({ key: f.key, hasUrl: !!f.downloadUrl })));
     res.status(201).json({
       message: `${results.length} file(s) uploaded to DigitalOcean Spaces`,
       files: filesWithUrls,

@@ -277,17 +277,35 @@ function InventoryPage() {
 
   // Get the best URL for a media item
   const getMediaSrc = (item) => {
-    return item.downloadUrl || item.url || item.publicUrl || item.location || '';
+    if (!item) return '';
+    return item.downloadUrl || item.url || item.publicUrl || item.location || item.src || '';
   };
 
   // Normalize media items from any source (upload response, listMedia, etc.)
   const normalizeMediaItems = (items) => {
-    if (!Array.isArray(items)) return [];
-    return items.map(item => ({
-      ...item,
-      type: detectMediaType(item),
-      downloadUrl: getMediaSrc(item),
-    })).filter(m => m.downloadUrl); // only keep items with a valid URL
+    console.log('[NORMALIZE] Input items:', items);
+    if (!Array.isArray(items)) {
+      console.log('[NORMALIZE] Not an array, returning empty');
+      return [];
+    }
+    const normalized = items.map(item => {
+      const url = getMediaSrc(item);
+      console.log('[NORMALIZE] Processing item:', {
+        key: item.key,
+        url: item.url,
+        downloadUrl: item.downloadUrl,
+        resolvedUrl: url ? url.substring(0, 80) : 'NONE'
+      });
+      return {
+        ...item,
+        type: detectMediaType(item),
+        downloadUrl: url,
+      };
+    });
+    // Keep items that have either a key (can get URL later) or a URL
+    const result = normalized.filter(m => m.key || m.downloadUrl);
+    console.log('[NORMALIZE] Result count:', result.length, 'items');
+    return result;
   };
 
   const formatCurrency = (val) => {
@@ -369,10 +387,16 @@ function InventoryPage() {
         setSelectedUnit(null);
       }
       try {
+        console.log('[VIEW] Fetching media for unit:', unitId);
         const mediaRes = await inventoryAPI.listUnitMedia(unitId);
+        console.log('[VIEW] listUnitMedia response:', mediaRes?.data);
         // backend may return { media: [] } or an array directly
         const mediaData = mediaRes?.data;
-        const rawList = Array.isArray(mediaData) ? mediaData : (mediaData?.media || []);
+        const rawList = Array.isArray(mediaData) ? mediaData : (mediaData?.media || mediaData?.files || []);
+        console.log('[VIEW] Raw media list count:', rawList.length);
+        if (rawList.length > 0) {
+          console.log('[VIEW] First raw item:', JSON.stringify(rawList[0]));
+        }
         const mediaList = normalizeMediaItems(rawList);
         console.log('[INVENTORY] Media from server:', rawList.length, 'items, normalized:', mediaList.length, 'with URLs');
         // Only update if we got valid media with URLs
@@ -416,28 +440,40 @@ function InventoryPage() {
       if (uploadedFiles.length > 0) {
         const newMedia = normalizeMediaItems(uploadedFiles);
         console.log('[INVENTORY] Upload response normalized:', newMedia);
-        setUnitMedia(prev => [...prev, ...newMedia]);
+        if (newMedia.length > 0) {
+          setUnitMedia(prev => [...prev, ...newMedia]);
 
-        // Set thumbnail immediately for this unit
-        const firstImg = newMedia.find(m => m.type === 'image');
-        if (firstImg && firstImg.downloadUrl) {
-          const unitId = selectedUnit.id || selectedUnit._id;
-          setUnitThumbnails(prev => ({ ...prev, [unitId]: firstImg.downloadUrl }));
+          // Set thumbnail immediately for this unit
+          const firstImg = newMedia.find(m => m.type === 'image');
+          if (firstImg && firstImg.downloadUrl) {
+            const unitId = selectedUnit.id || selectedUnit._id;
+            setUnitThumbnails(prev => ({ ...prev, [unitId]: firstImg.downloadUrl }));
+          }
         }
       }
 
-      // Also refresh media from server in background (don't overwrite immediately)
+      // Always refresh media from server to get proper presigned URLs
       const unitId = selectedUnit.id || selectedUnit._id;
-      inventoryAPI.listUnitMedia(unitId)
-        .then((mediaRes) => {
-          const mediaData = mediaRes?.data;
-          const rawList = Array.isArray(mediaData) ? mediaData : (mediaData?.media || []);
-          const mediaList = normalizeMediaItems(rawList);
-          if (mediaList.length > 0) {
-            setUnitMedia(mediaList);
+      console.log('[UPLOAD] Fetching fresh media list from server...');
+      try {
+        const mediaRes = await inventoryAPI.listUnitMedia(unitId);
+        console.log('[UPLOAD] listUnitMedia response:', mediaRes.data);
+        const mediaData = mediaRes?.data;
+        const rawList = Array.isArray(mediaData) ? mediaData : (mediaData?.media || mediaData?.files || []);
+        console.log('[UPLOAD] Raw media list:', rawList);
+        const mediaList = normalizeMediaItems(rawList);
+        console.log('[UPLOAD] Normalized media list:', mediaList.length, 'items');
+        if (mediaList.length > 0) {
+          setUnitMedia(mediaList);
+          // Set thumbnail from fetched media
+          const firstImg = mediaList.find(m => m.type === 'image' && m.downloadUrl);
+          if (firstImg) {
+            setUnitThumbnails(prev => ({ ...prev, [unitId]: firstImg.downloadUrl }));
           }
-        })
-        .catch(() => {});
+        }
+      } catch (fetchErr) {
+        console.warn('[UPLOAD] Failed to fetch fresh media:', fetchErr.message);
+      }
 
       // Refresh thumbnail for this unit card (background, silently fail)
       inventoryAPI.getUnitThumbnails([unitId])
@@ -953,6 +989,8 @@ function InventoryPage() {
                     <div className="lg:w-1/2 p-5">
                       <div className="rounded-xl overflow-hidden bg-gray-100 aspect-video shadow-inner">
                         {(() => {
+                          // Debug: log unitMedia state
+                          console.log('[RENDER] unitMedia state:', unitMedia?.length, 'items', unitMedia);
                           // Find first displayable media item (auto-detect type from extension)
                           const firstImage = unitMedia?.find(m => detectMediaType(m) === 'image' && getMediaSrc(m));
                           const firstVideo = unitMedia?.find(m => detectMediaType(m) === 'video' && getMediaSrc(m));
@@ -963,8 +1001,10 @@ function InventoryPage() {
                           const anySrc = anyMedia ? getMediaSrc(anyMedia) : null;
                           const thumbSrc = selectedUnit?.thumbnail || unitThumbnails[selectedUnit?._id || selectedUnit?.id];
 
+                          console.log('[RENDER] URLs found:', { imgSrc: imgSrc?.substring(0, 50), vidSrc: vidSrc?.substring(0, 50), anySrc: anySrc?.substring(0, 50), thumbSrc: thumbSrc?.substring(0, 50) });
+
                           if (imgSrc) {
-                            return <img src={imgSrc} alt={firstImage.name || ''} className="w-full h-full object-cover" onError={(e) => { e.target.onerror=null; e.target.style.display='none'; }} />;
+                            return <img src={imgSrc} alt={firstImage.name || ''} className="w-full h-full object-cover" onError={(e) => { console.log('[RENDER] Image load error:', e.target.src); e.target.onerror=null; e.target.style.display='none'; }} />;
                           } else if (vidSrc) {
                             return <video controls className="w-full h-full object-cover"><source src={vidSrc} /></video>;
                           } else if (anySrc) {
@@ -977,6 +1017,26 @@ function InventoryPage() {
                               <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
                                 <FiHome className="text-4xl mb-2" />
                                 <span className="text-sm">No image available</span>
+                                <button
+                                  onClick={async () => {
+                                    const unitId = selectedUnit?.id || selectedUnit?._id;
+                                    if (!unitId) return;
+                                    try {
+                                      const mediaRes = await inventoryAPI.listUnitMedia(unitId);
+                                      const mediaData = mediaRes?.data;
+                                      const rawList = Array.isArray(mediaData) ? mediaData : (mediaData?.media || mediaData?.files || []);
+                                      const mediaList = normalizeMediaItems(rawList);
+                                      if (mediaList.length > 0) {
+                                        setUnitMedia(mediaList);
+                                      }
+                                    } catch (e) {
+                                      console.error('Refresh media failed:', e);
+                                    }
+                                  }}
+                                  className="mt-2 px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600"
+                                >
+                                  Refresh Media
+                                </button>
                               </div>
                             );
                           }
