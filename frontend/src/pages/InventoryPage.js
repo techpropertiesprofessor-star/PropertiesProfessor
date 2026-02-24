@@ -1403,10 +1403,15 @@ function InventoryPage() {
 
                         // If photos were provided, upload them separately to the media endpoint
                         let mediaUploadFailed = false;
+                        console.log('[CREATE] unitId:', unitId, 'photos:', form.photos?.length);
                         if (unitId && form.photos && form.photos.length > 0) {
                           try {
                             const mediaForm = new FormData();
-                            form.photos.forEach((file) => mediaForm.append('files', file));
+                            form.photos.forEach((file) => {
+                              console.log('[CREATE] Adding photo to FormData:', file.name, file.type, file.size);
+                              mediaForm.append('files', file);
+                            });
+                            console.log('[CREATE] Calling uploadUnitMedia...');
                             const uploadRes = await inventoryAPI.uploadUnitMedia(unitId, mediaForm);
                             console.log('Media upload success:', uploadRes.data);
                           } catch (mediaErr) {
