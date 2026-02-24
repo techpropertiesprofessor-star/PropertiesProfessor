@@ -432,6 +432,10 @@ function InventoryPage() {
       const res = await inventoryAPI.uploadUnitMedia(selectedUnit.id || selectedUnit._id, formData);
       console.log('[UPLOAD] API response:', res.data);
       const uploadedFiles = res.data?.files || [];
+      console.log('[UPLOAD] uploadedFiles count:', uploadedFiles.length);
+      if (uploadedFiles.length > 0) {
+        console.log('[UPLOAD] First file properties:', JSON.stringify(uploadedFiles[0], null, 2));
+      }
       const uploadedCount = uploadedFiles.length || files.length;
       setUploadSuccess(`${uploadedCount} file(s) uploaded successfully!`);
       setTimeout(() => setUploadSuccess(''), 5000);
