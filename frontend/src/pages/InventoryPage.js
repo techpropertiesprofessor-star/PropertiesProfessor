@@ -260,6 +260,34 @@ function InventoryPage() {
     return `${api.defaults.baseURL || ''}/${url}`.replace(/([^:]\/\/)\//g, '$1');
   };
 
+  // Detect file type from key/name/extension (don't trust server type field)
+  const detectMediaType = (item) => {
+    const name = (item.name || item.key || item.originalname || '').toLowerCase();
+    const ext = name.split('.').pop();
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(ext)) return 'image';
+    if (['mp4', 'mov', 'avi', 'mkv', 'webm'].includes(ext)) return 'video';
+    if (item.contentType && item.contentType.startsWith('image/')) return 'image';
+    if (item.contentType && item.contentType.startsWith('video/')) return 'video';
+    if (item.mimetype && item.mimetype.startsWith('image/')) return 'image';
+    if (item.mimetype && item.mimetype.startsWith('video/')) return 'video';
+    return item.type || 'file';
+  };
+
+  // Get the best URL for a media item
+  const getMediaSrc = (item) => {
+    return item.downloadUrl || item.url || item.publicUrl || item.location || '';
+  };
+
+  // Normalize media items from any source (upload response, listMedia, etc.)
+  const normalizeMediaItems = (items) => {
+    if (!Array.isArray(items)) return [];
+    return items.map(item => ({
+      ...item,
+      type: detectMediaType(item),
+      downloadUrl: getMediaSrc(item),
+    })).filter(m => m.downloadUrl); // only keep items with a valid URL
+  };
+
   const formatCurrency = (val) => {
     const n = Number(val);
     if (!Number.isFinite(n) || isNaN(n)) return '-';
@@ -342,8 +370,10 @@ function InventoryPage() {
         const mediaRes = await inventoryAPI.listUnitMedia(unitId);
         // backend may return { media: [] } or an array directly
         const mediaData = mediaRes?.data;
-        const mediaList = Array.isArray(mediaData) ? mediaData : (mediaData?.media || []);
-        // Only update if we got valid media with downloadUrls
+        const rawList = Array.isArray(mediaData) ? mediaData : (mediaData?.media || []);
+        const mediaList = normalizeMediaItems(rawList);
+        console.log('[INVENTORY] Media from server:', rawList.length, 'items, normalized:', mediaList.length, 'with URLs');
+        // Only update if we got valid media with URLs
         if (mediaList.length > 0) {
           setUnitMedia(mediaList);
         }
@@ -373,14 +403,8 @@ function InventoryPage() {
 
       // Immediately show uploaded images from the upload response (has downloadUrl)
       if (uploadedFiles.length > 0) {
-        const newMedia = uploadedFiles.map(f => ({
-          key: f.key,
-          name: f.url ? f.url.split('/').pop() : (f.key || '').split('/').pop(),
-          size: f.size || 0,
-          type: /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(f.key || '') ? 'image' :
-                /\.(mp4|mov|avi|mkv|webm)$/i.test(f.key || '') ? 'video' : 'file',
-          downloadUrl: f.downloadUrl || f.url,
-        }));
+        const newMedia = normalizeMediaItems(uploadedFiles);
+        console.log('[INVENTORY] Upload response normalized:', newMedia);
         setUnitMedia(prev => [...prev, ...newMedia]);
 
         // Set thumbnail immediately for this unit
@@ -396,7 +420,8 @@ function InventoryPage() {
       inventoryAPI.listUnitMedia(unitId)
         .then((mediaRes) => {
           const mediaData = mediaRes?.data;
-          const mediaList = Array.isArray(mediaData) ? mediaData : (mediaData?.media || []);
+          const rawList = Array.isArray(mediaData) ? mediaData : (mediaData?.media || []);
+          const mediaList = normalizeMediaItems(rawList);
           if (mediaList.length > 0) {
             setUnitMedia(mediaList);
           }
@@ -917,19 +942,25 @@ function InventoryPage() {
                     <div className="lg:w-1/2 p-5">
                       <div className="rounded-xl overflow-hidden bg-gray-100 aspect-video shadow-inner">
                         {(() => {
-                          // Find first displayable media item
-                          const firstImage = unitMedia?.find(m => m.type === 'image' && (m.downloadUrl || m.url));
-                          const firstVideo = unitMedia?.find(m => m.type === 'video' && (m.downloadUrl || m.url));
-                          const imgSrc = firstImage ? (firstImage.downloadUrl || firstImage.url) : null;
-                          const vidSrc = firstVideo ? (firstVideo.downloadUrl || firstVideo.url) : null;
+                          // Find first displayable media item (auto-detect type from extension)
+                          const firstImage = unitMedia?.find(m => detectMediaType(m) === 'image' && getMediaSrc(m));
+                          const firstVideo = unitMedia?.find(m => detectMediaType(m) === 'video' && getMediaSrc(m));
+                          // If no typed match, try ANY media with a URL
+                          const anyMedia = unitMedia?.find(m => getMediaSrc(m));
+                          const imgSrc = firstImage ? getMediaSrc(firstImage) : null;
+                          const vidSrc = firstVideo ? getMediaSrc(firstVideo) : null;
+                          const anySrc = anyMedia ? getMediaSrc(anyMedia) : null;
                           const thumbSrc = selectedUnit?.thumbnail || unitThumbnails[selectedUnit?._id || selectedUnit?.id];
 
                           if (imgSrc) {
-                            return <img src={imgSrc} alt={firstImage.name || ''} className="w-full h-full object-cover" onError={(e) => { e.target.style.display='none'; }} />;
+                            return <img src={imgSrc} alt={firstImage.name || ''} className="w-full h-full object-cover" onError={(e) => { e.target.onerror=null; e.target.style.display='none'; }} />;
                           } else if (vidSrc) {
                             return <video controls className="w-full h-full object-cover"><source src={vidSrc} /></video>;
+                          } else if (anySrc) {
+                            // Unknown type but has URL — try showing as image
+                            return <img src={anySrc} alt="" className="w-full h-full object-cover" onError={(e) => { e.target.onerror=null; e.target.style.display='none'; }} />;
                           } else if (thumbSrc) {
-                            return <img src={thumbSrc} alt={selectedUnit?.name || ''} className="w-full h-full object-cover" onError={(e) => { e.target.style.display='none'; }} />;
+                            return <img src={thumbSrc} alt={selectedUnit?.name || ''} className="w-full h-full object-cover" onError={(e) => { e.target.onerror=null; e.target.style.display='none'; }} />;
                           } else {
                             return (
                               <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
@@ -949,7 +980,7 @@ function InventoryPage() {
                               onClick={async () => {
                                 for (const m of unitMedia) {
                                   try {
-                                    const dlUrl = m.downloadUrl || m.url;
+                                    const dlUrl = getMediaSrc(m);
                                     if (!dlUrl) continue;
                                     const response = await fetch(dlUrl);
                                     const blob = await response.blob();
@@ -974,12 +1005,13 @@ function InventoryPage() {
                           </div>
                           <div className="grid grid-cols-4 gap-2">
                             {unitMedia.map((m, idx) => {
-                              const mediaSrc = m.downloadUrl || m.url || '';
+                              const mediaSrc = getMediaSrc(m);
+                              const mediaType = detectMediaType(m);
                               return (
                               <div key={m.key || idx} className="relative group aspect-square overflow-hidden rounded-lg border-2 border-transparent hover:border-blue-400 cursor-pointer transition-all shadow-sm">
-                                {m.type === 'image' && mediaSrc ? (
-                                  <img src={mediaSrc} alt={m.name || ''} className="w-full h-full object-cover" onError={(e) => { e.target.style.display='none'; }} />
-                                ) : m.type === 'video' && mediaSrc ? (
+                                {mediaType === 'image' && mediaSrc ? (
+                                  <img src={mediaSrc} alt={m.name || ''} className="w-full h-full object-cover" onError={(e) => { e.target.onerror=null; e.target.style.display='none'; }} />
+                                ) : mediaType === 'video' && mediaSrc ? (
                                   <video className="w-full h-full object-cover">
                                     <source src={mediaSrc} />
                                   </video>
@@ -994,7 +1026,7 @@ function InventoryPage() {
                                     onClick={async (e) => {
                                       e.stopPropagation();
                                       try {
-                                        const dlUrl = m.downloadUrl || m.url;
+                                        const dlUrl = getMediaSrc(m);
                                         if (!dlUrl) return;
                                         const response = await fetch(dlUrl);
                                         const blob = await response.blob();
