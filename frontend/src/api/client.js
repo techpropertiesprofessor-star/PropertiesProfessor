@@ -7,7 +7,9 @@ import axios from "axios";
  */
 const api = axios.create({
   baseURL: process.env.REACT_APP_API_URL,
-  withCredentials: true,
+  // withCredentials NOT needed — auth is via Authorization: Bearer header (JWT),
+  // not cookies. Removing this allows CORS to use origin:* (cross-origin works everywhere)
+  withCredentials: false,
   headers: {
     "Content-Type": "application/json",
   },

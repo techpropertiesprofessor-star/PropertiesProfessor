@@ -8,35 +8,12 @@ const app = express();
 /* ========================
    CORS CONFIG (PRODUCTION SAFE)
 ======================== */
-const allowedOrigins = [
-  "http://localhost:3000",
-  "http://localhost:3001",
-  "http://localhost:5000",
-  "https://dashboard.propertiesprofessor.com",
-  "http://dashboard.propertiesprofessor.com",
-  "https://www.dashboard.propertiesprofessor.com",
-  "https://propertiesprofessor.com",
-  "https://www.propertiesprofessor.com",
-];
-
+// CORS: Allow all origins — auth is JWT via Authorization header (no cookies/credentials)
+// This works cross-origin from any domain (Vercel, custom domains, etc.)
 app.use(
   cors({
-    origin: function (origin, callback) {
-      // Allow requests with no origin (mobile apps, curl, Postman, server-to-server)
-      if (!origin) return callback(null, true);
-
-      if (
-        allowedOrigins.includes(origin) ||
-        origin.endsWith('.vercel.app') ||
-        origin.endsWith('.propertiesprofessor.com')
-      ) {
-        return callback(null, true);
-      }
-
-      console.warn(`[CORS] Blocked request from origin: ${origin}`);
-      callback(new Error('Not allowed by CORS'));
-    },
-    credentials: true,
+    origin: '*',
+    credentials: false, // Not needed — we use Bearer tokens, not cookies
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: [
       'Content-Type',
@@ -47,11 +24,11 @@ app.use(
       'Cache-Control',
     ],
     exposedHeaders: ['Content-Disposition'],
-    maxAge: 86400, // Cache preflight for 24 hours
+    maxAge: 86400,
   })
 );
 
-// Ensure OPTIONS preflight is handled for all routes
+// Handle OPTIONS preflight for all routes
 app.options('*', cors());
 
 /* ========================
