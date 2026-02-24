@@ -53,7 +53,12 @@ api.interceptors.request.use(
     }
     // Auto-detect FormData — DELETE Content-Type so browser sets it with boundary
     if (config.data instanceof FormData) {
-      delete config.headers['Content-Type'];
+      // Use AxiosHeaders API (.delete) for Axios 1.x compatibility
+      if (config.headers && typeof config.headers.delete === 'function') {
+        config.headers.delete('Content-Type');
+      } else if (config.headers) {
+        delete config.headers['Content-Type'];
+      }
     }
     return config;
   },

@@ -1073,9 +1073,14 @@ function InventoryPage() {
                           <input
                             type="file"
                             multiple
-                            accept="image/*,video/*,.pdf"
+                            accept="image/*,video/*,.pdf,.heic,.heif"
                             className="hidden"
-                            onChange={(e) => handleUploadMedia(e.target.files)}
+                            onChange={(e) => {
+                              if (e.target.files && e.target.files.length > 0) {
+                                handleUploadMedia(e.target.files);
+                                e.target.value = ''; // Reset so same file can be re-selected
+                              }
+                            }}
                             disabled={uploading}
                           />
                           <FiDownload className="text-blue-500 text-xl mb-1 rotate-180" />

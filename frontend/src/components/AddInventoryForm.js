@@ -1390,7 +1390,7 @@ export default function AddInventoryForm({ onSubmit }) {
             <label className="flex flex-col items-center justify-center cursor-pointer py-6">
               <input
                 type="file"
-                accept="image/*,video/*"
+                accept="image/*,video/*,.pdf,.heic,.heif"
                 multiple
                 className="hidden"
                 onChange={e => {
@@ -1404,7 +1404,7 @@ export default function AddInventoryForm({ onSubmit }) {
               </svg>
               <span className="text-sm text-blue-700 font-semibold">Click to upload photos & videos</span>
               <span className="text-xs text-blue-400 mt-1">Files are stored on DigitalOcean Spaces</span>
-              <span className="text-[10px] text-gray-400 mt-1">Supports: JPG, PNG, GIF, WebP, MP4, MOV, AVI, MKV</span>
+              <span className="text-[10px] text-gray-400 mt-1">Supports: JPG, PNG, HEIC, GIF, WebP, MP4, MOV, PDF</span>
             </label>
           </div>
 
