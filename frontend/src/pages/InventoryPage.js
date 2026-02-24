@@ -357,12 +357,39 @@ function InventoryPage() {
       Array.from(files).forEach((f) => formData.append('files', f));
       if (caption) formData.append('caption', caption);
       const res = await inventoryAPI.uploadUnitMedia(selectedUnit.id || selectedUnit._id, formData);
-      const uploadedCount = res.data?.files?.length || files.length;
+      const uploadedFiles = res.data?.files || [];
+      const uploadedCount = uploadedFiles.length || files.length;
       setUploadSuccess(`${uploadedCount} file(s) uploaded successfully!`);
       setTimeout(() => setUploadSuccess(''), 5000);
-      // Refresh unit media in modal
-      await viewUnit(selectedUnit.id || selectedUnit._id);
-      // Refresh thumbnail for this unit card
+
+      // Immediately show uploaded images from the upload response (has downloadUrl)
+      if (uploadedFiles.length > 0) {
+        const newMedia = uploadedFiles.map(f => ({
+          key: f.key,
+          name: f.url ? f.url.split('/').pop() : (f.key || '').split('/').pop(),
+          size: f.size || 0,
+          type: /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(f.key || '') ? 'image' :
+                /\.(mp4|mov|avi|mkv|webm)$/i.test(f.key || '') ? 'video' : 'file',
+          downloadUrl: f.downloadUrl || f.url,
+        }));
+        setUnitMedia(prev => [...prev, ...newMedia]);
+
+        // Set thumbnail immediately for this unit
+        const firstImg = newMedia.find(m => m.type === 'image');
+        if (firstImg && firstImg.downloadUrl) {
+          const unitId = selectedUnit.id || selectedUnit._id;
+          setUnitThumbnails(prev => ({ ...prev, [unitId]: firstImg.downloadUrl }));
+        }
+      }
+
+      // Also refresh from server (background — to get canonical data)
+      try {
+        await viewUnit(selectedUnit.id || selectedUnit._id);
+      } catch (e) {
+        console.warn('Background media refresh failed:', e.message);
+      }
+
+      // Refresh thumbnail for this unit card (background)
       const unitId = selectedUnit.id || selectedUnit._id;
       inventoryAPI.getUnitThumbnails([unitId])
         .then((thumbRes) => {

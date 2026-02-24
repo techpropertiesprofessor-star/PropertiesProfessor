@@ -26,6 +26,10 @@ const requirePermission = require('../middlewares/permission.middleware');
 router.use(auth);
 router.use(requirePermission('Inventory'));
 
+// ─── Batch thumbnails MUST be BEFORE any :id routes to prevent route collision ───
+router.post('/thumbnails', inventoryController.getUnitThumbnails);
+router.post('/units/thumbnails', inventoryController.getUnitThumbnails); // keep old path too
+
 // Project routes
 router.get('/projects', inventoryController.getProjects);
 router.post('/projects', role(['ADMIN', 'MANAGER', 'EMPLOYEE']), inventoryController.createProject);
@@ -46,9 +50,6 @@ router.post('/units/:id/price-history', role(['ADMIN', 'MANAGER', 'EMPLOYEE']), 
 // Search & stats
 router.get('/search', inventoryController.searchUnits);
 router.get('/stats', inventoryController.getStats);
-
-// Batch thumbnails (first image from DO Spaces per unit)
-router.post('/units/thumbnails', inventoryController.getUnitThumbnails);
 
 // Media upload routes — with multer error handling
 router.post('/units/:id/media', role(['ADMIN', 'MANAGER', 'EMPLOYEE']), (req, res, next) => {
