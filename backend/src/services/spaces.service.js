@@ -243,7 +243,7 @@ async function listFiles(inventoryId) {
         const name = obj.Key.replace(prefix, '');
         const ext = path.extname(name).toLowerCase();
         const isVideo = ['.mp4', '.mov', '.avi', '.mkv', '.webm'].includes(ext);
-        const isImage = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'].includes(ext);
+        const isImage = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg', '.heic', '.heif', '.tiff', '.tif', '.avif'].includes(ext);
         return {
           key: obj.Key,
           name,

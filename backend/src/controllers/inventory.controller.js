@@ -567,8 +567,8 @@ exports.uploadUnitMedia = async (req, res, next) => {
 
         // Determine file type
         const ext = file.originalname.split('.').pop().toLowerCase();
-        const isVideo = ['.mp4', '.mov', '.avi', '.mkv', '.webm'].map(e => e.replace('.', '')).includes(ext);
-        const isImage = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'].map(e => e.replace('.', '')).includes(ext);
+        const isVideo = ['mp4', 'mov', 'avi', 'mkv', 'webm'].includes(ext);
+        const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'heic', 'heif', 'tiff', 'tif', 'avif'].includes(ext);
         const fileType = isVideo ? 'video' : isImage ? 'image' : 'file';
 
         newMediaEntries.push({

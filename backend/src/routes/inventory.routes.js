@@ -10,7 +10,7 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB per file
   fileFilter: (req, file, cb) => {
-    const allowed = /jpeg|jpg|png|gif|webp|bmp|svg|mp4|mov|avi|mkv|webm|pdf/;
+    const allowed = /jpeg|jpg|png|gif|webp|bmp|svg|heic|heif|tiff|tif|avif|mp4|mov|avi|mkv|webm|pdf/;
     const ext = file.originalname.split('.').pop().toLowerCase();
     if (allowed.test(ext)) {
       cb(null, true);
