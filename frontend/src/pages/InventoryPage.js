@@ -266,7 +266,7 @@ function InventoryPage() {
   const detectMediaType = (item) => {
     const name = (item.name || item.key || item.originalname || '').toLowerCase();
     const ext = name.split('.').pop();
-    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(ext)) return 'image';
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'heic', 'heif', 'tiff', 'tif', 'avif'].includes(ext)) return 'image';
     if (['mp4', 'mov', 'avi', 'mkv', 'webm'].includes(ext)) return 'video';
     if (item.contentType && item.contentType.startsWith('image/')) return 'image';
     if (item.contentType && item.contentType.startsWith('video/')) return 'video';
@@ -283,29 +283,14 @@ function InventoryPage() {
 
   // Normalize media items from any source (upload response, listMedia, etc.)
   const normalizeMediaItems = (items) => {
-    console.log('[NORMALIZE] Input items:', items);
-    if (!Array.isArray(items)) {
-      console.log('[NORMALIZE] Not an array, returning empty');
-      return [];
-    }
-    const normalized = items.map(item => {
-      const url = getMediaSrc(item);
-      console.log('[NORMALIZE] Processing item:', {
-        key: item.key,
-        url: item.url,
-        downloadUrl: item.downloadUrl,
-        resolvedUrl: url ? url.substring(0, 80) : 'NONE'
-      });
-      return {
+    if (!Array.isArray(items)) return [];
+    return items
+      .map(item => ({
         ...item,
         type: detectMediaType(item),
-        downloadUrl: url,
-      };
-    });
-    // Keep items that have either a key (can get URL later) or a URL
-    const result = normalized.filter(m => m.key || m.downloadUrl);
-    console.log('[NORMALIZE] Result count:', result.length, 'items');
-    return result;
+        downloadUrl: getMediaSrc(item),
+      }))
+      .filter(m => m.downloadUrl || m.key); // keep items with URL or at least a key
   };
 
   const formatCurrency = (val) => {
@@ -386,26 +371,19 @@ function InventoryPage() {
       } else {
         setSelectedUnit(null);
       }
+      // Fetch media for this unit
       try {
-        console.log('[VIEW] Fetching media for unit:', unitId);
         const mediaRes = await inventoryAPI.listUnitMedia(unitId);
-        console.log('[VIEW] listUnitMedia response:', mediaRes?.data);
-        // backend may return { media: [] } or an array directly
         const mediaData = mediaRes?.data;
         const rawList = Array.isArray(mediaData) ? mediaData : (mediaData?.media || mediaData?.files || []);
-        console.log('[VIEW] Raw media list count:', rawList.length);
-        if (rawList.length > 0) {
-          console.log('[VIEW] First raw item:', JSON.stringify(rawList[0]));
-        }
         const mediaList = normalizeMediaItems(rawList);
-        console.log('[INVENTORY] Media from server:', rawList.length, 'items, normalized:', mediaList.length, 'with URLs');
-        // Only update if we got valid media with URLs
         if (mediaList.length > 0) {
           setUnitMedia(mediaList);
+        } else {
+          setUnitMedia([]);
         }
       } catch (mediaErr) {
         console.warn('Failed to fetch unit media:', mediaErr.message);
-        // Don't clear unitMedia — keep whatever was set from upload response
       }
     } catch (err) {
       console.error('Failed to view unit:', err);
@@ -413,94 +391,57 @@ function InventoryPage() {
   };
 
   const handleUploadMedia = async (files) => {
-    console.log('[UPLOAD] handleUploadMedia called, selectedUnit:', selectedUnit?.id || selectedUnit?._id, 'files:', files?.length);
-    if (!selectedUnit) {
-      console.error('[UPLOAD] No selectedUnit, aborting');
-      return;
-    }
+    if (!selectedUnit) return;
+    const unitId = selectedUnit.id || selectedUnit._id;
     setUploading(true);
     setUploadError('');
     setUploadSuccess('');
     try {
       const formData = new FormData();
-      Array.from(files).forEach((f) => {
-        console.log('[UPLOAD] Adding file to FormData:', f.name, f.type, f.size);
-        formData.append('files', f);
-      });
+      Array.from(files).forEach((f) => formData.append('files', f));
       if (caption) formData.append('caption', caption);
-      console.log('[UPLOAD] Calling API uploadUnitMedia...');
-      const res = await inventoryAPI.uploadUnitMedia(selectedUnit.id || selectedUnit._id, formData);
-      console.log('[UPLOAD] API response:', res.data);
+
+      const res = await inventoryAPI.uploadUnitMedia(unitId, formData);
       const uploadedFiles = res.data?.files || [];
-      console.log('[UPLOAD] uploadedFiles count:', uploadedFiles.length);
-      if (uploadedFiles.length > 0) {
-        console.log('[UPLOAD] First file properties:', JSON.stringify(uploadedFiles[0], null, 2));
-      }
       const uploadedCount = uploadedFiles.length || files.length;
       setUploadSuccess(`${uploadedCount} file(s) uploaded successfully!`);
       setTimeout(() => setUploadSuccess(''), 5000);
 
-      // Immediately show uploaded images from the upload response (has downloadUrl)
+      // Immediately show uploaded images from the upload response
       if (uploadedFiles.length > 0) {
         const newMedia = normalizeMediaItems(uploadedFiles);
-        console.log('[INVENTORY] Upload response normalized:', newMedia);
         if (newMedia.length > 0) {
           setUnitMedia(prev => [...prev, ...newMedia]);
-
-          // Set thumbnail immediately for this unit
-          const firstImg = newMedia.find(m => m.type === 'image');
-          if (firstImg && firstImg.downloadUrl) {
-            const unitId = selectedUnit.id || selectedUnit._id;
-            setUnitThumbnails(prev => ({ ...prev, [unitId]: firstImg.downloadUrl }));
-          }
-        }
-      }
-
-      // Always refresh media from server to get proper presigned URLs
-      const unitId = selectedUnit.id || selectedUnit._id;
-      console.log('[UPLOAD] Fetching fresh media list from server...');
-      try {
-        const mediaRes = await inventoryAPI.listUnitMedia(unitId);
-        console.log('[UPLOAD] listUnitMedia response:', mediaRes.data);
-        const mediaData = mediaRes?.data;
-        const rawList = Array.isArray(mediaData) ? mediaData : (mediaData?.media || mediaData?.files || []);
-        console.log('[UPLOAD] Raw media list:', rawList);
-        const mediaList = normalizeMediaItems(rawList);
-        console.log('[UPLOAD] Normalized media list:', mediaList.length, 'items');
-        if (mediaList.length > 0) {
-          setUnitMedia(mediaList);
-          // Set thumbnail from fetched media
-          const firstImg = mediaList.find(m => m.type === 'image' && m.downloadUrl);
+          const firstImg = newMedia.find(m => m.type === 'image' && m.downloadUrl);
           if (firstImg) {
             setUnitThumbnails(prev => ({ ...prev, [unitId]: firstImg.downloadUrl }));
           }
         }
-      } catch (fetchErr) {
-        console.warn('[UPLOAD] Failed to fetch fresh media:', fetchErr.message);
       }
 
-      // Refresh thumbnail for this unit card (background, silently fail)
-      inventoryAPI.getUnitThumbnails([unitId])
-        .then((thumbRes) => {
-          const thumbs = thumbRes.data?.thumbnails || {};
-          if (Object.keys(thumbs).length > 0) {
-            setUnitThumbnails(prev => ({ ...prev, ...thumbs }));
+      // Refresh media from server (with small delay to allow DB to sync)
+      setTimeout(async () => {
+        try {
+          const mediaRes = await inventoryAPI.listUnitMedia(unitId);
+          const mediaData = mediaRes?.data;
+          const rawList = Array.isArray(mediaData) ? mediaData : (mediaData?.media || mediaData?.files || []);
+          const mediaList = normalizeMediaItems(rawList);
+          if (mediaList.length > 0) {
+            setUnitMedia(mediaList);
+            const firstImg = mediaList.find(m => m.type === 'image' && m.downloadUrl);
+            if (firstImg) {
+              setUnitThumbnails(prev => ({ ...prev, [unitId]: firstImg.downloadUrl }));
+            }
           }
-        })
-        .catch(() => {});
+        } catch (e) { /* silent */ }
+      }, 1500);
+
       setCaption('');
     } catch (err) {
       console.error('Upload media failed:', err);
-      let errorMsg;
-      if (!err.response) {
-        // Network error — likely Render cold start or connectivity issue
-        errorMsg = 'Network error — server may be starting up. Please wait a moment and try again.';
-      } else {
-        errorMsg = err.response?.data?.message
-          || err.response?.data?.hint
-          || err.message
-          || 'Upload failed. Please try again.';
-      }
+      const errorMsg = !err.response
+        ? 'Network error — server may be starting up. Please wait and try again.'
+        : (err.response?.data?.message || err.response?.data?.hint || err.message || 'Upload failed. Please try again.');
       setUploadError(errorMsg);
       setTimeout(() => setUploadError(''), 10000);
     } finally {
@@ -993,22 +934,17 @@ function InventoryPage() {
                     <div className="lg:w-1/2 p-5">
                       <div className="rounded-xl overflow-hidden bg-gray-100 aspect-video shadow-inner">
                         {(() => {
-                          // Debug: log unitMedia state
-                          console.log('[RENDER] unitMedia state:', unitMedia?.length, 'items', unitMedia);
-                          // Find first displayable media item (auto-detect type from extension)
+                          // Find first displayable media item
                           const firstImage = unitMedia?.find(m => detectMediaType(m) === 'image' && getMediaSrc(m));
                           const firstVideo = unitMedia?.find(m => detectMediaType(m) === 'video' && getMediaSrc(m));
-                          // If no typed match, try ANY media with a URL
                           const anyMedia = unitMedia?.find(m => getMediaSrc(m));
                           const imgSrc = firstImage ? getMediaSrc(firstImage) : null;
                           const vidSrc = firstVideo ? getMediaSrc(firstVideo) : null;
                           const anySrc = anyMedia ? getMediaSrc(anyMedia) : null;
                           const thumbSrc = selectedUnit?.thumbnail || unitThumbnails[selectedUnit?._id || selectedUnit?.id];
 
-                          console.log('[RENDER] URLs found:', { imgSrc: imgSrc?.substring(0, 50), vidSrc: vidSrc?.substring(0, 50), anySrc: anySrc?.substring(0, 50), thumbSrc: thumbSrc?.substring(0, 50) });
-
                           if (imgSrc) {
-                            return <img src={imgSrc} alt={firstImage.name || ''} className="w-full h-full object-cover" onError={(e) => { console.log('[RENDER] Image load error:', e.target.src); e.target.onerror=null; e.target.style.display='none'; }} />;
+                            return <img src={imgSrc} alt={firstImage.name || ''} className="w-full h-full object-cover" onError={(e) => { e.target.onerror=null; e.target.style.display='none'; }} />;
                           } else if (vidSrc) {
                             return <video controls className="w-full h-full object-cover"><source src={vidSrc} /></video>;
                           } else if (anySrc) {
@@ -1148,13 +1084,10 @@ function InventoryPage() {
                             multiple
                             accept="image/*,video/*,.pdf,.heic,.heif"
                             className="hidden"
-                            onClick={(e) => console.log('[UPLOAD_INPUT] File input clicked, disabled:', uploading)}
                             onChange={(e) => {
-                              console.log('[UPLOAD_INPUT] onChange triggered, files:', e.target.files?.length);
                               if (e.target.files && e.target.files.length > 0) {
-                                console.log('[UPLOAD_INPUT] Calling handleUploadMedia with', e.target.files.length, 'files');
                                 handleUploadMedia(e.target.files);
-                                e.target.value = ''; // Reset so same file can be re-selected
+                                e.target.value = '';
                               }
                             }}
                             disabled={uploading}
@@ -1467,19 +1400,13 @@ function InventoryPage() {
 
                         // If photos were provided, upload them separately to the media endpoint
                         let mediaUploadFailed = false;
-                        console.log('[CREATE] unitId:', unitId, 'photos:', form.photos?.length);
                         if (unitId && form.photos && form.photos.length > 0) {
                           try {
                             const mediaForm = new FormData();
-                            form.photos.forEach((file) => {
-                              console.log('[CREATE] Adding photo to FormData:', file.name, file.type, file.size);
-                              mediaForm.append('files', file);
-                            });
-                            console.log('[CREATE] Calling uploadUnitMedia...');
-                            const uploadRes = await inventoryAPI.uploadUnitMedia(unitId, mediaForm);
-                            console.log('Media upload success:', uploadRes.data);
+                            form.photos.forEach((file) => mediaForm.append('files', file));
+                            await inventoryAPI.uploadUnitMedia(unitId, mediaForm);
                           } catch (mediaErr) {
-                            console.error('Failed to upload photos to DigitalOcean Spaces:', mediaErr);
+                            console.error('Failed to upload photos:', mediaErr);
                             mediaUploadFailed = true;
                             setCreateError('Unit created but media upload failed: ' + (mediaErr.response?.data?.message || mediaErr.message || 'Check backend logs'));
                           }

@@ -607,19 +607,29 @@ exports.uploadUnitMedia = async (req, res, next) => {
       results.map(async (r) => {
         try {
           const downloadUrl = await spacesService.getPresignedDownloadUrl(r.key, 3600);
-          console.log(`[UPLOAD_MEDIA] Generated presigned URL for ${r.key}: ${downloadUrl ? downloadUrl.substring(0, 80) + '...' : 'NONE'}`);
-          return { ...r, downloadUrl };
+          console.log(`[UPLOAD_MEDIA] ✓ Presigned URL for ${r.key}`);
+          return { key: r.key, url: r.url, size: r.size, downloadUrl };
         } catch (urlErr) {
-          console.error(`[UPLOAD_MEDIA] Failed to generate presigned URL for ${r.key}:`, urlErr.message);
-          return { ...r, downloadUrl: r.url }; // fallback to public URL
+          console.error(`[UPLOAD_MEDIA] ✗ Presigned URL failed for ${r.key}:`, urlErr.message);
+          // Fallback to public/CDN URL
+          const fallbackUrl = r.url || spacesService.buildPublicUrl(r.key);
+          return { key: r.key, url: fallbackUrl, size: r.size, downloadUrl: fallbackUrl };
         }
       })
     );
 
-    console.log(`[UPLOAD_MEDIA] Completed: ${results.length} succeeded, ${errors.length} failed, files:`, filesWithUrls.map(f => ({ key: f.key, hasUrl: !!f.downloadUrl })));
+    // Merge file type info into response
+    const responseFiles = filesWithUrls.map((f, i) => ({
+      ...f,
+      name: newMediaEntries[i]?.name || f.key.split('/').pop(),
+      type: newMediaEntries[i]?.type || 'file',
+    }));
+
+    console.log(`[UPLOAD_MEDIA] Completed: ${results.length} OK, ${errors.length} failed`);
+    console.log(`[UPLOAD_MEDIA] Response files:`, responseFiles.map(f => ({ key: f.key, type: f.type, hasDownloadUrl: !!f.downloadUrl, hasUrl: !!f.url })));
     res.status(201).json({
-      message: `${results.length} file(s) uploaded to DigitalOcean Spaces`,
-      files: filesWithUrls,
+      message: 'Files uploaded successfully',
+      files: responseFiles,
       ...(errors.length > 0 ? { errors } : {}),
     });
   } catch (err) {
@@ -631,10 +641,14 @@ exports.uploadUnitMedia = async (req, res, next) => {
 exports.getUnitMedia = async (req, res, next) => {
   try {
     const { id } = req.params;
+    console.log(`[GET_MEDIA] Fetching media for unit ${id}`);
     const unit = await InventoryUnit.findById(id);
     if (!unit) return res.status(404).json({ message: 'Unit not found' });
 
     const storedFiles = unit.mediaFiles || [];
+    console.log(`[GET_MEDIA] DB mediaFiles count: ${storedFiles.length}`);
+
+    let mediaResult = [];
 
     if (storedFiles.length > 0) {
       // Generate fresh presigned URLs from stored keys
@@ -652,17 +666,53 @@ exports.getUnitMedia = async (req, res, next) => {
             };
           } catch (err) {
             console.error(`[GET_MEDIA] Failed to generate URL for key ${mf.key}:`, err.message);
-            return null;
+            // Return with public URL as fallback
+            return {
+              key: mf.key,
+              name: mf.name || mf.key.split('/').pop(),
+              size: mf.size || 0,
+              lastModified: mf.uploadedAt,
+              type: mf.type || 'file',
+              downloadUrl: spacesService.buildPublicUrl(mf.key),
+            };
           }
         })
       );
-      res.json({ media: files.filter(Boolean) });
-    } else {
-      // Fallback: list directly from DO Spaces (for units without DB-stored references)
-      const files = await spacesService.listFiles(id);
-      res.json({ media: files });
+      mediaResult = files.filter(Boolean);
     }
+
+    // If DB had no records, or as additional check, also list from Spaces directly
+    if (mediaResult.length === 0) {
+      console.log(`[GET_MEDIA] No DB records, listing from DO Spaces for unit ${id}...`);
+      try {
+        const spacesFiles = await spacesService.listFiles(id);
+        console.log(`[GET_MEDIA] Spaces listing returned ${spacesFiles.length} files`);
+        mediaResult = spacesFiles;
+
+        // Sync to DB if found files in Spaces but not in DB
+        if (spacesFiles.length > 0 && storedFiles.length === 0) {
+          console.log(`[GET_MEDIA] Syncing ${spacesFiles.length} Spaces files to DB for unit ${id}`);
+          const newEntries = spacesFiles.map(f => ({
+            key: f.key,
+            name: f.name,
+            type: f.type || 'file',
+            size: f.size || 0,
+            uploadedAt: f.lastModified || new Date()
+          }));
+          await InventoryUnit.findByIdAndUpdate(id, {
+            $push: { mediaFiles: { $each: newEntries } }
+          });
+          console.log(`[GET_MEDIA] Synced ${newEntries.length} file references to DB`);
+        }
+      } catch (spacesErr) {
+        console.error(`[GET_MEDIA] Spaces listing failed:`, spacesErr.message);
+      }
+    }
+
+    console.log(`[GET_MEDIA] Returning ${mediaResult.length} media items for unit ${id}`);
+    res.json({ media: mediaResult });
   } catch (err) {
+    console.error(`[GET_MEDIA] Error:`, err.message);
     next(err);
   }
 };

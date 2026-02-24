@@ -1393,11 +1393,8 @@ export default function AddInventoryForm({ onSubmit }) {
                 accept="image/*,video/*,.pdf,.heic,.heif"
                 multiple
                 className="hidden"
-                onClick={() => console.log('[ADD_FORM] File input clicked')}
                 onChange={e => {
-                  console.log('[ADD_FORM] Files selected:', e.target.files?.length);
                   const newFiles = Array.from(e.target.files || []);
-                  newFiles.forEach(f => console.log('[ADD_FORM] File:', f.name, f.type, f.size));
                   handleChange('photos', [...(form.photos || []), ...newFiles]);
                   e.target.value = '';
                 }}
