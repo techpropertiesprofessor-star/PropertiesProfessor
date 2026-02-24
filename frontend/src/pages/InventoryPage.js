@@ -389,15 +389,24 @@ function InventoryPage() {
   };
 
   const handleUploadMedia = async (files) => {
-    if (!selectedUnit) return;
+    console.log('[UPLOAD] handleUploadMedia called, selectedUnit:', selectedUnit?.id || selectedUnit?._id, 'files:', files?.length);
+    if (!selectedUnit) {
+      console.error('[UPLOAD] No selectedUnit, aborting');
+      return;
+    }
     setUploading(true);
     setUploadError('');
     setUploadSuccess('');
     try {
       const formData = new FormData();
-      Array.from(files).forEach((f) => formData.append('files', f));
+      Array.from(files).forEach((f) => {
+        console.log('[UPLOAD] Adding file to FormData:', f.name, f.type, f.size);
+        formData.append('files', f);
+      });
       if (caption) formData.append('caption', caption);
+      console.log('[UPLOAD] Calling API uploadUnitMedia...');
       const res = await inventoryAPI.uploadUnitMedia(selectedUnit.id || selectedUnit._id, formData);
+      console.log('[UPLOAD] API response:', res.data);
       const uploadedFiles = res.data?.files || [];
       const uploadedCount = uploadedFiles.length || files.length;
       setUploadSuccess(`${uploadedCount} file(s) uploaded successfully!`);
@@ -1075,8 +1084,11 @@ function InventoryPage() {
                             multiple
                             accept="image/*,video/*,.pdf,.heic,.heif"
                             className="hidden"
+                            onClick={(e) => console.log('[UPLOAD_INPUT] File input clicked, disabled:', uploading)}
                             onChange={(e) => {
+                              console.log('[UPLOAD_INPUT] onChange triggered, files:', e.target.files?.length);
                               if (e.target.files && e.target.files.length > 0) {
+                                console.log('[UPLOAD_INPUT] Calling handleUploadMedia with', e.target.files.length, 'files');
                                 handleUploadMedia(e.target.files);
                                 e.target.value = ''; // Reset so same file can be re-selected
                               }
