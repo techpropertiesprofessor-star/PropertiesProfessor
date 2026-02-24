@@ -8,22 +8,18 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 
 const STAGE_COLORS = {
   new: '#3B82F6',
-  contacted: '#8B5CF6',
-  qualified: '#EC4899',
-  proposal: '#F59E0B',
-  negotiation: '#EF4444',
-  won: '#10B981',
-  lost: '#6B7280'
+  assigned: '#8B5CF6',
+  interested: '#EC4899',
+  callback: '#F59E0B',
+  closed: '#10B981'
 };
 
 const STAGE_LABELS = {
   new: 'New',
-  contacted: 'Contacted',
-  qualified: 'Qualified',
-  proposal: 'Proposal',
-  negotiation: 'Negotiation',
-  won: 'Won',
-  lost: 'Lost'
+  assigned: 'Assigned',
+  interested: 'Interested',
+  callback: 'Callback',
+  closed: 'Closed'
 };
 
 const LeadsFunnelChart = ({ data, onRefresh }) => {

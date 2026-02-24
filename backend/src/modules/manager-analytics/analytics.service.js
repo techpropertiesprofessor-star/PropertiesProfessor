@@ -96,36 +96,34 @@ class AnalyticsService {
             _id: '$assignedTo',
             totalTasks: { $sum: 1 },
             completedTasks: {
-              $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] }
+              $sum: { $cond: [{ $in: ['$status', ['COMPLETED', 'completed']] }, 1, 0] }
             },
             inProgressTasks: {
-              $sum: { $cond: [{ $eq: ['$status', 'in-progress'] }, 1, 0] }
+              $sum: { $cond: [{ $in: ['$status', ['IN_PROGRESS', 'in-progress', 'in_progress']] }, 1, 0] }
             },
             pendingTasks: {
-              $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] }
+              $sum: { $cond: [{ $in: ['$status', ['PENDING', 'pending']] }, 1, 0] }
             }
           }
         },
         {
           $lookup: {
-            from: 'users',
+            from: 'employees',
             localField: '_id',
             foreignField: '_id',
-            as: 'userInfo'
+            as: 'employeeInfo'
           }
         },
         {
           $unwind: {
-            path: '$userInfo',
+            path: '$employeeInfo',
             preserveNullAndEmptyArrays: true
           }
         },
         {
           $project: {
             employeeId: '$_id',
-            employeeName: {
-              $concat: ['$userInfo.firstName', ' ', '$userInfo.lastName']
-            },
+            employeeName: { $ifNull: ['$employeeInfo.name', 'Unknown'] },
             totalTasks: 1,
             completedTasks: 1,
             inProgressTasks: 1,
@@ -172,8 +170,8 @@ class AnalyticsService {
         }
       ]);
 
-      // Define funnel order
-      const stageOrder = ['new', 'contacted', 'qualified', 'proposal', 'negotiation', 'won', 'lost'];
+      // Define funnel order matching actual Lead model statuses
+      const stageOrder = ['new', 'assigned', 'interested', 'callback', 'closed'];
       const orderedFunnel = stageOrder.map(stage => {
         const found = funnel.find(f => f.stage === stage);
         return {
@@ -206,7 +204,7 @@ class AnalyticsService {
             _id: '$source',
             count: { $sum: 1 },
             wonCount: {
-              $sum: { $cond: [{ $eq: ['$status', 'won'] }, 1, 0] }
+              $sum: { $cond: [{ $in: ['$status', ['closed', 'won', 'interested']] }, 1, 0] }
             }
           }
         },
@@ -348,7 +346,7 @@ class AnalyticsService {
       // Completed tasks (today)
       const completedTasksToday = this.Task
         ? await this.Task.countDocuments({
-            status: 'completed',
+            status: { $in: ['COMPLETED', 'completed'] },
             updatedAt: { $gte: today }
           })
         : 0;
@@ -358,11 +356,11 @@ class AnalyticsService {
         ? await this.Lead.countDocuments()
         : 0;
 
-      // Won leads (this month)
+      // Closed/Won leads (this month)
       const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
       const wonLeadsThisMonth = this.Lead
         ? await this.Lead.countDocuments({
-            status: 'won',
+            status: { $in: ['closed', 'won', 'interested'] },
             updatedAt: { $gte: firstDayOfMonth }
           })
         : 0;
@@ -386,7 +384,7 @@ class AnalyticsService {
       const presentToday = this.Attendance
         ? await this.Attendance.countDocuments({
             date: { $gte: today },
-            status: 'present'
+            status: { $in: ['PRESENT', 'present'] }
           })
         : 0;
 
@@ -435,7 +433,7 @@ class AnalyticsService {
       if (this.Task) {
         const overdueTasks = await this.Task.countDocuments({
           dueDate: { $lt: today },
-          status: { $nin: ['completed', 'cancelled'] }
+          status: { $nin: ['completed', 'COMPLETED', 'cancelled', 'ARCHIVED'] }
         });
 
         if (overdueTasks > 0) {
@@ -490,7 +488,7 @@ class AnalyticsService {
         const totalActive = await this.Employee.countDocuments({ status: 'active' });
         const presentToday = await this.Attendance.countDocuments({
           date: { $gte: today },
-          status: 'present'
+          status: { $in: ['PRESENT', 'present'] }
         });
         const absentees = totalActive - presentToday;
 

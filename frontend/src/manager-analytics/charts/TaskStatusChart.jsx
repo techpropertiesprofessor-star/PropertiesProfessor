@@ -8,17 +8,25 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recha
 
 const COLORS = {
   pending: '#f59e0b',
+  PENDING: '#f59e0b',
   'in-progress': '#3b82f6',
+  IN_PROGRESS: '#3b82f6',
   completed: '#10b981',
+  COMPLETED: '#10b981',
   cancelled: '#ef4444',
+  ARCHIVED: '#6b7280',
   'on-hold': '#6b7280'
 };
 
 const STATUS_LABELS = {
   pending: 'Pending',
+  PENDING: 'Pending',
   'in-progress': 'In Progress',
+  IN_PROGRESS: 'In Progress',
   completed: 'Completed',
+  COMPLETED: 'Completed',
   cancelled: 'Cancelled',
+  ARCHIVED: 'Archived',
   'on-hold': 'On Hold'
 };
 

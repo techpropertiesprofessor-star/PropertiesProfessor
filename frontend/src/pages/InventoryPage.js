@@ -1136,24 +1136,38 @@ function InventoryPage() {
                             { icon: <FiTag className="text-indigo-500" />, label: 'Looking To', value: selectedUnit.looking_to },
                             { icon: <FiMapPin className="text-pink-500" />, label: 'City', value: selectedUnit.city },
                             { icon: <FiNavigation className="text-rose-500" />, label: 'Locality', value: selectedUnit.locality },
+                            { icon: <FiMapPin className="text-gray-500" />, label: 'Address', value: [selectedUnit.address_line1, selectedUnit.address_line2, selectedUnit.landmark].filter(Boolean).join(', ') || null },
+                            { icon: <FiMapPin className="text-blue-400" />, label: 'Pincode', value: selectedUnit.pincode },
+                            { icon: <FiMapPin className="text-indigo-400" />, label: 'State', value: selectedUnit.state },
                             { icon: <FiActivity className="text-amber-500" />, label: 'Possession Status', value: selectedUnit.possession_status?.replace(/_/g, ' ') },
                             { icon: <FiGrid className="text-teal-500" />, label: 'Zone Type', value: selectedUnit.zone_type?.replace(/_/g, ' ') },
                             { icon: <FiBriefcase className="text-blue-600" />, label: 'Location Hub', value: selectedUnit.location_hub?.replace(/_/g, ' ') },
                             { icon: <FiBox className="text-green-500" />, label: 'Property Condition', value: selectedUnit.property_condition?.replace(/_/g, ' ') },
+                            { icon: <FiCalendar className="text-orange-400" />, label: 'Property Age', value: selectedUnit.age != null && selectedUnit.age !== '' ? `${selectedUnit.age} years` : null },
                             { icon: <FiMaximize className="text-cyan-500" />, label: 'Built-up Area', value: selectedUnit.built_up_area ? `${selectedUnit.built_up_area} sqft` : null },
+                            { icon: <FiMaximize className="text-teal-400" />, label: 'Carpet Area', value: selectedUnit.carpet_area ? `${selectedUnit.carpet_area} sqft` : null },
+                            { icon: <FiMaximize className="text-indigo-500" />, label: 'Super Area', value: selectedUnit.super_area ? `${selectedUnit.super_area} sqft` : null },
                             { icon: <FiShield className="text-violet-500" />, label: 'Ownership', value: selectedUnit.ownership?.replace(/_/g, ' ') },
+                            { icon: <FiGrid className="text-green-500" />, label: 'Furnished Status', value: selectedUnit.furnished_status?.replace(/_/g, ' ') },
                             { icon: <FiDollarSign className="text-emerald-500" />, label: 'Price', value: selectedUnit.base_price ? `₹${Number(selectedUnit.base_price).toLocaleString('en-IN')}` : null },
+                            { icon: <FiDollarSign className="text-green-600" />, label: 'Final Price', value: selectedUnit.final_price ? `₹${Number(selectedUnit.final_price).toLocaleString('en-IN')}` : null },
+                            { icon: <FiDollarSign className="text-teal-600" />, label: 'Price/sqft', value: selectedUnit.price_per_sqft ? `₹${Number(selectedUnit.price_per_sqft).toLocaleString('en-IN')}` : null },
                             { icon: <FiTag className="text-green-600" />, label: 'Negotiable', value: selectedUnit.negotiable },
                             { icon: <FiClipboard className="text-gray-500" />, label: 'Tax & Govt. Included', value: selectedUnit.tax_govt_included },
                             { icon: <FiActivity className="text-orange-500" />, label: 'DG & UPS Included', value: selectedUnit.dg_ups_included },
-                            { icon: <FiLayers className="text-purple-500" />, label: 'Floor', value: selectedUnit.your_floor ? `${selectedUnit.your_floor}${selectedUnit.total_floors ? ` / ${selectedUnit.total_floors}` : ''}` : null },
-                            { icon: <FiLayers className="text-blue-400" />, label: 'Staircases', value: selectedUnit.number_of_staircase },
-                            { icon: <FiNavigation className="text-indigo-500" />, label: 'Passenger Lifts', value: selectedUnit.passenger_lifts },
-                            { icon: <FiPackage className="text-gray-600" />, label: 'Service Lifts', value: selectedUnit.service_lifts },
-                            { icon: <FiTruck className="text-blue-500" />, label: 'Private Parking', value: selectedUnit.private_parking },
-                            { icon: <FiTruck className="text-gray-500" />, label: 'Public Parking', value: selectedUnit.public_parking },
+                            { icon: <FiDollarSign className="text-amber-500" />, label: 'Maintenance', value: selectedUnit.maintenance_charges?.replace(/_/g, ' ') },
+                            { icon: <FiLayers className="text-purple-500" />, label: 'Floor', value: selectedUnit.your_floor ? `${selectedUnit.your_floor}${selectedUnit.total_floors ? ` / ${selectedUnit.total_floors}` : ''}` : (selectedUnit.floor_number ? `${selectedUnit.floor_number}${selectedUnit.total_floors ? ` / ${selectedUnit.total_floors}` : ''}` : null) },
+                            { icon: <FiLayers className="text-blue-400" />, label: 'Staircases', value: selectedUnit.number_of_staircase != null && selectedUnit.number_of_staircase !== 0 ? selectedUnit.number_of_staircase : null },
+                            { icon: <FiNavigation className="text-indigo-500" />, label: 'Passenger Lifts', value: selectedUnit.passenger_lifts != null && selectedUnit.passenger_lifts !== 0 ? selectedUnit.passenger_lifts : null },
+                            { icon: <FiPackage className="text-gray-600" />, label: 'Service Lifts', value: selectedUnit.service_lifts != null && selectedUnit.service_lifts !== 0 ? selectedUnit.service_lifts : null },
+                            { icon: <FiTruck className="text-blue-500" />, label: 'Private Parking', value: selectedUnit.private_parking != null && selectedUnit.private_parking !== 0 ? selectedUnit.private_parking : null },
+                            { icon: <FiTruck className="text-gray-500" />, label: 'Public Parking', value: selectedUnit.public_parking != null && selectedUnit.public_parking !== 0 ? selectedUnit.public_parking : null },
+                            { icon: <FiSun className="text-yellow-500" />, label: 'Facing', value: selectedUnit.facing },
                             { icon: <FiAward className="text-amber-600" />, label: 'Pre-leased/Pre-rented', value: selectedUnit.is_pre_leased },
-                          ] : [
+                            { icon: <FiCalendar className="text-orange-500" />, label: 'Available From', value: selectedUnit.availability_date ? new Date(selectedUnit.availability_date).toLocaleDateString() : null },
+                            { icon: <FiKey className="text-gray-500" />, label: 'Keys Location', value: selectedUnit.keys_location || selectedUnit.keysLocation },
+                            { icon: <FiClipboard className="text-gray-400" />, label: 'Keys Remarks', value: selectedUnit.keys_remarks },
+                          ].map(item => ({ ...item, value: item.value || '—' })) : [
                             { icon: <FiHome className="text-blue-500" />, label: 'Property Type', value: selectedUnit.bhk },
                             { icon: <FiLayers className="text-purple-500" />, label: 'Floor', value: selectedUnit.floor_number ? `${selectedUnit.floor_number}${selectedUnit.total_floors ? ` / ${selectedUnit.total_floors}` : ''}` : null },
                             { icon: <FiMapPin className="text-red-500" />, label: 'Building', value: selectedUnit.building_name || selectedUnit.project_name },
@@ -1170,7 +1184,7 @@ function InventoryPage() {
                               <div className="mt-0.5">{item.icon}</div>
                               <div>
                                 <div className="text-[11px] text-gray-400 uppercase font-semibold tracking-wide">{item.label}</div>
-                                <div className="text-sm font-medium text-gray-800 capitalize">{item.value}</div>
+                                <div className={`text-sm font-medium capitalize ${item.value === '—' ? 'text-gray-400 italic' : 'text-gray-800'}`}>{item.value}</div>
                               </div>
                             </div>
                           ))}

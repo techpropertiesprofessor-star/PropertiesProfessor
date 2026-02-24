@@ -265,37 +265,48 @@ exports.getEmployeesStatistics = async (req, res, next) => {
             })
           ]);
 
-          // Leave Statistics (current month)
-          const leaveDays = await LeaveRequest.aggregate([
-            {
-              $match: {
-                userId: employee._id,
-                status: 'APPROVED',
-                $or: [
-                  { fromDate: { $gte: startOfMonth, $lte: endOfMonth } },
-                  { toDate: { $gte: startOfMonth, $lte: endOfMonth } }
-                ]
-              }
-            },
-            {
-              $project: {
-                days: {
-                  $divide: [
-                    { $subtract: ['$toDate', '$fromDate'] },
-                    1000 * 60 * 60 * 24
+          // Leave Statistics (current month) - LeaveRequest uses User._id, not Employee._id
+          const userIdForLeave = user ? user._id : null;
+          let totalLeaveDays = 0;
+          if (userIdForLeave) {
+            const leaveDays = await LeaveRequest.aggregate([
+              {
+                $match: {
+                  userId: userIdForLeave,
+                  status: 'APPROVED',
+                  $or: [
+                    { fromDate: { $gte: startOfMonth, $lte: endOfMonth } },
+                    { toDate: { $gte: startOfMonth, $lte: endOfMonth } }
                   ]
                 }
+              },
+              {
+                $project: {
+                  days: {
+                    $divide: [
+                      { $subtract: ['$toDate', '$fromDate'] },
+                      1000 * 60 * 60 * 24
+                    ]
+                  }
+                }
+              },
+              {
+                $group: {
+                  _id: null,
+                  totalLeaveDays: { $sum: { $add: ['$days', 1] } }
+                }
               }
-            },
-            {
-              $group: {
-                _id: null,
-                totalLeaveDays: { $sum: { $add: ['$days', 1] } }
-              }
-            }
-          ]);
+            ]);
+            totalLeaveDays = leaveDays.length > 0 ? Math.round(leaveDays[0].totalLeaveDays) : 0;
+          }
 
-          const totalLeaveDays = leaveDays.length > 0 ? Math.round(leaveDays[0].totalLeaveDays) : 0;
+          // Also count LEAVE status from Attendance as fallback
+          const leaveAttendanceDays = await Attendance.countDocuments({
+            employee: employee._id,
+            status: 'LEAVE',
+            date: { $gte: startOfMonth, $lte: endOfMonth }
+          });
+          totalLeaveDays = Math.max(totalLeaveDays, leaveAttendanceDays);
 
           // Online/Offline Status
           const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
