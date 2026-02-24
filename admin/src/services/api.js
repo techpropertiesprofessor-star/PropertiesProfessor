@@ -31,6 +31,27 @@ api.interceptors.response.use(
   }
 );
 
+/**
+ * Retry a request up to `retries` times with exponential backoff.
+ * Handles Render cold-start timeouts and network blips.
+ */
+async function retryRequest(requestFn, retries = 2, delayMs = 2000) {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      return await requestFn();
+    } catch (err) {
+      const isNetworkError = !err.response;
+      const isServerWaking = err.response?.status >= 500;
+      const isLastAttempt = i === retries;
+      if (isLastAttempt || (!isNetworkError && !isServerWaking)) {
+        throw err;
+      }
+      console.warn(`[API] Request failed (attempt ${i + 1}/${retries + 1}), retrying in ${delayMs}ms...`, err.message);
+      await new Promise((r) => setTimeout(r, delayMs * (i + 1)));
+    }
+  }
+}
+
 export const adminApi = {
   // Activity logs
   getActivityLogs: (params) => api.get('/api/admin/logs/activity', { params }),
@@ -71,7 +92,7 @@ export const adminApi = {
   getBiosDiagnosticReport: () => api.get('/api/bios/diagnostic-report'),
 
   // Auth
-  login: (credentials) => api.post('/api/auth/login', credentials),
+  login: (credentials) => retryRequest(() => api.post('/api/auth/login', credentials)),
 };
 
 export default api;

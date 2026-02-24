@@ -39,9 +39,9 @@ export const PermissionRoute = ({ permission, children }) => {
     return <Navigate to="/login" />;
   }
 
-  // ADMIN and MANAGER have full access to every page
+  // ADMIN, SUPER_ADMIN and MANAGER have full access to every page
   const role = user.role?.toUpperCase();
-  if (role === 'ADMIN' || role === 'MANAGER') {
+  if (role === 'SUPER_ADMIN' || role === 'ADMIN' || role === 'MANAGER') {
     return children;
   }
 

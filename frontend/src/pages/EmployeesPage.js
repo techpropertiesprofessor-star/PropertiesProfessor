@@ -358,7 +358,7 @@ export default function EmployeesPage() {
       // You may need to adjust API endpoint and payload as per backend
       await authAPI.changePassword({
         userId: employeeDetails.id || employeeDetails._id,
-        oldPassword: passwordForm.oldPassword,
+        currentPassword: passwordForm.oldPassword,
         newPassword: passwordForm.newPassword
       });
       setPasswordSuccess('Password changed successfully!');

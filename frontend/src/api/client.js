@@ -68,15 +68,15 @@ api.interceptors.request.use(
 export const authAPI = {
   register: (data) => api.post("/auth/register", data),
   login: (email, password) =>
-    api.post("/auth/login", { email, password }),
+    retryRequest(() => api.post("/auth/login", { email, password })),
   logout: () => api.post("/auth/logout"),
   getProfile: () => api.get("/auth/profile"),
-  verifyToken: () => api.post("/auth/verify-token"),
+  verifyToken: () => retryRequest(() => api.post("/auth/verify-token")),
   updateProfile: (formData) => api.put("/auth/update-profile", formData),
-  changePassword: ({ userId, oldPassword, newPassword }) =>
-    api.post("/auth/change-password", {
+  changePassword: ({ userId, currentPassword, newPassword }) =>
+    api.put("/auth/change-password", {
       userId,
-      oldPassword,
+      currentPassword,
       newPassword,
     }),
 };
