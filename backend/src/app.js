@@ -8,22 +8,67 @@ const app = express();
 /* ========================
    CORS CONFIG (PRODUCTION SAFE)
 ======================== */
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://localhost:3001",
+  "http://localhost:5000",
+  "https://dashboard.propertiesprofessor.com",
+  "http://dashboard.propertiesprofessor.com",
+  "https://www.dashboard.propertiesprofessor.com",
+  "https://propertiesprofessor.com",
+  "https://www.propertiesprofessor.com",
+];
+
 app.use(
   cors({
-    origin: [
-      "http://localhost:3000",
-      "https://dashboard.propertiesprofessor.com"
-    ],
+    origin: function (origin, callback) {
+      // Allow requests with no origin (mobile apps, curl, Postman, server-to-server)
+      if (!origin) return callback(null, true);
+
+      if (
+        allowedOrigins.includes(origin) ||
+        origin.endsWith('.vercel.app') ||
+        origin.endsWith('.propertiesprofessor.com')
+      ) {
+        return callback(null, true);
+      }
+
+      console.warn(`[CORS] Blocked request from origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    },
     credentials: true,
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Requested-With',
+      'Accept',
+      'Origin',
+      'Cache-Control',
+    ],
+    exposedHeaders: ['Content-Disposition'],
+    maxAge: 86400, // Cache preflight for 24 hours
   })
 );
+
+// Ensure OPTIONS preflight is handled for all routes
+app.options('*', cors());
 
 /* ========================
    GLOBAL SECURITY & BODY PARSER
 ======================== */
-app.use(helmet());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(
+  helmet({
+    // Allow cross-origin resource loading (needed for DO Spaces images & cross-origin API)
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    // Disable COEP — it blocks cross-origin resources without CORP headers (DO Spaces)
+    crossOriginEmbedderPolicy: false,
+    // CSP is not needed for an API server; frontend handles its own CSP
+    contentSecurityPolicy: false,
+  })
+);
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 /* ========================
    OBSERVABILITY MIDDLEWARE (Non-intrusive)
@@ -81,10 +126,27 @@ app.use('/api/bios', require('./routes/observability/bios.routes'));
 /* ========================
    HEALTH CHECK
 ======================== */
-app.get('/health', (req, res) => {
+app.get('/health', async (req, res) => {
+  // Check DO Spaces connectivity
+  let spacesOk = false;
+  try {
+    const spacesService = require('./services/spaces.service');
+    spacesOk = await spacesService.testConnection();
+  } catch (e) { /* ignore */ }
+
   res.status(200).json({
     status: 'OK',
-    message: 'Server is healthy'
+    message: 'Server is healthy',
+    cors: {
+      requestOrigin: req.headers.origin || 'none',
+      allowed: true,
+    },
+    spaces: {
+      connected: spacesOk,
+      keyConfigured: !!process.env.SPACES_KEY,
+      secretConfigured: !!process.env.SPACES_SECRET,
+      bucket: process.env.SPACES_NAME || 'properties-media',
+    },
   });
 });
 

@@ -375,10 +375,16 @@ function InventoryPage() {
       setCaption('');
     } catch (err) {
       console.error('Upload media failed:', err);
-      const errorMsg = err.response?.data?.message
-        || err.response?.data?.hint
-        || err.message
-        || 'Upload failed. Please try again.';
+      let errorMsg;
+      if (!err.response) {
+        // Network error — likely Render cold start or connectivity issue
+        errorMsg = 'Network error — server may be starting up. Please wait a moment and try again.';
+      } else {
+        errorMsg = err.response?.data?.message
+          || err.response?.data?.hint
+          || err.message
+          || 'Upload failed. Please try again.';
+      }
       setUploadError(errorMsg);
       setTimeout(() => setUploadError(''), 10000);
     } finally {

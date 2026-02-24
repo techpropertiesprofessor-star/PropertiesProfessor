@@ -13,6 +13,28 @@ const api = axios.create({
   },
 });
 
+/**
+ * Helper: Retry a request up to `retries` times with exponential backoff.
+ * Handles Render cold-start timeouts and network blips on production domain.
+ */
+async function retryRequest(requestFn, retries = 2, delayMs = 2000) {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      return await requestFn();
+    } catch (err) {
+      const isNetworkError = !err.response; // no response = network/timeout issue
+      const isServerWaking = err.response?.status >= 500;
+      const isLastAttempt = i === retries;
+
+      if (isLastAttempt || (!isNetworkError && !isServerWaking)) {
+        throw err;
+      }
+      console.warn(`[API] Request failed (attempt ${i + 1}/${retries + 1}), retrying in ${delayMs}ms...`, err.message);
+      await new Promise((r) => setTimeout(r, delayMs * (i + 1)));
+    }
+  }
+}
+
 
 /**
  * =====================================================
@@ -171,18 +193,23 @@ createTower: (projectId, data) =>
   getStats: () =>
     api.get("/inventory/stats"),
 
-  // Batch thumbnails from DO Spaces
+  // Batch thumbnails from DO Spaces (with retry for cold starts)
   getUnitThumbnails: (unitIds) =>
-    api.post('/inventory/units/thumbnails', { unitIds }),
+    retryRequest(() => api.post('/inventory/units/thumbnails', { unitIds })),
 
   // Media — DigitalOcean Spaces
   listUnitMedia: (id) =>
-    api.get(`/inventory/units/${id}/media`),
+    retryRequest(() => api.get(`/inventory/units/${id}/media`)),
 
   uploadUnitMedia: (id, formData) =>
-    api.post(`/inventory/units/${id}/media`, formData, {
-      timeout: 120000, // 2 min for large files
-    }),
+    retryRequest(
+      () =>
+        api.post(`/inventory/units/${id}/media`, formData, {
+          timeout: 180000, // 3 min for large files (Render cold-start + upload)
+        }),
+      1, // only 1 retry for uploads (to avoid duplicate uploads)
+      5000
+    ),
 
   deleteUnitMedia: (id, mediaId) =>
     api.delete(`/inventory/units/${id}/media/${encodeURIComponent(mediaId)}`),
@@ -200,19 +227,24 @@ createTower: (projectId, data) =>
  * =====================================================
  */
 export const storageAPI = {
-  // Upload files via backend to Spaces
+  // Upload files via backend to Spaces (with retry)
   upload: (inventoryId, formData) =>
-    api.post(`/storage/upload/${inventoryId}`, formData, {
-      timeout: 120000, // 2 min for large files
-    }),
+    retryRequest(
+      () =>
+        api.post(`/storage/upload/${inventoryId}`, formData, {
+          timeout: 180000, // 3 min for large files
+        }),
+      1,
+      5000
+    ),
 
-  // List files for an inventory unit
+  // List files for an inventory unit (with retry)
   list: (inventoryId) =>
-    api.get(`/storage/list/${inventoryId}`),
+    retryRequest(() => api.get(`/storage/list/${inventoryId}`)),
 
   // Get presigned download URL
   getDownloadUrl: (key) =>
-    api.get(`/storage/download`, { params: { key } }),
+    retryRequest(() => api.get(`/storage/download`, { params: { key } })),
 
   // Delete a file
   delete: (key) =>
