@@ -266,17 +266,23 @@ exports.listUnits = async (req, res, next) => {
     }
 
     const pg = Math.max(1, parseInt(page, 10) || 1);
-    const lim = Math.max(1, Math.min(100, parseInt(limit, 10) || 20));
-    const skip = (pg - 1) * lim;
+    const parsedLimit = parseInt(limit, 10);
+    // limit=0 or very large value means fetch all; default 20 if not specified
+    const lim = parsedLimit === 0 ? 0 : Math.max(1, parsedLimit || 20);
+    const skip = lim === 0 ? 0 : (pg - 1) * lim;
 
-    const [units, total] = await Promise.all([
-      InventoryUnit.find(filter)
+    let query_builder = InventoryUnit.find(filter)
         .populate('priceHistory')
         .populate({ path: 'project', select: 'name location description' })
         .populate({ path: 'tower', select: 'name description' })
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(lim),
+        .sort({ createdAt: -1 });
+    
+    if (lim > 0) {
+      query_builder = query_builder.skip(skip).limit(lim);
+    }
+    
+    const [units, total] = await Promise.all([
+      query_builder,
       InventoryUnit.countDocuments(filter)
     ]);
 
@@ -467,9 +473,9 @@ exports.getStats = async (req, res, next) => {
       total += s.count;
     });
     statsObj.total_units = total;
-    // For Sale/For Rent counts (if you have listing_type field)
-    const saleCount = await InventoryUnit.countDocuments({ listing_type: 'sale' });
-    const rentCount = await InventoryUnit.countDocuments({ listing_type: 'rent' });
+    // For Sale/For Rent counts — use case-insensitive regex to match 'sale', 'sell', 'Sale', 'Sell', etc.
+    const saleCount = await InventoryUnit.countDocuments({ listing_type: { $regex: /sale|sell/i } });
+    const rentCount = await InventoryUnit.countDocuments({ listing_type: { $regex: /rent/i } });
     statsObj.for_sale = saleCount;
     statsObj.for_rent = rentCount;
     res.json(statsObj);

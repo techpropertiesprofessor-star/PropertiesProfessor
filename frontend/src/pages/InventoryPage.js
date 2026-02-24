@@ -109,6 +109,8 @@ function InventoryPage() {
       const bhkFilterForClient = params.bhk || null;
       if (bhkFilterForClient) delete params.bhk;
 
+      // Fetch all units (no pagination limit) so the full inventory is displayed
+      params.limit = 0;
       const res = await inventoryAPI.getUnits(params);
 
       // normalize unit fields (support snake_case and camelCase from backend)
@@ -739,9 +741,9 @@ function InventoryPage() {
             </button>
           </div>
 
-          {/* Stats Cards (from backend database counts) */}
+          {/* Stats Cards — use liveStats (computed from loaded units) for accurate counts */}
           {(() => {
-            const displayStats = stats || liveStats || {};
+            const displayStats = liveStats || stats || {};
             const unspecified = Math.max(0, (displayStats.total_units || 0) - (displayStats.for_sale || 0) - (displayStats.for_rent || 0));
             const cards = [
               { label: 'Total Units', value: displayStats.total_units || 0, bg: 'bg-white', text: 'text-gray-900', sub: 'text-gray-500', border: 'border-gray-200', icon: '📊' },
