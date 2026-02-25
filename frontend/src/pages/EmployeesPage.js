@@ -610,7 +610,7 @@ export default function EmployeesPage() {
                           return (
                             <>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                {['Dashboard', 'Employees', 'Attendance', 'Leads', 'Tasks', 'Team Chat', 'Profile', 'Inventory', 'Announcements', 'Notes', 'Calendar', 'Leave Request', 'Caller'].map((page) => {
+                                {['Dashboard', 'Employees', 'Attendance', 'Leads', 'Tasks', 'Team Chat', 'Profile', 'Inventory', 'NAS', 'Announcements', 'Notes', 'Calendar', 'Leave Request', 'Caller'].map((page) => {
                                   let hasPermission = isAdminOrManager ? true : (employeeDetails?.permissions?.includes(page));
                             const updatePermissions = async (newPerms) => {
                               try {
@@ -630,6 +630,7 @@ export default function EmployeesPage() {
                               'Team Chat': '💬',
                               'Profile': '👤',
                               'Inventory': '📦',
+                              'NAS': '💾',
                               'Announcements': '📢',
                               'Notes': '📝',
                               'Calendar': '🗓️',
