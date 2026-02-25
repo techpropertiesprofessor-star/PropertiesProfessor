@@ -116,6 +116,41 @@ exports.updateEmployee = async (req, res, next) => {
   }
 };
 
+exports.deleteEmployee = async (req, res, next) => {
+  try {
+    const id = req.params.id;
+    if (!id || id === 'undefined' || !id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ message: 'Invalid or missing employee ID' });
+    }
+    const employee = await Employee.findById(id);
+    if (!employee) return res.status(404).json({ message: 'Employee not found' });
+
+    // Also delete the associated user account
+    await User.findOneAndDelete({ employeeId: id });
+    // Also try deleting by email as fallback
+    await User.findOneAndDelete({ email: employee.email });
+
+    await Employee.findByIdAndDelete(id);
+
+    // Emit real-time update via Socket.IO
+    try {
+      const io = getIO();
+      io.emit('employee-updated', {
+        employeeId: id,
+        deleted: true,
+        updatedBy: req.user.id,
+        timestamp: new Date()
+      });
+    } catch (socketErr) {
+      console.error('Socket emission error:', socketErr);
+    }
+
+    res.json({ message: 'Employee deleted successfully' });
+  } catch (err) {
+    next(err);
+  }
+};
+
 exports.uploadDocument = async (req, res, next) => {
   try {
     const id = req.params.id;

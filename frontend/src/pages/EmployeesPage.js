@@ -20,9 +20,10 @@ export default function EmployeesPage() {
       last_name: '',
       email: '',
       phone: '',
-      role: 'CALLER',
+      role: 'EMPLOYEE',
       password: ''
     });
+    const [deleteLoading, setDeleteLoading] = useState(null);
     const [addLoading, setAddLoading] = useState(false);
     const [addError, setAddError] = useState('');
 
@@ -47,7 +48,7 @@ export default function EmployeesPage() {
           password: addForm.password
         });
         setAddModalOpen(false);
-        setAddForm({ first_name: '', last_name: '', email: '', phone: '', role: 'employee', password: '' });
+        setAddForm({ first_name: '', last_name: '', email: '', phone: '', role: 'EMPLOYEE', password: '' });
         await loadEmployees();
         showSuccess('Employee created successfully');
       } catch (err) {
@@ -546,12 +547,36 @@ export default function EmployeesPage() {
                           </span>
                         </div>
                       </div>
-                      <button 
-                        className="w-full px-3 py-2 text-xs bg-gradient-to-r from-blue-500 to-blue-700 text-white rounded-xl font-bold shadow hover:from-blue-600 hover:to-blue-800 transition-all duration-150 group-hover:scale-105"
-                        onClick={() => handleSelectEmployee(emp)}
-                      >
-                        View →
-                      </button>
+                      <div className="flex gap-2">
+                        <button 
+                          className="flex-1 px-3 py-2 text-xs bg-gradient-to-r from-blue-500 to-blue-700 text-white rounded-xl font-bold shadow hover:from-blue-600 hover:to-blue-800 transition-all duration-150 group-hover:scale-105"
+                          onClick={() => handleSelectEmployee(emp)}
+                        >
+                          View →
+                        </button>
+                        {(user?.role === 'MANAGER' || user?.role === 'ADMIN') && (
+                          <button
+                            className="px-3 py-2 text-xs bg-gradient-to-r from-red-500 to-red-700 text-white rounded-xl font-bold shadow hover:from-red-600 hover:to-red-800 transition-all duration-150 disabled:opacity-50"
+                            disabled={deleteLoading === (emp._id || emp.id)}
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              if (!window.confirm(`Are you sure you want to delete ${emp.name || emp.first_name}? This action cannot be undone.`)) return;
+                              setDeleteLoading(emp._id || emp.id);
+                              try {
+                                await employeeAPI.delete(emp._id || emp.id);
+                                await loadEmployees();
+                                showSuccess('Employee deleted successfully');
+                              } catch (err) {
+                                alert(err.response?.data?.message || 'Failed to delete employee');
+                              } finally {
+                                setDeleteLoading(null);
+                              }
+                            }}
+                          >
+                            {deleteLoading === (emp._id || emp.id) ? '...' : '🗑'}
+                          </button>
+                        )}
+                      </div>
                       <div className="absolute -top-4 -right-4 w-16 h-16 bg-gradient-to-br from-indigo-200 to-emerald-200 rounded-full opacity-30 blur-2xl pointer-events-none"></div>
                     </div>
                   ))

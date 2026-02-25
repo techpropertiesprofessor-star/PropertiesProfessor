@@ -36,6 +36,7 @@ router.use(auth, role(['ADMIN', 'MANAGER']));
 router.post('/', employeeController.createEmployee);
 router.get('/:id', employeeController.getEmployeeById);
 router.put('/:id', employeeController.updateEmployee);
+router.delete('/:id', employeeController.deleteEmployee);
 router.post('/:id/documents', upload.single('document'), employeeController.uploadDocument);
 router.get('/:id/documents', employeeController.getDocuments);
 

@@ -107,6 +107,7 @@ export const employeeAPI = {
   updateProfile: (id, data) => api.put(`/employees/${id}`, data),
   // Update online status (socketId / isOnline)
   updateOnlineStatus: (payload) => api.put('/employees/status/online', payload),
+  delete: (id) => api.delete(`/employees/${id}`),
 };
 
 /**
