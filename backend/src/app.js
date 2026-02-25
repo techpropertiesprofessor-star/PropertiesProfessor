@@ -85,6 +85,7 @@ app.use('/api/callers', require('./routes/caller.routes'));
 app.use('/api/permissions', require('./routes/permissions.routes'));
 app.use('/api/personal-notes', require('./routes/personalNote.routes'));
 app.use('/api/reminders', require('./routes/reminder.routes'));
+app.use('/api/nas', require('./routes/nas.routes'));
 
 /* ========================
    MANAGER ANALYTICS ROUTES

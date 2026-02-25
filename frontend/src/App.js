@@ -33,6 +33,7 @@ import LeadsPage from './pages/LeadsPage';
 import LeaveRequestsPage from './pages/LeaveRequestsPage';
 import LeaveRequestFormPage from './pages/LeaveRequestFormPage';
 import InventoryPage from './pages/InventoryPage';
+import NasPage from './pages/NasPage';
 import ContentCalendarPage from './pages/ContentCalendarPage';
 import PermissionsPage from './pages/PermissionsPage';
 import { PermissionRoute } from './context/PermissionRoute';
@@ -117,6 +118,7 @@ function AppContent() {
         <Route path="/leaves" element={<ProtectedRoute><PermissionRoute permission="Leave Request"><LeaveRequestsPage /></PermissionRoute></ProtectedRoute>} />
         <Route path="/leaves/new" element={<ProtectedRoute><PermissionRoute permission="Leave Request"><LeaveRequestFormPage /></PermissionRoute></ProtectedRoute>} />
         <Route path="/inventory" element={<ProtectedRoute><PermissionRoute permission="Inventory"><InventoryPage /></PermissionRoute></ProtectedRoute>} />
+        <Route path="/nas" element={<ProtectedRoute><PermissionRoute permission="NAS"><NasPage /></PermissionRoute></ProtectedRoute>} />
         <Route path="/calendar" element={<ProtectedRoute><PermissionRoute permission="Calendar"><ContentCalendarPage /></PermissionRoute></ProtectedRoute>} />
         <Route path="/permissions" element={<ProtectedRoute><PermissionRoute permission="Employees"><PermissionsPage /></PermissionRoute></ProtectedRoute>} />
         <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />

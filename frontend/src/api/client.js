@@ -391,3 +391,27 @@ export const leaveAPI = {
   rejectLeave: (id) =>
     api.patch(`/leaves/${id}/reject`),
 };
+
+/**
+ * =====================================================
+ * NAS (Network Attached Storage) APIs
+ * =====================================================
+ */
+export const nasAPI = {
+  // Folders
+  listFolders: () => api.get('/nas/folders'),
+  createFolder: (data) => api.post('/nas/folders', data),
+  getFolder: (folderId) => api.get(`/nas/folders/${folderId}`),
+  updateFolder: (folderId, data) => api.put(`/nas/folders/${folderId}`, data),
+  deleteFolder: (folderId) => api.delete(`/nas/folders/${folderId}`),
+
+  // Files
+  uploadFiles: (folderId, formData) =>
+    api.post(`/nas/folders/${folderId}/files`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000, // 5 min for large video uploads
+    }),
+
+  deleteFile: (folderId, fileKey) =>
+    api.delete(`/nas/folders/${folderId}/files/${encodeURIComponent(fileKey)}`),
+};
