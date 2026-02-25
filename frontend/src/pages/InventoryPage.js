@@ -36,6 +36,10 @@ function InventoryPage() {
 
   const [newUnit, setNewUnit] = useState({});
 
+  // Active media item shown in hero gallery & video modal
+  const [activeMediaItem, setActiveMediaItem] = useState(null);
+  const [videoModalSrc, setVideoModalSrc] = useState(null);
+
   // Edit state
   const [editingUnitId, setEditingUnitId] = useState(null);
   const [editUnit, setEditUnit] = useState(null);
@@ -368,8 +372,10 @@ function InventoryPage() {
           raw: u
         };
         setSelectedUnit(normalized);
+        setActiveMediaItem(null); // Reset active media when switching units
       } else {
         setSelectedUnit(null);
+        setActiveMediaItem(null);
       }
       // Fetch media for this unit
       try {
@@ -913,7 +919,7 @@ function InventoryPage() {
                       if (s.includes('available')) return <span className="px-3 py-1 rounded-full bg-emerald-400 text-white text-xs font-bold">AVAILABLE</span>;
                       return <span className="px-3 py-1 rounded-full bg-white/20 text-white text-xs font-bold">{selectedUnit.status.toUpperCase()}</span>;
                     })()}
-                    <button onClick={() => setSelectedUnit(null)} className="ml-2 w-8 h-8 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center transition-colors">
+                    <button onClick={() => { setSelectedUnit(null); setActiveMediaItem(null); }} className="ml-2 w-8 h-8 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center transition-colors">
                       <FiX className="text-white text-lg" />
                     </button>
                   </div>
@@ -923,9 +929,34 @@ function InventoryPage() {
                   <div className="flex flex-col lg:flex-row">
                     {/* Left: Image Gallery (DigitalOcean Spaces) */}
                     <div className="lg:w-1/2 p-5">
-                      <div className="rounded-xl overflow-hidden bg-gray-100 aspect-video shadow-inner">
+                      <div className="rounded-xl overflow-hidden bg-gray-100 aspect-video shadow-inner relative">
                         {(() => {
-                          // Find first displayable media item
+                          // If user selected a specific media item, show it in the hero
+                          const heroItem = activeMediaItem;
+                          const heroType = heroItem ? detectMediaType(heroItem) : null;
+                          const heroSrc = heroItem ? getMediaSrc(heroItem) : null;
+
+                          if (heroItem && heroSrc) {
+                            if (heroType === 'video') {
+                              return (
+                                <div className="relative w-full h-full">
+                                  <video controls autoPlay className="w-full h-full object-contain bg-black">
+                                    <source src={heroSrc} />
+                                  </video>
+                                  <button
+                                    onClick={() => setVideoModalSrc(heroSrc)}
+                                    className="absolute top-2 right-2 p-1.5 bg-black/60 hover:bg-black/80 text-white rounded-lg transition-colors z-10"
+                                    title="Full Screen"
+                                  >
+                                    <FiMaximize className="text-sm" />
+                                  </button>
+                                </div>
+                              );
+                            }
+                            return <img src={heroSrc} alt={heroItem.name || ''} className="w-full h-full object-cover" onError={(e) => { e.target.onerror=null; e.target.style.display='none'; }} />;
+                          }
+
+                          // Default: find first displayable media item
                           const firstImage = unitMedia?.find(m => detectMediaType(m) === 'image' && getMediaSrc(m));
                           const firstVideo = unitMedia?.find(m => detectMediaType(m) === 'video' && getMediaSrc(m));
                           const anyMedia = unitMedia?.find(m => getMediaSrc(m));
@@ -937,9 +968,21 @@ function InventoryPage() {
                           if (imgSrc) {
                             return <img src={imgSrc} alt={firstImage.name || ''} className="w-full h-full object-cover" onError={(e) => { e.target.onerror=null; e.target.style.display='none'; }} />;
                           } else if (vidSrc) {
-                            return <video controls className="w-full h-full object-cover"><source src={vidSrc} /></video>;
+                            return (
+                              <div className="relative w-full h-full">
+                                <video controls className="w-full h-full object-contain bg-black">
+                                  <source src={vidSrc} />
+                                </video>
+                                <button
+                                  onClick={() => setVideoModalSrc(vidSrc)}
+                                  className="absolute top-2 right-2 p-1.5 bg-black/60 hover:bg-black/80 text-white rounded-lg transition-colors z-10"
+                                  title="Full Screen"
+                                >
+                                  <FiMaximize className="text-sm" />
+                                </button>
+                              </div>
+                            );
                           } else if (anySrc) {
-                            // Unknown type but has URL — try showing as image
                             return <img src={anySrc} alt="" className="w-full h-full object-cover" onError={(e) => { e.target.onerror=null; e.target.style.display='none'; }} />;
                           } else if (thumbSrc) {
                             return <img src={thumbSrc} alt={selectedUnit?.name || ''} className="w-full h-full object-cover" onError={(e) => { e.target.onerror=null; e.target.style.display='none'; }} />;
@@ -1009,21 +1052,49 @@ function InventoryPage() {
                             {unitMedia.map((m, idx) => {
                               const mediaSrc = getMediaSrc(m);
                               const mediaType = detectMediaType(m);
+                              const isActive = activeMediaItem && (activeMediaItem.key || activeMediaItem.name) === (m.key || m.name);
                               return (
-                              <div key={m.key || idx} className="relative group aspect-square overflow-hidden rounded-lg border-2 border-transparent hover:border-blue-400 cursor-pointer transition-all shadow-sm">
+                              <div
+                                key={m.key || idx}
+                                className={`relative group aspect-square overflow-hidden rounded-lg border-2 cursor-pointer transition-all shadow-sm ${
+                                  isActive ? 'border-blue-500 ring-2 ring-blue-300' : 'border-transparent hover:border-blue-400'
+                                }`}
+                                onClick={() => setActiveMediaItem(m)}
+                              >
                                 {mediaType === 'image' && mediaSrc ? (
                                   <img src={mediaSrc} alt={m.name || ''} className="w-full h-full object-cover" onError={(e) => { e.target.onerror=null; e.target.style.display='none'; }} />
                                 ) : mediaType === 'video' && mediaSrc ? (
-                                  <video className="w-full h-full object-cover">
-                                    <source src={mediaSrc} />
-                                  </video>
+                                  <div className="relative w-full h-full">
+                                    <video className="w-full h-full object-cover" muted>
+                                      <source src={mediaSrc} />
+                                    </video>
+                                    {/* Play button overlay for video */}
+                                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                      <div className="w-10 h-10 bg-black/60 rounded-full flex items-center justify-center shadow-lg">
+                                        <svg className="w-5 h-5 text-white ml-0.5" fill="currentColor" viewBox="0 0 20 20"><polygon points="6,4 16,10 6,16" /></svg>
+                                      </div>
+                                    </div>
+                                    {/* VIDEO badge */}
+                                    <div className="absolute top-1 left-1 bg-red-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                      Video
+                                    </div>
+                                  </div>
                                 ) : (
                                   <div className="w-full h-full flex items-center justify-center bg-gray-200 text-gray-500 text-xs">
                                     <FiFileText className="text-2xl" />
                                   </div>
                                 )}
-                                {/* Download overlay */}
+                                {/* Hover overlay with actions */}
                                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                  {mediaType === 'video' && mediaSrc && (
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); setVideoModalSrc(mediaSrc); }}
+                                      className="p-1.5 bg-white rounded-full shadow hover:bg-green-100 transition-colors"
+                                      title="Play Video"
+                                    >
+                                      <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20"><polygon points="6,4 16,10 6,16" /></svg>
+                                    </button>
+                                  )}
                                   <button
                                     onClick={async (e) => {
                                       e.stopPropagation();
@@ -1657,6 +1728,32 @@ function InventoryPage() {
 
         </main>
       </div>
+
+      {/* Fullscreen Video Player Modal */}
+      {videoModalSrc && (
+        <div
+          className="fixed inset-0 bg-black/90 z-[9999] flex items-center justify-center p-4"
+          onClick={() => setVideoModalSrc(null)}
+        >
+          <div className="relative w-full max-w-5xl max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setVideoModalSrc(null)}
+              className="absolute -top-10 right-0 p-2 text-white hover:text-red-400 transition-colors z-10"
+              title="Close"
+            >
+              <FiX className="text-2xl" />
+            </button>
+            <video
+              controls
+              autoPlay
+              className="w-full max-h-[85vh] rounded-xl shadow-2xl bg-black"
+            >
+              <source src={videoModalSrc} />
+              Your browser does not support the video tag.
+            </video>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
