@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { nasAPI } from '../api/client';
 import Sidebar from '../components/Sidebar';
+import Header from '../components/Header';
 import useSidebarCollapsed from '../hooks/useSidebarCollapsed';
 import {
   FiFolder, FiFolderPlus, FiUpload, FiTrash2, FiEdit2, FiX, FiArrowLeft,
@@ -203,10 +204,11 @@ export default function NasPage() {
 
   // ─── Render ─────────────────────────────────────────────
   return (
-    <div className="flex h-screen bg-gray-50">
-      <Sidebar />
-      <div className={`flex-1 transition-all duration-300 ${sidebarCollapsed ? 'ml-16' : 'ml-56'}`}>
-        <main className="p-4 sm:p-6 overflow-y-auto h-full">
+    <div className="flex h-screen w-full overflow-hidden bg-gradient-to-br from-indigo-50 via-white to-blue-50">
+      <div className="hidden md:block"><Sidebar /></div>
+      <div className={`flex-1 flex flex-col overflow-hidden ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
+        <Header user={user} />
+        <main className="flex-1 p-4 sm:p-6 overflow-y-auto">
 
           {/* Header */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-3">
