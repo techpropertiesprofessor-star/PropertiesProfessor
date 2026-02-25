@@ -35,8 +35,8 @@ exports.createFolder = async (req, res) => {
     const folder = await NasFolder.create({
       name: name.trim(),
       description: description || '',
-      createdBy: req.user._id,
-      createdByName: req.user.name || req.user.username || req.user.email || 'Unknown',
+      createdBy: req.user.id || req.user._id,
+      createdByName: req.user.username || req.user.name || req.user.email || 'Unknown',
     });
 
     res.status(201).json(folder);
@@ -185,8 +185,8 @@ exports.uploadFiles = async (req, res) => {
           type: fileType,
           size: file.size,
           contentType: file.mimetype,
-          uploadedBy: req.user._id,
-          uploadedByName: req.user.name || req.user.username || req.user.email || 'Unknown',
+          uploadedBy: req.user.id || req.user._id,
+          uploadedByName: req.user.username || req.user.name || req.user.email || 'Unknown',
           uploadedAt: new Date(),
         };
 
