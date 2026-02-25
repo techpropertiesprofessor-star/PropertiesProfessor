@@ -101,7 +101,7 @@ export const userAPI = {
  * =====================================================
  */
 export const employeeAPI = {
-  getAll: () => api.get("/employees"),
+  getAll: () => api.get(`/employees?_t=${Date.now()}`),
   getBasic: () => api.get("/employees/basic"),
   getById: (id) => api.get(`/employees/${id}`),
   updateProfile: (id, data) => api.put(`/employees/${id}`, data),

@@ -39,6 +39,10 @@ exports.createEmployee = async (req, res, next) => {
 
 exports.getEmployees = async (req, res, next) => {
   try {
+    // Prevent caching stale employee data
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
     const employees = await Employee.find();
     res.json(employees);
   } catch (err) {

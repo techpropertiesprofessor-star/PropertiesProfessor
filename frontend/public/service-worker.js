@@ -1,7 +1,7 @@
 /* eslint-disable no-restricted-globals */
 
-const CACHE_NAME = 'pp-crm-v2';
-const API_CACHE_NAME = 'pp-crm-api-v2';
+const CACHE_NAME = 'pp-crm-v3';
+const API_CACHE_NAME = 'pp-crm-api-v3';
 
 // Static assets to pre-cache on install
 const STATIC_ASSETS = [
@@ -62,11 +62,15 @@ self.addEventListener('fetch', (event) => {
 
   // API requests: Network-first with cache fallback
   if (url.pathname.startsWith('/api/')) {
+    // Skip caching for mutable list endpoints — always fetch fresh
+    const noCachePaths = ['/api/employees', '/api/users', '/api/leads', '/api/tasks', '/api/attendance'];
+    const shouldSkipCache = noCachePaths.some(p => url.pathname.startsWith(p));
+
     event.respondWith(
       fetch(request)
         .then((response) => {
-          // Cache successful GET API responses
-          if (response.ok) {
+          // Only cache if response is OK and not a mutable list endpoint
+          if (response.ok && !shouldSkipCache) {
             const responseClone = response.clone();
             caches.open(API_CACHE_NAME).then((cache) => {
               cache.put(request, responseClone);
@@ -75,9 +79,11 @@ self.addEventListener('fetch', (event) => {
           return response;
         })
         .catch(async () => {
-          // Network failed — try cache
-          const cached = await caches.match(request);
-          if (cached) return cached;
+          // Network failed — try cache (only for cacheable endpoints)
+          if (!shouldSkipCache) {
+            const cached = await caches.match(request);
+            if (cached) return cached;
+          }
           // Return offline JSON response
           return new Response(
             JSON.stringify({ offline: true, message: 'You are offline. Showing cached data.' }),
