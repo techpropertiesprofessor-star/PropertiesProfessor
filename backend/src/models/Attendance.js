@@ -5,7 +5,8 @@ const AttendanceSchema = new mongoose.Schema({
   checkIn: { type: Date },
   checkOut: { type: Date },
   date: { type: Date, required: true },
-  status: { type: String, enum: ['PRESENT', 'ABSENT', 'LEAVE'], default: 'PRESENT' },
+  status: { type: String, enum: ['PRESENT', 'ABSENT', 'HALF_DAY', 'LEAVE'], default: 'PRESENT' },
+  markedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });

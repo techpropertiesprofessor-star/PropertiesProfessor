@@ -225,6 +225,12 @@ const startServer = async () => {
     });
 
     // ======================
+    // Payroll Cron Job (Month-end auto-generation)
+    // ======================
+    const { startPayrollCron } = require('./src/cron/payroll.cron');
+    startPayrollCron();
+
+    // ======================
     // Start Server
     // ======================
     server.listen(PORT, '0.0.0.0', () => {

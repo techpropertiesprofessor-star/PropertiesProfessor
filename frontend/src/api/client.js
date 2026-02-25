@@ -112,6 +112,68 @@ export const employeeAPI = {
 
 /**
  * =====================================================
+ * PAYROLL APIs — RBAC Protected
+ * =====================================================
+ */
+export const payrollAPI = {
+  // ADMIN only: set basic salary for an employee
+  setBasicSalary: (data) => api.post('/payroll/set-salary', data),
+  // ADMIN & MANAGER: generate single employee payroll
+  generate: (data) => api.post('/payroll/generate', data),
+  // ADMIN & MANAGER: generate bulk payroll for all employees
+  generateAll: (data) => api.post('/payroll/generate-all', data),
+  // ALL (controller enforces employee-own-only)
+  getAll: (params) => api.get('/payroll', { params }),
+  // ALL (controller enforces employee-own-only)
+  getById: (id) => api.get(`/payroll/${id}`),
+  // ADMIN & MANAGER: summary stats
+  getSummary: (params) => api.get('/payroll/summary', { params }),
+  // ADMIN only: edit bonus/incentives
+  update: (id, data) => api.put(`/payroll/${id}`, data),
+  // ADMIN only: mark as paid
+  markPaid: (id) => api.put(`/payroll/${id}/pay`),
+  // ADMIN only: delete salary record
+  delete: (id) => api.delete(`/payroll/${id}`),
+};
+
+/**
+ * =====================================================
+ * PROFESSIONAL PAYROLL APIs — /api/pro-payroll
+ * =====================================================
+ */
+export const proPayrollAPI = {
+  // Salary Structure CRUD
+  createSalaryStructure: (data) => api.post('/pro-payroll/salary-structure', data),
+  getSalaryStructures: () => api.get('/pro-payroll/salary-structures'),
+  updateSalaryStructure: (id, data) => api.put(`/pro-payroll/salary-structure/${id}`, data),
+  deleteSalaryStructure: (id) => api.delete(`/pro-payroll/salary-structure/${id}`),
+  assignStructure: (data) => api.post('/pro-payroll/assign-structure', data),
+
+  // Payroll Generation
+  generate: (employeeId, data) => api.post(`/pro-payroll/generate/${employeeId}`, data),
+  generateAll: (data) => api.post('/pro-payroll/generate-all', data),
+
+  // Workflow
+  approve: (id) => api.post(`/pro-payroll/approve/${id}`),
+  markPaid: (id) => api.post(`/pro-payroll/mark-paid/${id}`),
+
+  // Queries
+  getAllPayrolls: (params) => api.get('/pro-payroll/all-payrolls', { params }),
+  getPayroll: (employeeId, params) => api.get(`/pro-payroll/${employeeId}`, { params }),
+  getDashboard: (params) => api.get('/pro-payroll/dashboard', { params }),
+
+  // PDF Payslip
+  downloadSlip: (id) => api.get(`/pro-payroll/slip/${id}`, { responseType: 'arraybuffer' }),
+
+  // Excel Export
+  exportExcel: (params) => api.get('/pro-payroll/export-excel', { params, responseType: 'arraybuffer' }),
+
+  // Delete
+  delete: (id) => api.delete(`/pro-payroll/${id}`),
+};
+
+/**
+ * =====================================================
  * ATTENDANCE APIs
  * =====================================================
  */

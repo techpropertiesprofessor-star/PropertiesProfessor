@@ -65,6 +65,9 @@ require('./models/Caller');
 require('./models/Attendance');
 require('./models/User');
 require('./models/Employee');
+require('./models/Salary');
+require('./models/SalaryStructure');
+require('./models/Payroll');
 
 app.use('/api/auth', require('./routes/auth.routes'));
 app.use('/api/users', require('./routes/user.routes'));
@@ -86,6 +89,8 @@ app.use('/api/permissions', require('./routes/permissions.routes'));
 app.use('/api/personal-notes', require('./routes/personalNote.routes'));
 app.use('/api/reminders', require('./routes/reminder.routes'));
 app.use('/api/nas', require('./routes/nas.routes'));
+app.use('/api/payroll', require('./routes/payroll.routes'));
+app.use('/api/pro-payroll', require('./routes/proPayroll.routes'));
 
 /* ========================
    MANAGER ANALYTICS ROUTES

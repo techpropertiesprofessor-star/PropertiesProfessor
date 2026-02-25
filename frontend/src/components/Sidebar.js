@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { useNotificationCounts } from '../context/NotificationContext';
-import { FiHome, FiClock, FiCheckSquare, FiPhone, FiUser, FiUsers, FiTrendingUp, FiPackage, FiChevronLeft, FiChevronRight, FiMessageCircle, FiBook, FiCalendar, FiEdit3, FiBarChart2, FiHardDrive } from 'react-icons/fi';
+import { FiHome, FiClock, FiCheckSquare, FiPhone, FiUser, FiUsers, FiTrendingUp, FiPackage, FiChevronLeft, FiChevronRight, FiMessageCircle, FiBook, FiCalendar, FiEdit3, FiBarChart2, FiHardDrive, FiDollarSign } from 'react-icons/fi';
 
 import { useLocation } from 'react-router-dom';
 export default function Sidebar({ 
@@ -71,6 +71,8 @@ export default function Sidebar({
     { icon: FiHardDrive, label: 'NAS', path: '/nas', permission: 'NAS' },
     { icon: FiPhone, label: 'Callers', path: '/callers', permission: 'Caller' },
     { icon: FiUsers, label: 'Employees', path: '/employees', permission: 'Employees' },
+    { icon: FiDollarSign, label: 'Payroll', path: '/payroll', permission: 'Payroll' },
+    { icon: FiDollarSign, label: 'Pro Payroll', path: '/pro-payroll', permission: 'Payroll' },
     { icon: FiCalendar, label: 'Calendar', path: '/calendar', permission: 'Calendar' },
     { icon: FiEdit3, label: 'Notes', path: '/notes', permission: 'Notes' },
     { icon: FiCheckSquare, label: 'Leave Requests', path: '/leaves', permission: 'Leave Request' },
