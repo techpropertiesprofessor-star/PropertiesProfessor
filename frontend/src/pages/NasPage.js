@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { nasAPI } from '../api/client';
 import Sidebar from '../components/Sidebar';
-import { useSidebarCollapsed } from '../hooks/useSidebarCollapsed';
+import useSidebarCollapsed from '../hooks/useSidebarCollapsed';
 import {
   FiFolder, FiFolderPlus, FiUpload, FiTrash2, FiEdit2, FiX, FiArrowLeft,
   FiImage, FiVideo, FiFile, FiDownload, FiPlay, FiCalendar, FiUser,
