@@ -72,7 +72,7 @@ export default function Sidebar({
     { icon: FiPhone, label: 'Callers', path: '/callers', permission: 'Caller' },
     { icon: FiUsers, label: 'Employees', path: '/employees', permission: 'Employees' },
     { icon: FiDollarSign, label: 'Payroll', path: '/payroll', permission: 'Payroll' },
-    { icon: FiDollarSign, label: 'Pro Payroll', path: '/pro-payroll', permission: 'Payroll' },
+    { icon: FiDollarSign, label: 'Payroll Manage', path: '/pro-payroll', permission: 'Payroll' },
     { icon: FiCalendar, label: 'Calendar', path: '/calendar', permission: 'Calendar' },
     { icon: FiEdit3, label: 'Notes', path: '/notes', permission: 'Notes' },
     { icon: FiCheckSquare, label: 'Leave Requests', path: '/leaves', permission: 'Leave Request' },

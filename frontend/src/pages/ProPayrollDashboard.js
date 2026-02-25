@@ -136,7 +136,7 @@ export default function ProPayrollDashboard() {
       fetchPayrolls();
       fetchEmployees();
     }
-    if (isAdmin) fetchStructures();
+    if (isAdmin || isManager) fetchStructures();
     if (isEmployee) fetchMySalary();
   }, [selectedMonth, isAdmin, isManager, isEmployee, fetchDashboard, fetchPayrolls, fetchEmployees, fetchStructures, fetchMySalary]);
 
@@ -324,11 +324,11 @@ export default function ProPayrollDashboard() {
           {/* Page Title + Month Selector */}
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
             <div>
-              <h1 className="text-2xl font-bold text-gray-800">Professional Payroll</h1>
-              <p className="text-sm text-gray-500">Company-Level Payroll Management System</p>
+              <h1 className="text-2xl font-bold text-gray-800">Payroll Manage</h1>
+              <p className="text-sm text-gray-500">Company-Level Salary & Payroll Management</p>
             </div>
-            <div className="flex items-center gap-3">
-              <FiCalendar className="text-gray-400" />
+            <div className="flex flex-wrap items-center gap-3">
+              <FiCalendar className="text-gray-400 hidden sm:block" />
               <input
                 type="month"
                 value={selectedMonth}
@@ -336,7 +336,7 @@ export default function ProPayrollDashboard() {
                 className="px-3 py-2 border rounded-lg text-sm bg-white"
               />
               {(isAdmin || isManager) && (
-                <button onClick={handleExportExcel} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 transition">
+                <button onClick={handleExportExcel} className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 transition">
                   <FiDownload size={14} /> Export Excel
                 </button>
               )}
@@ -394,14 +394,14 @@ export default function ProPayrollDashboard() {
           {/* ═══════════════════════════════════════════ */}
           {activeTab === 'structures' && (isAdmin || isManager) && (
             <div>
-              <div className="flex justify-between items-center mb-4">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
                 <h2 className="text-lg font-semibold text-gray-800">Salary Structures</h2>
-                <div className="flex gap-2">
-                  <button onClick={() => { setShowAssignModal(true); fetchEmployees(); fetchStructures(); }} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
-                    <FiUsers size={14} /> Assign to Employee
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={() => { setShowAssignModal(true); fetchEmployees(); fetchStructures(); }} className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
+                    <FiUsers size={14} /> Assign
                   </button>
-                  <button onClick={() => { setEditStructureId(null); setStructureForm({ label:'', basic:'', hra:'', conveyance:'', specialAllowance:'', pfPercent:'', taxPercent:'' }); setShowStructureModal(true); }} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700">
-                    <FiPlus size={14} /> Create Structure
+                  <button onClick={() => { setEditStructureId(null); setStructureForm({ label:'', basic:'', hra:'', conveyance:'', specialAllowance:'', pfPercent:'', taxPercent:'' }); setShowStructureModal(true); }} className="flex items-center gap-2 px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700">
+                    <FiPlus size={14} /> Create
                   </button>
                 </div>
               </div>
@@ -438,16 +438,18 @@ export default function ProPayrollDashboard() {
           {/* ═══════════════════════════════════════════ */}
           {activeTab === 'generate' && (isAdmin || isManager) && (
             <div>
-              <div className="flex justify-between items-center mb-4">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
                 <h2 className="text-lg font-semibold text-gray-800">Generate Payroll</h2>
-                <button onClick={() => { setGenerateForm({ employeeId: '', month: selectedMonth, bonus: 0, incentives: 0, notes: '' }); setShowGenerateModal(true); }} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700">
+                <button onClick={() => { setGenerateForm({ employeeId: '', month: selectedMonth, bonus: 0, incentives: 0, notes: '' }); setShowGenerateModal(true); }} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 w-fit">
                   <FiRefreshCw size={14} /> Generate
                 </button>
               </div>
 
               {/* Employee list with structure status */}
               <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-                <div className="overflow-x-auto">
+
+                {/* Desktop Table */}
+                <div className="hidden md:block overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50 border-b">
                       <tr>
@@ -486,6 +488,43 @@ export default function ProPayrollDashboard() {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Mobile Cards */}
+                <div className="md:hidden divide-y divide-gray-100">
+                  {employees.filter(e => e.status === 'active').length === 0 ? (
+                    <div className="text-center py-8 text-gray-400 text-sm">No active employees</div>
+                  ) : (
+                    employees.filter(e => e.status === 'active').map(emp => {
+                      const hasPayroll = payrolls.some(p => (p.employeeId?._id || p.employeeId) === emp._id);
+                      return (
+                        <div key={emp._id} className="p-4">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="font-semibold text-gray-800 text-sm">{emp.name}</p>
+                              <p className="text-xs text-gray-500">{emp.designation || emp.role}</p>
+                            </div>
+                            {hasPayroll ? (
+                              <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">Generated</span>
+                            ) : (
+                              <span className="px-2 py-1 bg-gray-100 text-gray-500 rounded-full text-xs font-medium">Pending</span>
+                            )}
+                          </div>
+                          <div className="flex justify-between items-center mt-2 text-sm">
+                            <span className="text-gray-500">
+                              {emp.salaryStructureId ? (
+                                <span className="text-green-600 font-medium">✓ Structure Assigned</span>
+                              ) : (
+                                <span className="text-red-500 font-medium">✗ No Structure</span>
+                              )}
+                            </span>
+                            <span className="font-medium text-gray-800">{emp.basicSalary ? fmt(emp.basicSalary) : '—'}</span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
               </div>
             </div>
           )}
@@ -502,7 +541,9 @@ export default function ProPayrollDashboard() {
                 <div className="bg-white rounded-xl p-8 text-center text-gray-400 border">No payroll records for this month.</div>
               ) : (
                 <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-                  <div className="overflow-x-auto">
+
+                  {/* Desktop Table */}
+                  <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead className="bg-gray-50 border-b">
                         <tr>
@@ -534,23 +575,19 @@ export default function ProPayrollDashboard() {
                             <td className="px-4 py-3 text-center"><StatusBadge status={p.status} /></td>
                             <td className="px-4 py-3 text-center">
                               <div className="flex items-center justify-center gap-1">
-                                {/* Approve button — ADMIN & MANAGER */}
                                 {(isAdmin || isManager) && p.status === 'Generated' && (
                                   <button onClick={() => handleApprove(p._id)} title="Approve" className="p-1.5 text-blue-600 hover:bg-blue-50 rounded">
                                     <FiCheck size={14} />
                                   </button>
                                 )}
-                                {/* Mark Paid button — ADMIN & MANAGER */}
                                 {(isAdmin || isManager) && p.status === 'Approved' && (
                                   <button onClick={() => handleMarkPaid(p._id)} title="Mark Paid" className="p-1.5 text-green-600 hover:bg-green-50 rounded">
                                     <FiDollarSign size={14} />
                                   </button>
                                 )}
-                                {/* Download payslip */}
                                 <button onClick={() => handleDownloadSlip(p._id)} title="Download Payslip" className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded">
                                   <FiDownload size={14} />
                                 </button>
-                                {/* Delete — ADMIN & MANAGER */}
                                 {(isAdmin || isManager) && p.status !== 'Paid' && (
                                   <button onClick={() => handleDelete(p._id)} title="Delete" className="p-1.5 text-red-500 hover:bg-red-50 rounded">
                                     <FiTrash2 size={14} />
@@ -563,6 +600,65 @@ export default function ProPayrollDashboard() {
                       </tbody>
                     </table>
                   </div>
+
+                  {/* Mobile Cards */}
+                  <div className="md:hidden divide-y divide-gray-100">
+                    {payrolls.map(p => (
+                      <div key={p._id} className="p-4">
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <p className="font-semibold text-gray-800 text-sm">{p.employeeId?.name || 'N/A'}</p>
+                            <p className="text-xs text-gray-400">{p.employeeId?.designation || p.employeeId?.role}</p>
+                          </div>
+                          <StatusBadge status={p.status} />
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm mt-3">
+                          <div>
+                            <p className="text-xs text-gray-400">Gross</p>
+                            <p className="font-medium">{fmt(p.grossSalary)}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-400">Deductions</p>
+                            <p className="font-medium text-red-600">{fmt(p.totalDeductions)}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-400">Net Salary</p>
+                            <p className="font-bold text-green-700 text-base">{fmt(p.netSalary)}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-400">Attendance</p>
+                            <p className="text-xs font-medium">
+                              <span className="text-green-600">{p.presentDays}P</span>{' / '}
+                              <span className="text-red-500">{p.absentDays}A</span>{' / '}
+                              <span className="text-yellow-600">{p.halfDays}H</span>{' / '}
+                              <span className="text-blue-500">{p.leaveDays}L</span>
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-gray-100">
+                          {(isAdmin || isManager) && p.status === 'Generated' && (
+                            <button onClick={() => handleApprove(p._id)} className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-xs font-bold hover:bg-blue-200 flex items-center gap-1">
+                              <FiCheck size={12} /> Approve
+                            </button>
+                          )}
+                          {(isAdmin || isManager) && p.status === 'Approved' && (
+                            <button onClick={() => handleMarkPaid(p._id)} className="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-bold hover:bg-green-200 flex items-center gap-1">
+                              <FiDollarSign size={12} /> Pay
+                            </button>
+                          )}
+                          <button onClick={() => handleDownloadSlip(p._id)} className="px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-200 flex items-center gap-1">
+                            <FiDownload size={12} /> Payslip
+                          </button>
+                          {(isAdmin || isManager) && p.status !== 'Paid' && (
+                            <button onClick={() => handleDelete(p._id)} className="px-3 py-1.5 bg-red-100 text-red-700 rounded-lg text-xs font-bold hover:bg-red-200 flex items-center gap-1">
+                              <FiTrash2 size={12} /> Delete
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
                 </div>
               )}
             </div>

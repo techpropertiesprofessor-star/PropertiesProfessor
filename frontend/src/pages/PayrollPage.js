@@ -62,8 +62,10 @@ export default function PayrollPage() {
       setLoading(true);
       const params = { month: selectedMonth, year: selectedYear };
       const res = await payrollAPI.getAll(params);
-      setSalaries(res.data);
+      const data = Array.isArray(res.data) ? res.data : (res.data?.data || res.data?.salaries || []);
+      setSalaries(data);
     } catch (err) {
+      console.error('Load salaries error:', err);
       showError(err.response?.data?.message || 'Failed to load salaries');
     } finally {
       setLoading(false);
@@ -84,7 +86,7 @@ export default function PayrollPage() {
     if (isEmployee) return;
     try {
       const res = await employeeAPI.getAll();
-      setEmployees(res.data);
+      setEmployees(Array.isArray(res.data) ? res.data : (res.data?.data || []));
     } catch (err) {
       console.error('Failed to load employees:', err);
     }
@@ -290,9 +292,11 @@ export default function PayrollPage() {
             {/* EMPLOYEE sees nothing here — clean UX */}
           </div>
 
-          {/* ── Salary Table ── */}
+          {/* ── Salary Table / Cards ── */}
           <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
-            <div className="overflow-x-auto">
+
+            {/* ── Desktop Table (hidden on mobile) ── */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-gradient-to-r from-indigo-600 to-blue-600 text-white">
                   <tr>
@@ -337,16 +341,13 @@ export default function PayrollPage() {
                         {(isAdmin || isManager) && (
                           <td className="px-4 py-3 text-center">
                             <div className="flex items-center justify-center gap-1">
-                              {/* ADMIN & MANAGER: Edit, Pay, Delete */}
-                              {(isAdmin || isManager) && sal.status !== 'PAID' && (
+                              {sal.status !== 'PAID' && (
                                 <>
-                                  <button onClick={() => openEdit(sal)} className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-bold hover:bg-blue-200" title="Edit bonus/incentives">✏️</button>
+                                  <button onClick={() => openEdit(sal)} className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-bold hover:bg-blue-200" title="Edit">✏️</button>
                                   <button onClick={() => handleMarkPaid(sal._id)} className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-bold hover:bg-green-200" title="Mark as Paid">✅</button>
                                 </>
                               )}
-                              {(isAdmin || isManager) && (
-                                <button onClick={() => handleDelete(sal._id)} className="px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-bold hover:bg-red-200" title="Delete">🗑️</button>
-                              )}
+                              <button onClick={() => handleDelete(sal._id)} className="px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-bold hover:bg-red-200" title="Delete">🗑️</button>
                             </div>
                           </td>
                         )}
@@ -356,6 +357,69 @@ export default function PayrollPage() {
                 </tbody>
               </table>
             </div>
+
+            {/* ── Mobile Cards (hidden on desktop) ── */}
+            <div className="md:hidden">
+              {loading ? (
+                <div className="text-center py-8 text-gray-400">Loading...</div>
+              ) : salaries.length === 0 ? (
+                <div className="text-center py-8 text-gray-400">No salary records for {MONTHS[selectedMonth - 1]} {selectedYear}</div>
+              ) : (
+                <div className="divide-y divide-gray-100">
+                  {salaries.map(sal => (
+                    <div key={sal._id} className="p-4">
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <p className="font-semibold text-gray-800 text-sm">{sal.employee?.name || 'Unknown'}</p>
+                          <p className="text-xs text-gray-400">{sal.employee?.email}</p>
+                        </div>
+                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${sal.status === 'PAID' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                          {sal.status}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm mt-3">
+                        <div>
+                          <p className="text-xs text-gray-400">Period</p>
+                          <p className="font-medium text-gray-700">{MONTHS[sal.month - 1]} {sal.year}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-400">Basic</p>
+                          <p className="font-medium text-gray-700">{formatCurrency(sal.basicSalary)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-400">Bonus / Incentives</p>
+                          <p className="text-green-600 font-medium">+{formatCurrency((sal.bonus || 0) + (sal.incentives || 0))}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-400">Deductions</p>
+                          <p className="text-red-600 font-medium">-{formatCurrency(sal.deductions)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-400">Net Pay</p>
+                          <p className="font-bold text-gray-900 text-base">{formatCurrency(sal.netPay)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-400">Days (P/A/L)</p>
+                          <p className="text-gray-600 font-medium">{sal.presentDays}/{sal.absentDays}/{sal.leaveDays}</p>
+                        </div>
+                      </div>
+                      {(isAdmin || isManager) && (
+                        <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-gray-100">
+                          {sal.status !== 'PAID' && (
+                            <>
+                              <button onClick={() => openEdit(sal)} className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-xs font-bold hover:bg-blue-200">✏️ Edit</button>
+                              <button onClick={() => handleMarkPaid(sal._id)} className="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-bold hover:bg-green-200">✅ Pay</button>
+                            </>
+                          )}
+                          <button onClick={() => handleDelete(sal._id)} className="px-3 py-1.5 bg-red-100 text-red-700 rounded-lg text-xs font-bold hover:bg-red-200">🗑️ Delete</button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
           </div>
 
           {/* ════════════════════════════════════════════
