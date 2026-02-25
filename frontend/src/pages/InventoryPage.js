@@ -771,19 +771,10 @@ function InventoryPage() {
                 onChange={(e) => setFilters((p) => ({ ...p, project_id: e.target.value }))}
               >
                 <option value="">All Projects</option>
-                {projects && projects.length > 0 ? (
+                {projects && projects.length > 0 && (
                   projects.map((pr) => (
                     <option key={pr._id || pr.id} value={pr._id || pr.id}>{pr.name}</option>
                   ))
-                ) : (
-                  // fallback static options to match previous UI
-                  <>
-                    <option value="dc">dc</option>
-                    <option value="jaypee">jaypee</option>
-                    <option value="guar">Guar</option>
-                    <option value="m3m">m3m</option>
-                    <option value="bhutani">Bhutani</option>
-                  </>
                 )}
               </select>
 

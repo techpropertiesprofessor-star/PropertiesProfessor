@@ -39,15 +39,16 @@ exports.register = async (req, res, next) => {
       });
     }
 
-    // Also create Employee document
+    // Create Employee document for all roles
     let employeeId = null;
-    if ((role || '').toUpperCase() === 'EMPLOYEE') {
-      let emp = await Employee.findOne({ email });
-      if (!emp) {
-        emp = await Employee.create({ name, email, phone, role: (role || '').toUpperCase() });
-      }
-      employeeId = emp._id;
+    let emp = await Employee.findOne({ email });
+    if (!emp) {
+      emp = await Employee.create({ name, email, phone, role: (role || 'EMPLOYEE').toUpperCase() });
     }
+    employeeId = emp._id;
+    // Link employee to user
+    user.employeeId = employeeId;
+    await user.save();
 
     const token = generateToken(user, employeeId);
     res.status(201).json({ 

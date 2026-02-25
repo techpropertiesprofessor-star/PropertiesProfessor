@@ -25,10 +25,11 @@ exports.createEmployee = async (req, res, next) => {
       first_name = parts[0];
       last_name = parts.slice(1).join(' ') || '-';
     }
-    if (!first_name || !last_name || !email) return res.status(400).json({ message: 'First name, last name, and email are required' });
+    const fullName = name || ((first_name || '') + ' ' + (last_name || '')).trim();
+    if (!fullName || !email) return res.status(400).json({ message: 'Name and email are required' });
     const exists = await Employee.findOne({ email });
     if (exists) return res.status(409).json({ message: 'Email already exists' });
-    const employee = new Employee({ first_name, last_name, email, phone, role });
+    const employee = new Employee({ name: fullName, email, phone, role });
     await employee.save();
     res.status(201).json(employee);
   } catch (err) {

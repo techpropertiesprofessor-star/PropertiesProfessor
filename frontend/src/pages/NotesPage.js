@@ -4,7 +4,7 @@ import Header from "../components/Header";
 import useSidebarCollapsed from '../hooks/useSidebarCollapsed';
 import { AuthContext } from "../context/AuthContext";
 
-// For demo: use localStorage. Replace with API for production.
+// Notes storage using localStorage
 const NOTES_KEY = "user_notes";
 
 function getUserNotes(userId) {

@@ -247,8 +247,7 @@ export default function EmployeesPage() {
   };
 
   const filteredEmployees = employees.filter(emp =>
-    (emp.first_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (emp.last_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (emp.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (emp.email || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
