@@ -138,7 +138,8 @@ const AmenityIcons = {
 };
 
 // SECTION 1: Basic Property Details
-export default function AddInventoryForm({ onSubmit }) {
+export default function AddInventoryForm({ onSubmit, loading = false }) {
+  const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
     // Section 1
     propertyType: '',
@@ -337,6 +338,7 @@ export default function AddInventoryForm({ onSubmit }) {
 
   function handleSubmit(e) {
     e.preventDefault();
+    if (submitting || loading) return; // Prevent double submission
     if (validate(step)) {
       // Normalize some fields before submitting
       const normalized = { ...form };
@@ -347,7 +349,8 @@ export default function AddInventoryForm({ onSubmit }) {
       // Also set listing_type for backend compatibility
       normalized.listing_type = normalized.listing_type || normalized.lookingTo || '';
 
-      onSubmit(normalized);
+      setSubmitting(true);
+      Promise.resolve(onSubmit(normalized)).finally(() => setSubmitting(false));
     }
   }
 
@@ -1574,12 +1577,26 @@ export default function AddInventoryForm({ onSubmit }) {
             </button>
           ) : (
             <button
-              type="submit"
+              type="button"
               onClick={handleSubmit}
-              className="inline-flex items-center gap-2 px-6 py-2.5 bg-emerald-600 text-white rounded-lg font-semibold text-sm shadow-sm hover:bg-emerald-700 hover:shadow-md transition-all"
+              disabled={submitting || loading}
+              className={`inline-flex items-center gap-2 px-6 py-2.5 text-white rounded-lg font-semibold text-sm shadow-sm transition-all ${
+                submitting || loading
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-emerald-600 hover:bg-emerald-700 hover:shadow-md'
+              }`}
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-              Submit Property
+              {submitting || loading ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                  Submitting...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                  Submit Property
+                </>
+              )}
             </button>
           )}
         </div>

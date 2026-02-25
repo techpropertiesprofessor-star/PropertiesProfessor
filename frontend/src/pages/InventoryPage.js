@@ -1307,6 +1307,7 @@ function InventoryPage() {
               <div className="bg-white rounded-lg p-0 w-full max-w-2xl mx-4 sm:mx-0 max-h-[95vh] overflow-y-auto">
                 <div className="p-0">
                   <AddInventoryForm
+                    loading={createLoading}
                     onSubmit={async (form) => {
                       setCreateLoading(true);
                       setCreateError('');
@@ -1420,9 +1421,12 @@ function InventoryPage() {
                         if (!mediaUploadFailed) {
                           setCreateModalOpen(false);
                         }
-                        await fetchProjects();
-                        await fetchUnits();
-                        await fetchStats();
+                        // NOTE: Do NOT call fetchUnits() here — the backend emits an
+                        // 'inventory-created' socket event which triggers refreshInventory
+                        // (via useRealtimeData) and already refetches units, stats & projects.
+                        // Calling fetchUnits() here as well caused the new item to appear
+                        // twice: once from this explicit fetch, and once from the socket-
+                        // triggered fetch.
                         if (unitId) await viewUnit(unitId);
                       } catch (err) {
                         console.error('Create unit error:', err);
