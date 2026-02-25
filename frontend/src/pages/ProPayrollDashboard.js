@@ -289,13 +289,13 @@ export default function ProPayrollDashboard() {
     }
   };
 
-  // ── Tab definitions ──
+  // ── Tab definitions (shorter labels for mobile) ──
   const tabs = [];
-  if (isAdmin || isManager) tabs.push({ key: 'dashboard', label: 'Dashboard', icon: FiDollarSign });
-  if (isAdmin || isManager) tabs.push({ key: 'structures', label: 'Salary Structure', icon: FiPercent });
-  if (isAdmin || isManager) tabs.push({ key: 'generate', label: 'Generate Payroll', icon: FiRefreshCw });
-  if (isAdmin || isManager) tabs.push({ key: 'records', label: 'Payroll Records', icon: FiFileText });
-  if (isEmployee) tabs.push({ key: 'my-salary', label: 'My Salary', icon: FiDollarSign });
+  if (isAdmin || isManager) tabs.push({ key: 'dashboard', label: 'Dashboard', shortLabel: 'Home', icon: FiDollarSign });
+  if (isAdmin || isManager) tabs.push({ key: 'structures', label: 'Salary Structure', shortLabel: 'Structure', icon: FiPercent });
+  if (isAdmin || isManager) tabs.push({ key: 'generate', label: 'Generate Payroll', shortLabel: 'Generate', icon: FiRefreshCw });
+  if (isAdmin || isManager) tabs.push({ key: 'records', label: 'Payroll Records', shortLabel: 'Records', icon: FiFileText });
+  if (isEmployee) tabs.push({ key: 'my-salary', label: 'My Salary', shortLabel: 'Salary', icon: FiDollarSign });
 
   // ── Status badge ──
   const StatusBadge = ({ status }) => {
@@ -343,20 +343,21 @@ export default function ProPayrollDashboard() {
             </div>
           </div>
 
-          {/* Tabs */}
-          <div className="flex gap-1 mb-6 bg-white rounded-xl p-1 shadow-sm border overflow-x-auto">
+          {/* Tabs - Mobile scroll friendly */}
+          <div className="flex gap-1 mb-6 bg-white rounded-xl p-1 shadow-sm border overflow-x-auto scrollbar-hide">
             {tabs.map(tab => (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                className={`flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
                   activeTab === tab.key
                     ? 'bg-indigo-600 text-white shadow'
                     : 'text-gray-600 hover:bg-gray-100'
                 }`}
               >
-                <tab.icon size={15} />
-                {tab.label}
+                <tab.icon size={14} className="flex-shrink-0" />
+                <span className="hidden sm:inline">{tab.label}</span>
+                <span className="sm:hidden">{tab.shortLabel || tab.label}</span>
               </button>
             ))}
           </div>
@@ -691,7 +692,7 @@ export default function ProPayrollDashboard() {
                         <div><p className="text-gray-400 text-xs">Bonus + Incentives</p><p className="font-semibold text-blue-600">{fmt((p.bonus||0)+(p.incentives||0))}</p></div>
                         <div><p className="text-gray-400 text-xs">Net Salary</p><p className="font-bold text-green-700 text-lg">{fmt(p.netSalary)}</p></div>
                       </div>
-                      <div className="mt-3 flex gap-4 text-xs text-gray-500">
+                      <div className="mt-3 flex flex-wrap gap-3 sm:gap-4 text-xs text-gray-500">
                         <span>Present: {p.presentDays}</span>
                         <span>Absent: {p.absentDays}</span>
                         <span>Half-Day: {p.halfDays}</span>
@@ -714,7 +715,7 @@ export default function ProPayrollDashboard() {
         <Modal title={editStructureId ? 'Edit Salary Structure' : 'Create Salary Structure'} onClose={() => setShowStructureModal(false)}>
           <div className="space-y-3">
             <Input label="Label (optional)" value={structureForm.label} onChange={v => setStructureForm(f => ({...f, label: v}))} placeholder="e.g. Senior Developer Package" />
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Input label="Basic *" type="number" value={structureForm.basic} onChange={v => setStructureForm(f => ({...f, basic: v}))} />
               <Input label="HRA" type="number" value={structureForm.hra} onChange={v => setStructureForm(f => ({...f, hra: v}))} />
               <Input label="Conveyance" type="number" value={structureForm.conveyance} onChange={v => setStructureForm(f => ({...f, conveyance: v}))} />
