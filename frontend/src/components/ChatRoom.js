@@ -374,7 +374,7 @@ export default function ChatRoom({ chatType = 'team', userId = null, userName = 
   };
 
   return (
-    <div className="flex flex-col w-full h-full min-h-0 bg-white overflow-hidden">
+    <div className="flex flex-col w-full h-full min-h-0 bg-white" style={{ maxHeight: '100%' }}>
       {/* HEADER */}
       <div className="px-4 py-3 border-b bg-blue-600 text-white flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -481,7 +481,7 @@ export default function ChatRoom({ chatType = 'team', userId = null, userName = 
       )}
 
       {/* INPUT */}
-      <div className="px-4 py-2 border-t bg-white relative">
+      <div className="px-4 py-2 border-t bg-white relative" style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}>
         {/* Employee Dropdown for @ tagging */}
         {showEmployeeDropdown && filteredEmployees.length > 0 && (
           <div className="absolute bottom-full left-4 right-4 mb-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-40 overflow-y-auto">

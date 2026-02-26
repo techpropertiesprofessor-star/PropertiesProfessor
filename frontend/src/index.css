@@ -47,7 +47,15 @@
 /* Apply theme variables to body */
 html, body, #root {
   height: 100%;
+  height: 100dvh; /* dynamic viewport height for mobile browsers */
   overflow: hidden;
+}
+
+/* Mobile viewport fix — ensures content doesn't hide behind browser chrome */
+@supports (height: 100dvh) {
+  html, body, #root {
+    height: 100dvh;
+  }
 }
 
 body {
