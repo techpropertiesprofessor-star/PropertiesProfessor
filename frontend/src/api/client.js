@@ -170,6 +170,11 @@ export const proPayrollAPI = {
 
   // Delete
   delete: (id) => api.delete(`/pro-payroll/${id}`),
+
+  // Employee Receipts (Paid payrolls)
+  getMyReceipts: () => api.get('/pro-payroll/my-receipts'),
+  getReceiptById: (id) => api.get(`/pro-payroll/receipt/${id}`),
+  downloadReceiptPDF: (id) => api.get(`/pro-payroll/slip/${id}`, { responseType: 'arraybuffer' }),
 };
 
 /**

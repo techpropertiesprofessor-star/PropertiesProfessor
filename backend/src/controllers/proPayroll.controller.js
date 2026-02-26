@@ -467,6 +467,67 @@ exports.deletePayroll = async (req, res, next) => {
   }
 };
 
+// ────────────────────────────────────────────────────────
+// EMPLOYEE RECEIPTS — Paid payrolls for the logged-in employee
+// ────────────────────────────────────────────────────────
+
+/**
+ * GET /my-receipts — Get all Paid payroll receipts for the logged-in employee
+ * Only returns records with status === 'Paid'.
+ */
+exports.getMyReceipts = async (req, res, next) => {
+  try {
+    const emp = await Employee.findOne({ email: req.user.email });
+    if (!emp) return res.status(404).json({ message: 'Employee record not found' });
+
+    const filter = { employeeId: emp._id, status: 'Paid' };
+
+
+    const receipts = await Payroll.find(filter)
+      .populate('employeeId', 'name email designation role')
+      .populate('generatedBy', 'name')
+      .populate('approvedBy', 'name')
+      .populate('paidBy', 'name')
+      .sort({ month: -1 });
+
+    res.json({ data: receipts });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * GET /receipt/:id — View a single receipt detail (EMPLOYEE own-only)
+ */
+exports.getReceiptById = async (req, res, next) => {
+  try {
+    const payroll = await Payroll.findById(req.params.id)
+      .populate('employeeId', 'name email designation role')
+      .populate('generatedBy', 'name')
+      .populate('approvedBy', 'name')
+      .populate('paidBy', 'name');
+
+    if (!payroll) return res.status(404).json({ message: 'Receipt not found' });
+
+    // EMPLOYEE can only view own receipt
+    const userRole = (req.user.role || '').toUpperCase();
+    if (userRole === 'EMPLOYEE') {
+      const emp = await Employee.findOne({ email: req.user.email });
+      if (!emp || payroll.employeeId._id.toString() !== emp._id.toString()) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+    }
+
+    if (payroll.status !== 'Paid') {
+      return res.status(400).json({ message: 'Receipt is only available for paid payrolls' });
+    }
+
+    res.json({ data: payroll });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // ── Utility ──
 
 function getCurrentMonth() {

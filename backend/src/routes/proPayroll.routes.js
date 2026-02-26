@@ -43,6 +43,10 @@ router.post('/generate-all',          role(['ADMIN', 'MANAGER']), ctrl.generateA
 router.post('/approve/:id',           role(['ADMIN', 'MANAGER']), ctrl.approvePayroll);
 router.post('/mark-paid/:id',         role(['ADMIN', 'MANAGER']), ctrl.markPaid);
 
+// ── Employee Receipts (EMPLOYEE — only own paid payrolls) ──
+router.get('/my-receipts',             role(['ADMIN', 'MANAGER', 'EMPLOYEE']), ctrl.getMyReceipts);
+router.get('/receipt/:id',             role(['ADMIN', 'MANAGER', 'EMPLOYEE']), ctrl.getReceiptById);
+
 // ── Employee Payroll History (role-filtered in controller) ──
 router.get('/:employeeId',            role(['ADMIN', 'MANAGER', 'EMPLOYEE']), ctrl.getPayroll);
 

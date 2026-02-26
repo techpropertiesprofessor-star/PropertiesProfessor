@@ -38,6 +38,7 @@ import ContentCalendarPage from './pages/ContentCalendarPage';
 import PermissionsPage from './pages/PermissionsPage';
 import PayrollPage from './pages/PayrollPage';
 import ProPayrollDashboard from './pages/ProPayrollDashboard';
+import PayrollReceiptPage from './pages/PayrollReceiptPage';
 import { PermissionRoute } from './context/PermissionRoute';
 import NotificationsPage from './pages/NotificationsPage';
 
@@ -124,7 +125,8 @@ function AppContent() {
         <Route path="/calendar" element={<ProtectedRoute><PermissionRoute permission="Calendar"><ContentCalendarPage /></PermissionRoute></ProtectedRoute>} />
         <Route path="/permissions" element={<ProtectedRoute><PermissionRoute permission="Employees"><PermissionsPage /></PermissionRoute></ProtectedRoute>} />
         <Route path="/payroll" element={<ProtectedRoute><PermissionRoute permission="Payroll"><PayrollPage /></PermissionRoute></ProtectedRoute>} />
-        <Route path="/pro-payroll" element={<ProtectedRoute><PermissionRoute permission="Payroll"><ProPayrollDashboard /></PermissionRoute></ProtectedRoute>} />
+        <Route path="/pro-payroll" element={<ProtectedRoute><PermissionRoute permission="Payroll Manage"><ProPayrollDashboard /></PermissionRoute></ProtectedRoute>} />
+        <Route path="/payroll-receipt" element={<ProtectedRoute><PermissionRoute permission="Payroll Receipt"><PayrollReceiptPage /></PermissionRoute></ProtectedRoute>} />
         <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
         <Route path="/notes" element={<ProtectedRoute><PermissionRoute permission="Notes"><NotesPage /></PermissionRoute></ProtectedRoute>} />
         <Route path="/announcements" element={<ProtectedRoute><PermissionRoute permission="Announcements"><AnnouncementsPage /></PermissionRoute></ProtectedRoute>} />
