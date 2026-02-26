@@ -46,9 +46,12 @@ const monthLabel = (m) => {
 export default function ProPayrollDashboard() {
   const { user } = useContext(AuthContext);
   const role = (user?.role || '').toUpperCase();
+  const userPermissions = user?.permissions || [];
+  const hasPayrollManage = userPermissions.includes('Payroll Manage');
+  // Employees with "Payroll Manage" permission get manager-level access
   const isAdmin = role === 'ADMIN' || role === 'SUPER_ADMIN';
-  const isManager = role === 'MANAGER';
-  const isEmployee = role === 'EMPLOYEE';
+  const isManager = role === 'MANAGER' || (role === 'EMPLOYEE' && hasPayrollManage);
+  const isEmployee = role === 'EMPLOYEE' && !hasPayrollManage;
 
   // ── State ──
   const [activeTab, setActiveTab] = useState(isEmployee ? 'my-salary' : 'dashboard');
@@ -141,11 +144,12 @@ export default function ProPayrollDashboard() {
     if (isEmployee) fetchMySalary();
   }, [selectedMonth, isAdmin, isManager, isEmployee, fetchDashboard, fetchPayrolls, fetchEmployees, fetchStructures, fetchMySalary]);
 
-  // Real-time: refresh dashboard and payrolls for managers
-  useRealtimeData(['payroll:managerUpdate'], () => {
+  // Real-time: refresh dashboard and payrolls for all roles
+  useRealtimeData(['payroll:managerUpdate', 'payroll:created', 'payroll:paid', 'payroll:updated'], () => {
     if (isAdmin || isManager) {
       fetchDashboard();
       fetchPayrolls();
+      fetchStructures();
     }
     if (isEmployee) fetchMySalary();
   });
@@ -680,6 +684,38 @@ export default function ProPayrollDashboard() {
           {/* ═══════════════════════════════════════════ */}
           {activeTab === 'my-salary' && isEmployee && (
             <div>
+              {/* Employee Stat Cards */}
+              {mySalary.length > 0 && (() => {
+                const totalSal = mySalary.reduce((s, p) => s + (p.netSalary || 0), 0);
+                const paidC = mySalary.filter(p => (p.status || '').toLowerCase() === 'paid').length;
+                const pendC = mySalary.length - paidC;
+                const latestP = mySalary[0];
+                const attPct = latestP && latestP.totalWorkingDays > 0
+                  ? Math.round((latestP.presentDays / latestP.totalWorkingDays) * 100)
+                  : 0;
+                return (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                    <StatCard icon={FiDollarSign} label="Total Salary" value={fmt(totalSal)} color="indigo" />
+                    <StatCard icon={FiClock} label="Pending" value={pendC} color="yellow" />
+                    <StatCard icon={FiCheckCircle} label="Paid" value={paidC} color="green" />
+                    <StatCard icon={FiUsers} label="Attendance %" value={`${attPct}%`} color="blue" />
+                  </div>
+                );
+              })()}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                <div className="bg-white rounded-xl p-5 shadow-sm border">
+                  <p className="text-sm text-gray-500">Total Records</p>
+                  <p className="text-2xl font-bold text-gray-800">{mySalary.length}</p>
+                </div>
+                <div className="bg-white rounded-xl p-5 shadow-sm border">
+                  <p className="text-sm text-gray-500">Paid</p>
+                  <p className="text-2xl font-bold text-blue-600">{mySalary.filter(p => (p.status || '').toLowerCase() === 'paid').length}</p>
+                </div>
+                <div className="bg-white rounded-xl p-5 shadow-sm border">
+                  <p className="text-sm text-gray-500">Month</p>
+                  <p className="text-2xl font-bold text-gray-800">{monthLabel(selectedMonth)}</p>
+                </div>
+              </div>
               <h2 className="text-lg font-semibold text-gray-800 mb-4">My Salary History</h2>
               {mySalary.length === 0 ? (
                 <div className="bg-white rounded-xl p-8 text-center text-gray-400 border">No salary records found.</div>

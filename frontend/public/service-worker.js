@@ -1,7 +1,7 @@
 /* eslint-disable no-restricted-globals */
 
-const CACHE_NAME = 'pp-crm-v3';
-const API_CACHE_NAME = 'pp-crm-api-v3';
+const CACHE_NAME = 'pp-crm-v4';
+const API_CACHE_NAME = 'pp-crm-api-v4';
 
 // Static assets to pre-cache on install
 const STATIC_ASSETS = [
@@ -60,10 +60,23 @@ self.addEventListener('fetch', (event) => {
   if (url.pathname.startsWith('/socket.io')) return;
   if (url.protocol === 'chrome-extension:') return;
 
+  // Auth API requests — NEVER cache, always go to network
+  if (url.pathname.startsWith('/api/auth/') || url.pathname.startsWith('/api/auth')) {
+    event.respondWith(
+      fetch(request).catch(() => {
+        return new Response(
+          JSON.stringify({ offline: true, message: 'Network unavailable. Please check your connection.' }),
+          { status: 503, headers: { 'Content-Type': 'application/json' } }
+        );
+      })
+    );
+    return;
+  }
+
   // API requests: Network-first with cache fallback
   if (url.pathname.startsWith('/api/')) {
     // Skip caching for mutable list endpoints — always fetch fresh
-    const noCachePaths = ['/api/employees', '/api/users', '/api/leads', '/api/tasks', '/api/attendance'];
+    const noCachePaths = ['/api/employees', '/api/users', '/api/leads', '/api/tasks', '/api/attendance', '/api/payroll', '/api/salary'];
     const shouldSkipCache = noCachePaths.some(p => url.pathname.startsWith(p));
 
     event.respondWith(
@@ -93,6 +106,20 @@ self.addEventListener('fetch', (event) => {
             }
           );
         })
+    );
+    return;
+  }
+
+  // Navigation requests (page loads): Network-first to ensure fresh HTML after updates
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          const responseClone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone));
+          return response;
+        })
+        .catch(() => caches.match('/index.html') || new Response('Offline', { status: 503 }))
     );
     return;
   }

@@ -1,7 +1,7 @@
 /* eslint-disable no-restricted-globals */
 
-const CACHE_NAME = 'pp-crm-v2';
-const API_CACHE_NAME = 'pp-crm-api-v2';
+const CACHE_NAME = 'pp-crm-v4';
+const API_CACHE_NAME = 'pp-crm-api-v4';
 
 // Static assets to pre-cache on install
 const STATIC_ASSETS = [
@@ -60,13 +60,30 @@ self.addEventListener('fetch', (event) => {
   if (url.pathname.startsWith('/socket.io')) return;
   if (url.protocol === 'chrome-extension:') return;
 
+  // Auth API requests — NEVER cache, always go to network
+  if (url.pathname.startsWith('/api/auth/') || url.pathname.startsWith('/api/auth')) {
+    event.respondWith(
+      fetch(request).catch(() => {
+        return new Response(
+          JSON.stringify({ offline: true, message: 'Network unavailable. Please check your connection.' }),
+          { status: 503, headers: { 'Content-Type': 'application/json' } }
+        );
+      })
+    );
+    return;
+  }
+
   // API requests: Network-first with cache fallback
   if (url.pathname.startsWith('/api/')) {
+    // Skip caching for mutable list endpoints — always fetch fresh
+    const noCachePaths = ['/api/employees', '/api/users', '/api/leads', '/api/tasks', '/api/attendance', '/api/payroll', '/api/salary'];
+    const shouldSkipCache = noCachePaths.some(p => url.pathname.startsWith(p));
+
     event.respondWith(
       fetch(request)
         .then((response) => {
-          // Cache successful GET API responses
-          if (response.ok) {
+          // Only cache if response is OK and not a mutable list endpoint
+          if (response.ok && !shouldSkipCache) {
             const responseClone = response.clone();
             caches.open(API_CACHE_NAME).then((cache) => {
               cache.put(request, responseClone);
@@ -75,9 +92,11 @@ self.addEventListener('fetch', (event) => {
           return response;
         })
         .catch(async () => {
-          // Network failed — try cache
-          const cached = await caches.match(request);
-          if (cached) return cached;
+          // Network failed — try cache (only for cacheable endpoints)
+          if (!shouldSkipCache) {
+            const cached = await caches.match(request);
+            if (cached) return cached;
+          }
           // Return offline JSON response
           return new Response(
             JSON.stringify({ offline: true, message: 'You are offline. Showing cached data.' }),
@@ -87,6 +106,20 @@ self.addEventListener('fetch', (event) => {
             }
           );
         })
+    );
+    return;
+  }
+
+  // Navigation requests (page loads): Network-first to ensure fresh HTML after updates
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          const responseClone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone));
+          return response;
+        })
+        .catch(() => caches.match('/index.html') || new Response('Offline', { status: 503 }))
     );
     return;
   }

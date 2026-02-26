@@ -236,7 +236,7 @@ export default function AddInventoryForm({ onSubmit, loading = false }) {
         if (!form.ownership) e.ownership = 'Ownership type is required.';
       } else {
         if (!form.configType) e.configType = 'Select property configuration.';
-        if (!form.builtUpArea || isNaN(form.builtUpArea) || form.builtUpArea < 150 || form.builtUpArea > 1500) e.builtUpArea = 'Built Up Area must be 150–1500.';
+        if (!form.builtUpArea || isNaN(form.builtUpArea) || Number(form.builtUpArea) <= 0) e.builtUpArea = 'Built Up Area is required.';
         if (!form.age || isNaN(form.age) || form.age < 0 || form.age > 99) e.age = 'Age must be 0–99.';
         if (!form.bathrooms) e.bathrooms = 'Select bathroom count.';
         if (form.balconies === '') e.balconies = 'Select balcony count.';
@@ -759,9 +759,8 @@ export default function AddInventoryForm({ onSubmit, loading = false }) {
                 className="w-full px-3 py-2 border rounded-md"
                 value={form.builtUpArea}
                 onChange={e => handleChange('builtUpArea', e.target.value)}
-                min={150}
-                max={1500}
-                placeholder="150–1500"
+                min={1}
+                placeholder="e.g. 1200"
               />
               {errors.builtUpArea && <div className="text-red-500 text-xs mt-1">{errors.builtUpArea}</div>}
             </div>

@@ -900,7 +900,7 @@ function InventoryPage() {
                     </div>
                     <div>
                       <h3 className="text-white font-bold text-lg">{selectedUnit.building_name || selectedUnit.project_name || 'Unit Details'}</h3>
-                      <p className="text-blue-100 text-xs">{selectedUnit.bhk || 'Property'} {selectedUnit.unit_number ? `• Unit ${selectedUnit.unit_number}` : ''}</p>
+                      <p className="text-blue-100 text-xs">{selectedUnit.bhk || 'Property'} {(user?.role === 'ADMIN' || user?.role === 'MANAGER') && selectedUnit.unit_number ? `• Unit ${selectedUnit.unit_number}` : ''}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -1253,8 +1253,8 @@ function InventoryPage() {
                         </div>
                       </div>
 
-                      {/* Owner Information */}
-                      {(selectedUnit.owner_name || selectedUnit.owner_phone) && (
+                      {/* Owner Information - Manager/Admin only */}
+                      {(user?.role === 'ADMIN' || user?.role === 'MANAGER') && (selectedUnit.owner_name || selectedUnit.owner_phone) && (
                         <div className="mb-5">
                           <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
                             <FiUser className="text-blue-500" /> Owner Information
@@ -1519,7 +1519,7 @@ function InventoryPage() {
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2">
               <div className="bg-white rounded-lg p-5 w-full max-w-3xl mx-4 sm:mx-0 max-h-[90vh] overflow-y-auto">
                 <div className="flex justify-between items-start mb-4">
-                  <h2 className="text-xl font-bold">Edit Unit (Unit: {editUnit.unit_number})</h2>
+                  <h2 className="text-xl font-bold">Edit Unit {(user?.role === 'ADMIN' || user?.role === 'MANAGER') && editUnit.unit_number ? `(Unit: ${editUnit.unit_number})` : ''}</h2>
                   <button
                     onClick={() => {
                       setEditingUnitId(null);
@@ -1699,6 +1699,7 @@ function InventoryPage() {
                     </div>
                   )}
 
+                  {(user?.role === 'ADMIN' || user?.role === 'MANAGER') && (
                   <div className="border-b pb-4">
                     <h3 className="font-semibold mb-3">Owner Information</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1716,6 +1717,7 @@ function InventoryPage() {
                       </div>
                     </div>
                   </div>
+                  )}
                 </div>
 
                 <div className="flex justify-end gap-3 mt-6">

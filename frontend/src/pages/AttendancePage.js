@@ -104,6 +104,7 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
   // Employee-specific states
   const [employeeViewMode, setEmployeeViewMode] = useState('current'); // 'current' or 'history'
   const [employeeSelectedMonth, setEmployeeSelectedMonth] = useState(new Date());
+  const [myJoiningDate, setMyJoiningDate] = useState(null); // Track when employee joined
   
   // Reload team attendance when selected month changes
   useEffect(() => {
@@ -119,6 +120,16 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
     loadLeaveRequests();
     checkUserLocation();
     checkTodayAttendance();
+    
+    // Fetch this employee's joining date for accurate absent calculation
+    if (user?.employeeId) {
+      api.get(`/employees/${user.employeeId}`)
+        .then(res => {
+          const emp = res.data?.data || res.data;
+          setMyJoiningDate(emp?.joiningDate || emp?.createdAt || null);
+        })
+        .catch(() => {});
+    }
     
     // Load manager-specific data
     if (user && user.role === 'MANAGER') {
@@ -460,19 +471,34 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
   }).length;
   
   // Calculate absent by counting working days with no attendance in current month
+  // Only counts from the employee's joining date (not from day 1 if joined mid-month)
   const absentCount = (() => {
     const now = new Date();
     const year = now.getFullYear();
     const month = now.getMonth();
     const today = now.getDate();
     
-    // Build a Set of dates (day number) that have present attendance
-    const presentDays = new Set();
+    // Determine the start day — if employee joined this month, start from joining day
+    let startDay = 1;
+    if (myJoiningDate) {
+      const jd = new Date(myJoiningDate);
+      if (jd.getFullYear() === year && jd.getMonth() === month) {
+        // Joined this month — only count from joining day
+        startDay = jd.getDate();
+      } else if (jd > now) {
+        // Joining date is in the future — no absences
+        return 0;
+      }
+      // If joined in a previous month, start from day 1 (default)
+    }
+    
+    // Build a Set of dates (day number) that have any attendance record
+    const attendedDays = new Set();
     attendance.forEach(a => {
       const d = new Date(a.date);
       if (d.getFullYear() === year && d.getMonth() === month) {
         const status = getAttendanceStatus(a);
-        if (status === 'P') presentDays.add(d.getDate());
+        if (status === 'P' || status === 'L' || status === 'WO' || status === 'H') attendedDays.add(d.getDate());
       }
     });
     
@@ -498,7 +524,7 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
     });
     
     let absent = 0;
-    for (let day = 1; day < today; day++) {
+    for (let day = startDay; day < today; day++) {
       const date = new Date(year, month, day);
       const dayOfWeek = date.getDay();
       
@@ -512,7 +538,7 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
       if (leaveDays.has(day)) continue;
       
       // Skip if attendance was marked
-      if (presentDays.has(day)) continue;
+      if (attendedDays.has(day)) continue;
       
       // Working day with no attendance = absent
       absent++;
@@ -532,18 +558,31 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
   
   // ===== ACCURATE ABSENT CALCULATION HELPER =====
   // Counts working days where an employee had NO attendance in a given month
-  const calculateEmployeeAbsentDays = useCallback((employeeId, targetMonth, targetYear, empAttendanceData) => {
+  // Respects joiningDate — only counts absences from joining date onwards
+  const calculateEmployeeAbsentDays = useCallback((employeeId, targetMonth, targetYear, empAttendanceData, employeeJoiningDate) => {
     const now = new Date();
     const isCurrentMonth = now.getMonth() === targetMonth && now.getFullYear() === targetYear;
     const lastDay = isCurrentMonth ? now.getDate() : new Date(targetYear, targetMonth + 1, 0).getDate();
 
-    // Build Set of days with present attendance
-    const presentDays = new Set();
+    // Determine start day based on joining date
+    let startDay = 1;
+    if (employeeJoiningDate) {
+      const jd = new Date(employeeJoiningDate);
+      if (jd.getFullYear() === targetYear && jd.getMonth() === targetMonth) {
+        startDay = jd.getDate();
+      } else if (jd.getFullYear() > targetYear || (jd.getFullYear() === targetYear && jd.getMonth() > targetMonth)) {
+        // Employee hadn't joined yet in this month
+        return 0;
+      }
+    }
+
+    // Build Set of days with any attendance record
+    const attendedDays = new Set();
     empAttendanceData.forEach(a => {
       const d = new Date(a.date);
       if (d.getFullYear() === targetYear && d.getMonth() === targetMonth) {
         const status = getAttendanceStatus(a);
-        if (status === 'P') presentDays.add(d.getDate());
+        if (status === 'P' || status === 'L' || status === 'WO' || status === 'H') attendedDays.add(d.getDate());
       }
     });
 
@@ -556,7 +595,7 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
       }
     });
 
-    // Build Set of approved leave dates (use team leave data or global leaveRequests)
+    // Build Set of approved leave dates
     const leaveDays = new Set();
     empAttendanceData.forEach(a => {
       const d = new Date(a.date);
@@ -567,14 +606,14 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
     });
 
     let absent = 0;
-    for (let day = 1; day < lastDay; day++) {
+    for (let day = startDay; day < lastDay; day++) {
       const date = new Date(targetYear, targetMonth, day);
       const dayOfWeek = date.getDay();
       // Skip Sundays (0) and Mondays (1 = weekly off)
       if (dayOfWeek === 0 || dayOfWeek === 1) continue;
       if (holidayDays.has(day)) continue;
       if (leaveDays.has(day)) continue;
-      if (presentDays.has(day)) continue;
+      if (attendedDays.has(day)) continue;
       absent++;
     }
     return absent;
@@ -624,7 +663,7 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
     employees.forEach(emp => {
       const empAttendance = teamAttendance.filter(a => a.employee === emp._id);
       const present = empAttendance.filter(a => getAttendanceStatus(a) === 'P').length;
-      const absent = calculateEmployeeAbsentDays(emp._id, selectedMonth.getMonth(), selectedMonth.getFullYear(), empAttendance);
+      const absent = calculateEmployeeAbsentDays(emp._id, selectedMonth.getMonth(), selectedMonth.getFullYear(), empAttendance, emp.joiningDate || emp.createdAt);
       const leave = empAttendance.filter(a => getAttendanceStatus(a) === 'L').length;
       const wo = empAttendance.filter(a => ['WO', 'H'].includes(getAttendanceStatus(a))).length;
       const consecutive = getConsecutiveAbsences(emp._id);
@@ -848,7 +887,7 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                             const todayStatus = getEmployeeAttendanceForDate(emp._id, new Date());
                             const present = empAttendance.filter(a => getAttendanceStatus(a) === 'P').length;
                             const now = new Date();
-                            const absent = calculateEmployeeAbsentDays(emp._id, now.getMonth(), now.getFullYear(), empAttendance);
+                            const absent = calculateEmployeeAbsentDays(emp._id, now.getMonth(), now.getFullYear(), empAttendance, emp.joiningDate || emp.createdAt);
                             const leave = empAttendance.filter(a => getAttendanceStatus(a) === 'L').length;
                             const consecutive = getConsecutiveAbsences(emp._id);
                             
@@ -975,7 +1014,7 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                                      attDate.getFullYear() === selectedMonth.getFullYear() &&
                                      String(a.employee) === String(emp._id);
                             });
-                            totalAbsent += calculateEmployeeAbsentDays(emp._id, selectedMonth.getMonth(), selectedMonth.getFullYear(), empAtt);
+                            totalAbsent += calculateEmployeeAbsentDays(emp._id, selectedMonth.getMonth(), selectedMonth.getFullYear(), empAtt, emp.joiningDate || emp.createdAt);
                           });
                           return totalAbsent;
                         })()}
@@ -1034,7 +1073,7 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                             });
                             
                             const present = monthAttendance.filter(a => getAttendanceStatus(a) === 'P').length;
-                            const absent = calculateEmployeeAbsentDays(emp._id, selectedMonth.getMonth(), selectedMonth.getFullYear(), monthAttendance);
+                            const absent = calculateEmployeeAbsentDays(emp._id, selectedMonth.getMonth(), selectedMonth.getFullYear(), monthAttendance, emp.joiningDate || emp.createdAt);
                             const leave = monthAttendance.filter(a => getAttendanceStatus(a) === 'L').length;
                             const weeklyOff = monthAttendance.filter(a => getAttendanceStatus(a) === 'WO').length;
                             const totalDays = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 0).getDate();

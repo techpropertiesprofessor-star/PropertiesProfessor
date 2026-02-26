@@ -16,8 +16,19 @@ export const AuthProvider = ({ children }) => {
           const response = await authAPI.verifyToken();
           setUser(response.data.user);
         } catch (err) {
-          localStorage.removeItem('token');
-          setError('Session expired');
+          const status = err.response?.status;
+          // Only remove token on actual auth failures (401/403)
+          // Keep token on network errors or server issues — user may just be offline or server cold-starting
+          if (status === 401 || status === 403) {
+            localStorage.removeItem('token');
+            setError('Session expired');
+          } else if (!err.response) {
+            // Network error — keep token, let user retry
+            console.warn('[Auth] Network error during token verify, keeping session');
+          } else {
+            // Other server errors (500, 503) — keep token
+            console.warn('[Auth] Server error during token verify:', status);
+          }
         }
       }
       setLoading(false);

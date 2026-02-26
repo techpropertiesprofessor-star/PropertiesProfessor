@@ -368,6 +368,14 @@ exports.markAsPaid = async (req, res, next) => {
     await salary.save();
     await salary.populate('employee', 'name email role');
 
+    // ── Real-time: notify employee and managers ──
+    try {
+      const { emitToUser, emitToAll } = require('../utils/socket.util');
+      const monthStr = `${salary.year}-${String(salary.month).padStart(2, '0')}`;
+      emitToUser(salary.employee._id, 'payroll:paid', { payrollId: salary._id, month: monthStr });
+      emitToAll('payroll:managerUpdate', { month: monthStr });
+    } catch (e) { /* ignore socket errors */ }
+
     res.json({ message: 'Salary marked as paid', salary });
   } catch (err) {
     next(err);

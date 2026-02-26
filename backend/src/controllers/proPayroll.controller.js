@@ -32,9 +32,60 @@
 const Employee = require('../models/Employee');
 const SalaryStructure = require('../models/SalaryStructure');
 const Payroll = require('../models/Payroll');
+const Salary = require('../models/Salary');
 const { generateMonthlyPayroll, generateAllPayrolls } = require('../services/payroll.service');
 const { generatePayslipPDF } = require('../services/pdf.service');
 const { generatePayrollExcel } = require('../services/excel.service');
+
+// ────────────────────────────────────────────────────────
+// HELPER: Normalize old Salary records to Payroll format
+// ────────────────────────────────────────────────────────
+function normalizeSalaryToPayroll(salary) {
+  const monthStr = `${salary.year}-${String(salary.month).padStart(2, '0')}`;
+  const emp = salary.employee; // populated or ObjectId
+  return {
+    _id: salary._id,
+    employeeId: emp,
+    month: monthStr,
+    status: 'Paid',
+    basic: salary.basicSalary || 0,
+    hra: 0,
+    conveyance: 0,
+    specialAllowance: 0,
+    grossSalary: (salary.basicSalary || 0) + (salary.bonus || 0) + (salary.incentives || 0),
+    totalWorkingDays: salary.totalWorkingDays || 0,
+    presentDays: salary.presentDays || 0,
+    absentDays: salary.absentDays || 0,
+    halfDays: 0,
+    leaveDays: salary.leaveDays || 0,
+    pfDeduction: 0,
+    taxDeduction: 0,
+    attendanceDeduction: 0,
+    totalDeductions: salary.deductions || 0,
+    bonus: salary.bonus || 0,
+    incentives: salary.incentives || 0,
+    netSalary: salary.netPay || 0,
+    generatedBy: salary.generatedBy,
+    approvedBy: null,
+    paidBy: salary.paidBy,
+    generatedAt: salary.createdAt,
+    approvedAt: null,
+    paidAt: salary.paidAt,
+    notes: salary.notes || '',
+    _source: 'salary',
+    createdAt: salary.createdAt,
+    updatedAt: salary.updatedAt,
+  };
+}
+
+/**
+ * Parse 'YYYY-MM' into { month: Number, year: Number } for old Salary queries
+ */
+function parseYYYYMM(monthStr) {
+  if (!monthStr || !/^\d{4}-(0[1-9]|1[0-2])$/.test(monthStr)) return null;
+  const [y, m] = monthStr.split('-');
+  return { month: parseInt(m), year: parseInt(y) };
+}
 
 // ────────────────────────────────────────────────────────
 // SALARY STRUCTURE CRUD
@@ -177,6 +228,12 @@ exports.generatePayroll = async (req, res, next) => {
       generatedBy: req.user.id,
     });
 
+    // Real-time: notify managers
+    try {
+      const { emitToAll } = require('../utils/socket.util');
+      emitToAll('payroll:managerUpdate', { month });
+    } catch (e) { /* ignore */ }
+
     res.status(201).json({
       message: 'Payroll generated successfully',
       data: payroll,
@@ -203,6 +260,12 @@ exports.generateAllPayroll = async (req, res, next) => {
       notes: notes || '',
       generatedBy: req.user.id,
     });
+
+    // Real-time: notify managers
+    try {
+      const { emitToAll } = require('../utils/socket.util');
+      emitToAll('payroll:managerUpdate', { month });
+    } catch (e) { /* ignore */ }
 
     res.status(201).json({
       message: `Generated: ${results.generated.length}, Skipped: ${results.skipped.length}, Errors: ${results.errors.length}`,
@@ -235,6 +298,13 @@ exports.approvePayroll = async (req, res, next) => {
     await payroll.save();
 
     await payroll.populate('employeeId', 'name email designation role');
+
+    // Real-time: notify managers
+    try {
+      const { emitToAll } = require('../utils/socket.util');
+      emitToAll('payroll:managerUpdate', { month: payroll.month });
+    } catch (e) { /* ignore */ }
+
     res.json({ message: 'Payroll approved', data: payroll });
   } catch (err) {
     next(err);
@@ -291,10 +361,11 @@ exports.getPayroll = async (req, res, next) => {
     const requestedEmpId = req.params.employeeId;
     const userRole = (req.user.role || '').toUpperCase();
 
-    // EMPLOYEE can only view their own payroll
+    // EMPLOYEE without Payroll Manage permission can only view their own payroll
     if (userRole === 'EMPLOYEE') {
       const emp = await Employee.findOne({ email: req.user.email });
-      if (!emp || emp._id.toString() !== requestedEmpId) {
+      const hasPayrollManage = emp && Array.isArray(emp.permissions) && emp.permissions.includes('Payroll Manage');
+      if (!hasPayrollManage && (!emp || emp._id.toString() !== requestedEmpId)) {
         return res.status(403).json({ message: 'Access denied — you can only view your own payroll' });
       }
     }
@@ -302,13 +373,41 @@ exports.getPayroll = async (req, res, next) => {
     const filter = { employeeId: requestedEmpId };
     if (req.query.month) filter.month = req.query.month;
 
-    const payrolls = await Payroll.find(filter)
+    // ── NEW Payroll model ──
+    const newPayrolls = await Payroll.find(filter)
       .populate('employeeId', 'name email designation role')
       .populate('generatedBy', 'name')
       .populate('approvedBy', 'name')
       .sort({ month: -1 });
 
-    res.json({ data: payrolls });
+    // ── OLD Salary model ──
+    const oldFilter = { employee: requestedEmpId };
+    if (req.query.month) {
+      const parsed = parseYYYYMM(req.query.month);
+      if (parsed) {
+        oldFilter.month = parsed.month;
+        oldFilter.year = parsed.year;
+      }
+    }
+
+    const oldSalaries = await Salary.find(oldFilter)
+      .populate('employee', 'name email designation role')
+      .populate('generatedBy', 'name')
+      .populate('paidBy', 'name')
+      .sort({ year: -1, month: -1 });
+
+    const normalizedOld = oldSalaries.map(normalizeSalaryToPayroll);
+
+    // Deduplicate by month (prefer new system)
+    const monthSet = new Set(newPayrolls.map(p => p.month));
+    const merged = [
+      ...newPayrolls,
+      ...normalizedOld.filter(r => !monthSet.has(r.month)),
+    ];
+
+    merged.sort((a, b) => (b.month || '').localeCompare(a.month || ''));
+
+    res.json({ data: merged });
   } catch (err) {
     next(err);
   }
@@ -324,13 +423,54 @@ exports.getAllPayrolls = async (req, res, next) => {
     if (req.query.month) filter.month = req.query.month;
     if (req.query.status) filter.status = req.query.status;
 
-    const payrolls = await Payroll.find(filter)
+    // ── NEW Payroll model ──
+    const newPayrolls = await Payroll.find(filter)
       .populate('employeeId', 'name email designation role')
       .populate('generatedBy', 'name')
       .populate('approvedBy', 'name')
       .sort({ month: -1, createdAt: -1 });
 
-    res.json({ data: payrolls });
+    // ── OLD Salary model ──
+    const oldFilter = {};
+    if (req.query.month) {
+      const parsed = parseYYYYMM(req.query.month);
+      if (parsed) {
+        oldFilter.month = parsed.month;
+        oldFilter.year = parsed.year;
+      }
+    }
+    // Map status filters
+    if (req.query.status) {
+      const statusMap = { 'Generated': 'GENERATED', 'Approved': 'GENERATED', 'Paid': 'PAID' };
+      if (statusMap[req.query.status]) oldFilter.status = statusMap[req.query.status];
+    }
+
+    const oldPayrolls = await Salary.find(oldFilter)
+      .populate('employee', 'name email designation role')
+      .populate('generatedBy', 'name')
+      .populate('paidBy', 'name')
+      .sort({ year: -1, month: -1 });
+
+    const normalizedOld = oldPayrolls.map(normalizeSalaryToPayroll);
+
+    // Deduplicate: for same employee + month, prefer new system
+    const seen = new Set();
+    newPayrolls.forEach(p => {
+      const empId = (p.employeeId?._id || p.employeeId || '').toString();
+      seen.add(`${empId}_${p.month}`);
+    });
+
+    const merged = [
+      ...newPayrolls,
+      ...normalizedOld.filter(r => {
+        const empId = (r.employeeId?._id || r.employeeId || '').toString();
+        return !seen.has(`${empId}_${r.month}`);
+      }),
+    ];
+
+    merged.sort((a, b) => (b.month || '').localeCompare(a.month || ''));
+
+    res.json({ data: merged });
   } catch (err) {
     next(err);
   }
@@ -347,22 +487,45 @@ exports.getAllPayrolls = async (req, res, next) => {
  */
 exports.downloadSlip = async (req, res, next) => {
   try {
-    const payroll = await Payroll.findById(req.params.id)
+    let payroll = await Payroll.findById(req.params.id)
       .populate('employeeId', 'name email designation role');
 
-    if (!payroll) return res.status(404).json({ message: 'Payroll record not found' });
+    let empData = payroll?.employeeId;
+    let isOldModel = false;
 
-    // EMPLOYEE restriction
-    const userRole = (req.user.role || '').toUpperCase();
-    if (userRole === 'EMPLOYEE') {
-      const emp = await Employee.findOne({ email: req.user.email });
-      if (!emp || payroll.employeeId._id.toString() !== emp._id.toString()) {
-        return res.status(403).json({ message: 'Access denied' });
+    // If not found in new model, try old Salary model
+    if (!payroll) {
+      const salary = await Salary.findById(req.params.id)
+        .populate('employee', 'name email designation role');
+      if (salary) {
+        payroll = normalizeSalaryToPayroll(salary);
+        empData = salary.employee;
+        isOldModel = true;
       }
     }
 
-    const pdfBuffer = generatePayslipPDF(payroll, payroll.employeeId);
-    const empName = (payroll.employeeId?.name || 'employee').replace(/\s+/g, '_');
+    if (!payroll) return res.status(404).json({ message: 'Payroll record not found' });
+
+    // EMPLOYEE restriction — employees with Payroll Manage can download any
+    const userRole = (req.user.role || '').toUpperCase();
+    if (userRole === 'EMPLOYEE') {
+      const emp = await Employee.findOne({ email: req.user.email });
+      const hasPayrollManage = emp && Array.isArray(emp.permissions) && emp.permissions.includes('Payroll Manage');
+      if (!hasPayrollManage) {
+        const payrollEmpId = isOldModel
+          ? (empData?._id || payroll.employeeId)
+          : (payroll.employeeId?._id || payroll.employeeId);
+        if (!emp || payrollEmpId.toString() !== emp._id.toString()) {
+          return res.status(403).json({ message: 'Access denied' });
+        }
+      }
+    }
+
+    // For old model, empData is already the populated employee object
+    const employeeForPdf = isOldModel ? empData : payroll.employeeId;
+
+    const pdfBuffer = generatePayslipPDF(payroll, employeeForPdf);
+    const empName = (employeeForPdf?.name || 'employee').replace(/\s+/g, '_');
     const filename = `payslip_${empName}_${payroll.month}.pdf`;
 
     res.set({
@@ -423,17 +586,38 @@ exports.getDashboard = async (req, res, next) => {
   try {
     const month = req.query.month || getCurrentMonth();
 
+    // ── NEW Payroll model ──
     const payrolls = await Payroll.find({ month });
 
-    const totalSalary = payrolls.reduce((sum, p) => sum + (p.netSalary || 0), 0);
-    const pendingApprovals = payrolls.filter(p => p.status === 'Generated').length;
-    const approvedCount = payrolls.filter(p => p.status === 'Approved').length;
-    const paidCount = payrolls.filter(p => p.status === 'Paid').length;
-    const totalEmployees = payrolls.length;
+    // ── OLD Salary model ──
+    const parsed = parseYYYYMM(month);
+    let oldPayrolls = [];
+    if (parsed) {
+      const oldSalaries = await Salary.find({ month: parsed.month, year: parsed.year });
+      oldPayrolls = oldSalaries.map(normalizeSalaryToPayroll);
+    }
+
+    // Deduplicate: for same employeeId+month, prefer new system
+    const seen = new Set();
+    payrolls.forEach(p => {
+      seen.add((p.employeeId || '').toString());
+    });
+    const uniqueOld = oldPayrolls.filter(r => {
+      const empId = (r.employeeId?._id || r.employeeId || '').toString();
+      return !seen.has(empId);
+    });
+
+    const allPayrolls = [...payrolls, ...uniqueOld];
+
+    const totalSalary = allPayrolls.reduce((sum, p) => sum + (p.netSalary || 0), 0);
+    const pendingApprovals = allPayrolls.filter(p => p.status === 'Generated').length;
+    const approvedCount = allPayrolls.filter(p => p.status === 'Approved').length;
+    const paidCount = allPayrolls.filter(p => p.status === 'Paid').length;
+    const totalEmployees = allPayrolls.length;
 
     // Attendance aggregation for the month
-    const totalPresent = payrolls.reduce((s, p) => s + (p.presentDays || 0), 0);
-    const totalWorkingDaysSum = payrolls.reduce((s, p) => s + (p.totalWorkingDays || 0), 0);
+    const totalPresent = allPayrolls.reduce((s, p) => s + (p.presentDays || 0), 0);
+    const totalWorkingDaysSum = allPayrolls.reduce((s, p) => s + (p.totalWorkingDays || 0), 0);
     const attendancePercent = totalWorkingDaysSum > 0
       ? Math.round((totalPresent / totalWorkingDaysSum) * 100)
       : 0;
@@ -490,17 +674,35 @@ exports.getMyReceipts = async (req, res, next) => {
     const emp = await Employee.findOne({ email: req.user.email });
     if (!emp) return res.status(404).json({ message: 'Employee record not found' });
 
-    const filter = { employeeId: emp._id, status: 'Paid' };
-
-
-    const receipts = await Payroll.find(filter)
+    // ── Query NEW Payroll model ──
+    const newReceipts = await Payroll.find({ employeeId: emp._id, status: 'Paid' })
       .populate('employeeId', 'name email designation role')
       .populate('generatedBy', 'name')
       .populate('approvedBy', 'name')
       .populate('paidBy', 'name')
       .sort({ month: -1 });
 
-    res.json({ data: receipts });
+    // ── Query OLD Salary model ──
+    const oldReceipts = await Salary.find({ employee: emp._id, status: 'PAID' })
+      .populate('employee', 'name email designation role')
+      .populate('generatedBy', 'name')
+      .populate('paidBy', 'name')
+      .sort({ year: -1, month: -1 });
+
+    // Normalize old records to Payroll shape
+    const normalizedOld = oldReceipts.map(normalizeSalaryToPayroll);
+
+    // Merge — deduplicate by month string (prefer new system records)
+    const monthSet = new Set(newReceipts.map(r => r.month));
+    const merged = [
+      ...newReceipts,
+      ...normalizedOld.filter(r => !monthSet.has(r.month)),
+    ];
+
+    // Sort by month descending
+    merged.sort((a, b) => (b.month || '').localeCompare(a.month || ''));
+
+    res.json({ data: merged });
   } catch (err) {
     next(err);
   }
@@ -511,24 +713,44 @@ exports.getMyReceipts = async (req, res, next) => {
  */
 exports.getReceiptById = async (req, res, next) => {
   try {
-    const payroll = await Payroll.findById(req.params.id)
+    let payroll = await Payroll.findById(req.params.id)
       .populate('employeeId', 'name email designation role')
       .populate('generatedBy', 'name')
       .populate('approvedBy', 'name')
       .populate('paidBy', 'name');
 
-    if (!payroll) return res.status(404).json({ message: 'Receipt not found' });
+    let isOldModel = false;
 
-    // EMPLOYEE can only view own receipt
-    const userRole = (req.user.role || '').toUpperCase();
-    if (userRole === 'EMPLOYEE') {
-      const emp = await Employee.findOne({ email: req.user.email });
-      if (!emp || payroll.employeeId._id.toString() !== emp._id.toString()) {
-        return res.status(403).json({ message: 'Access denied' });
+    // If not found in new Payroll model, try old Salary model
+    if (!payroll) {
+      const salary = await Salary.findById(req.params.id)
+        .populate('employee', 'name email designation role')
+        .populate('generatedBy', 'name')
+        .populate('paidBy', 'name');
+      if (salary && salary.status === 'PAID') {
+        payroll = normalizeSalaryToPayroll(salary);
+        isOldModel = true;
       }
     }
 
-    if (payroll.status !== 'Paid') {
+    if (!payroll) return res.status(404).json({ message: 'Receipt not found' });
+
+    // EMPLOYEE without Payroll Manage can only view own receipt
+    const userRole = (req.user.role || '').toUpperCase();
+    if (userRole === 'EMPLOYEE') {
+      const emp = await Employee.findOne({ email: req.user.email });
+      const hasPayrollManage = emp && Array.isArray(emp.permissions) && emp.permissions.includes('Payroll Manage');
+      if (!hasPayrollManage) {
+        const empId = isOldModel
+          ? (payroll.employeeId?._id || payroll.employeeId)
+          : (payroll.employeeId?._id || payroll.employeeId);
+        if (!emp || empId.toString() !== emp._id.toString()) {
+          return res.status(403).json({ message: 'Access denied' });
+        }
+      }
+    }
+
+    if (!isOldModel && payroll.status !== 'Paid') {
       return res.status(400).json({ message: 'Receipt is only available for paid payrolls' });
     }
 

@@ -13,12 +13,13 @@
  * ============================================================
  */
 
-import React, { useState, useEffect, useContext, useCallback } from 'react';
+import React, { useState, useEffect, useContext, useCallback, useMemo } from 'react';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import useSidebarCollapsed from '../hooks/useSidebarCollapsed';
 import { payrollAPI, employeeAPI } from '../api/client';
 import { AuthContext } from '../context/AuthContext';
+import useRealtimeData from '../hooks/useRealtimeData';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -26,9 +27,12 @@ export default function PayrollPage() {
   const sidebarCollapsed = useSidebarCollapsed();
   const { user } = useContext(AuthContext);
   const role = (user?.role || '').toUpperCase();
+  const userPermissions = user?.permissions || [];
+  const hasPayrollPerm = userPermissions.includes('Payroll');
+  // Employees with "Payroll" permission get manager-level access
   const isAdmin = role === 'ADMIN';
-  const isManager = role === 'MANAGER';
-  const isEmployee = role === 'EMPLOYEE';
+  const isManager = role === 'MANAGER' || (role === 'EMPLOYEE' && hasPayrollPerm);
+  const isEmployee = role === 'EMPLOYEE' && !hasPayrollPerm;
 
   // ── State ──
   const [salaries, setSalaries] = useState([]);
@@ -97,6 +101,24 @@ export default function PayrollPage() {
     loadSummary();
     loadEmployees();
   }, [loadSalaries, loadSummary, loadEmployees]);
+
+  // Real-time: refresh data when payroll events fire
+  useRealtimeData(['payroll:created', 'payroll:paid', 'payroll:updated', 'payroll:managerUpdate'], () => {
+    loadSalaries();
+    loadSummary();
+    loadEmployees();
+  });
+
+  // Compute summary from salaries array for employees (or fallback)
+  const computedSummary = useMemo(() => {
+    if (!isEmployee) return summary; // managers use API summary
+    if (!salaries || salaries.length === 0) return null;
+    const total = salaries.length;
+    const paidCount = salaries.filter(s => (s.status || '').toUpperCase() === 'PAID').length;
+    const pendingCount = total - paidCount;
+    const totalPayout = salaries.reduce((sum, s) => sum + (s.netPay || 0), 0);
+    return { totalEmployees: total, totalPayout, paidCount, pendingCount };
+  }, [isEmployee, summary, salaries]);
 
   // ── ADMIN: Set Basic Salary ──
   const handleSetBasicSalary = async () => {
@@ -256,13 +278,13 @@ export default function PayrollPage() {
             </div>
           </div>
 
-          {/* ── Summary Cards — ADMIN & MANAGER only ── */}
-          {!isEmployee && summary && (
+          {/* ── Summary Cards — Visible to ALL users ── */}
+          {computedSummary && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-              <SummaryCard label="Total Employees" value={summary.totalEmployees} color="blue" />
-              <SummaryCard label="Total Payout" value={formatCurrency(summary.totalPayout)} color="green" />
-              <SummaryCard label="Paid" value={summary.paidCount} color="emerald" />
-              <SummaryCard label="Pending" value={summary.pendingCount} color="amber" />
+              <SummaryCard label={isEmployee ? 'My Records' : 'Total Employees'} value={computedSummary.totalEmployees} color="blue" />
+              <SummaryCard label="Total Payout" value={formatCurrency(computedSummary.totalPayout)} color="green" />
+              <SummaryCard label="Paid" value={computedSummary.paidCount} color="emerald" />
+              <SummaryCard label="Pending" value={computedSummary.pendingCount} color="amber" />
             </div>
           )}
 

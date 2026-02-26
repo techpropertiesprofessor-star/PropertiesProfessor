@@ -38,35 +38,38 @@ const payrollCtrl = require('../controllers/payroll.controller');
 //  ALL routes require authentication
 // ═══════════════════════════════════════════════════════════
 
-// ── ADMIN & MANAGER: Set basic salary for an employee ──
+// Permission shorthand: employees with 'Payroll' are treated as manager-level
+const pp = 'Payroll';
+
+// ── ADMIN & MANAGER (or Employee with Payroll permission): Set basic salary ──
 router.post(
   '/set-salary',
   auth,
-  role(['ADMIN', 'MANAGER']),
+  role(['ADMIN', 'MANAGER'], pp),
   payrollCtrl.setBasicSalary
 );
 
-// ── ADMIN & MANAGER: Generate payroll for single employee ──
+// ── Generate payroll for single employee ──
 router.post(
   '/generate',
   auth,
-  role(['ADMIN', 'MANAGER']),
+  role(['ADMIN', 'MANAGER'], pp),
   payrollCtrl.generateSalary
 );
 
-// ── ADMIN & MANAGER: Generate payroll for ALL active employees ──
+// ── Generate payroll for ALL active employees ──
 router.post(
   '/generate-all',
   auth,
-  role(['ADMIN', 'MANAGER']),
+  role(['ADMIN', 'MANAGER'], pp),
   payrollCtrl.generateAllSalaries
 );
 
-// ── ADMIN & MANAGER: Payroll summary stats ──
+// ── Payroll summary stats ──
 router.get(
   '/summary',
   auth,
-  role(['ADMIN', 'MANAGER']),
+  role(['ADMIN', 'MANAGER'], pp),
   payrollCtrl.getPayrollSummary
 );
 
@@ -86,27 +89,27 @@ router.get(
   payrollCtrl.getSalaryById
 );
 
-// ── ADMIN & MANAGER: Edit bonus/incentives/deductions ──
+// ── Edit bonus/incentives/deductions ──
 router.put(
   '/:id',
   auth,
-  role(['ADMIN', 'MANAGER']),
+  role(['ADMIN', 'MANAGER'], pp),
   payrollCtrl.updateSalary
 );
 
-// ── ADMIN & MANAGER: Mark salary as paid ──
+// ── Mark salary as paid ──
 router.put(
   '/:id/pay',
   auth,
-  role(['ADMIN', 'MANAGER']),
+  role(['ADMIN', 'MANAGER'], pp),
   payrollCtrl.markAsPaid
 );
 
-// ── ADMIN & MANAGER: Delete salary record ──
+// ── Delete salary record ──
 router.delete(
   '/:id',
   auth,
-  role(['ADMIN', 'MANAGER']),
+  role(['ADMIN', 'MANAGER'], pp),
   payrollCtrl.deleteSalary
 );
 

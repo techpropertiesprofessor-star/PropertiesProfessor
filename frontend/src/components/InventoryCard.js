@@ -104,7 +104,7 @@ export default function InventoryCard({data, onView, onEdit, user}){
       <div className="p-4 flex-1 flex flex-col">
         {/* Title & Location */}
         <div className="mb-3">
-          <h4 className="font-bold text-gray-900 text-base leading-tight line-clamp-1">{d.unit_number || d.name || 'Unit'}</h4>
+          <h4 className="font-bold text-gray-900 text-base leading-tight line-clamp-1">{(user?.role === 'ADMIN' || user?.role === 'MANAGER') ? (d.unit_number || d.name || 'Unit') : (d.bhk || d.building_name || 'Unit')}</h4>
           {d.location && d.location !== '-' && (
             <p className="flex items-center gap-1 text-xs text-gray-500 mt-1">
               <FiMapPin size={11} className="text-red-400 flex-shrink-0" />
@@ -133,15 +133,15 @@ export default function InventoryCard({data, onView, onEdit, user}){
         {/* Divider */}
         <div className="border-t border-gray-100 my-2" />
 
-        {/* Owner Info */}
+        {/* Owner Info - Manager/Admin only */}
         <div className="space-y-1.5 mb-4">
-          {d.owner_name && d.owner_name !== '-' && (
+          {(user?.role === 'ADMIN' || user?.role === 'MANAGER') && d.owner_name && d.owner_name !== '-' && (
             <div className="flex items-center gap-2 text-xs text-gray-600">
               <FiUser size={12} className="text-gray-400" />
               <span className="font-medium text-gray-800">{d.owner_name}</span>
             </div>
           )}
-          {d.owner_phone && d.owner_phone !== '-' && (
+          {(user?.role === 'ADMIN' || user?.role === 'MANAGER') && d.owner_phone && d.owner_phone !== '-' && (
             <div className="flex items-center gap-2 text-xs text-gray-600">
               <FiPhone size={12} className="text-gray-400" />
               <span>{d.owner_phone}</span>
