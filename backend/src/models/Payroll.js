@@ -70,6 +70,9 @@ const PayrollSchema = new mongoose.Schema(
     approvedAt:  { type: Date },
     paidAt:      { type: Date },
 
+    // --- Payslip Number (sequential within month) ---
+    payslipNumber: { type: String, default: '' },
+
     // --- Notes ---
     notes: { type: String, default: '' },
   },

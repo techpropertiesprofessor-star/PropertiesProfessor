@@ -234,6 +234,11 @@ async function generateMonthlyPayroll(employeeId, month, options = {}) {
       );
     }
 
+    // ── Generate sequential payslip number for this month ──
+    const monthCount = await Payroll.countDocuments({ month }).session(session);
+    const [yr, mo] = month.split('-');
+    payrollData.payslipNumber = `PP-${yr}${mo}-${String(monthCount + 1).padStart(3, '0')}`;
+
     const [payroll] = await Payroll.create([payrollData], { session });
     await session.commitTransaction();
 

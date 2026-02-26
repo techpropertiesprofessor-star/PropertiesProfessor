@@ -6,7 +6,10 @@ const EmployeeSchema = new mongoose.Schema({
   phone: { type: String },
   role: { type: String, enum: ['ADMIN', 'MANAGER', 'EMPLOYEE', 'CALLER'], default: 'EMPLOYEE' },
   designation: { type: String, trim: true, default: '' },
+  department: { type: String, trim: true, default: '' },
   joiningDate: { type: Date },
+  uanNumber: { type: String, trim: true, default: '' },          // UAN / PF registration number
+  bankAccountLast4: { type: String, trim: true, default: '' },  // Last 4 digits of bank account
   status: { type: String, enum: ['active', 'inactive'], default: 'active' },
   permissions: [{ type: String }],
   basicSalary: { type: Number, default: 0, min: 0 },

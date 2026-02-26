@@ -488,7 +488,7 @@ exports.getAllPayrolls = async (req, res, next) => {
 exports.downloadSlip = async (req, res, next) => {
   try {
     let payroll = await Payroll.findById(req.params.id)
-      .populate('employeeId', 'name email designation role');
+      .populate('employeeId', 'name email designation department role joiningDate uanNumber bankAccountLast4');
 
     let empData = payroll?.employeeId;
     let isOldModel = false;
@@ -496,7 +496,7 @@ exports.downloadSlip = async (req, res, next) => {
     // If not found in new model, try old Salary model
     if (!payroll) {
       const salary = await Salary.findById(req.params.id)
-        .populate('employee', 'name email designation role');
+        .populate('employee', 'name email designation department role joiningDate uanNumber bankAccountLast4');
       if (salary) {
         payroll = normalizeSalaryToPayroll(salary);
         empData = salary.employee;
@@ -524,14 +524,13 @@ exports.downloadSlip = async (req, res, next) => {
     // For old model, empData is already the populated employee object
     const employeeForPdf = isOldModel ? empData : payroll.employeeId;
 
-    const pdfBuffer = generatePayslipPDF(payroll, employeeForPdf);
+    const pdfBuffer = await generatePayslipPDF(payroll, employeeForPdf);
     const empName = (employeeForPdf?.name || 'employee').replace(/\s+/g, '_');
     const filename = `payslip_${empName}_${payroll.month}.pdf`;
 
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': `attachment; filename="${filename}"`,
-      'Content-Length': pdfBuffer.length,
     });
     res.send(pdfBuffer);
   } catch (err) {
@@ -676,7 +675,7 @@ exports.getMyReceipts = async (req, res, next) => {
 
     // ── Query NEW Payroll model ──
     const newReceipts = await Payroll.find({ employeeId: emp._id, status: 'Paid' })
-      .populate('employeeId', 'name email designation role')
+      .populate('employeeId', 'name email designation department role joiningDate uanNumber bankAccountLast4')
       .populate('generatedBy', 'name')
       .populate('approvedBy', 'name')
       .populate('paidBy', 'name')
@@ -684,7 +683,7 @@ exports.getMyReceipts = async (req, res, next) => {
 
     // ── Query OLD Salary model ──
     const oldReceipts = await Salary.find({ employee: emp._id, status: 'PAID' })
-      .populate('employee', 'name email designation role')
+      .populate('employee', 'name email designation department role joiningDate uanNumber bankAccountLast4')
       .populate('generatedBy', 'name')
       .populate('paidBy', 'name')
       .sort({ year: -1, month: -1 });
@@ -714,7 +713,7 @@ exports.getMyReceipts = async (req, res, next) => {
 exports.getReceiptById = async (req, res, next) => {
   try {
     let payroll = await Payroll.findById(req.params.id)
-      .populate('employeeId', 'name email designation role')
+      .populate('employeeId', 'name email designation department role joiningDate uanNumber bankAccountLast4')
       .populate('generatedBy', 'name')
       .populate('approvedBy', 'name')
       .populate('paidBy', 'name');
@@ -724,7 +723,7 @@ exports.getReceiptById = async (req, res, next) => {
     // If not found in new Payroll model, try old Salary model
     if (!payroll) {
       const salary = await Salary.findById(req.params.id)
-        .populate('employee', 'name email designation role')
+        .populate('employee', 'name email designation department role joiningDate uanNumber bankAccountLast4')
         .populate('generatedBy', 'name')
         .populate('paidBy', 'name');
       if (salary && salary.status === 'PAID') {

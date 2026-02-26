@@ -7,10 +7,12 @@
  * Receipts appear automatically once the manager marks payroll as "Paid".
  * ============================================================
  */
-import React, { useState, useEffect, useContext, useCallback } from 'react';
+import React, { useState, useEffect, useContext, useCallback, useRef } from 'react';
 import useRealtimeData from '../hooks/useRealtimeData';
 import { AuthContext } from '../context/AuthContext';
 import { proPayrollAPI } from '../api/client';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import useSidebarCollapsed from '../hooks/useSidebarCollapsed';
@@ -35,6 +37,8 @@ export default function PayrollReceiptPage() {
   const [loading, setLoading] = useState(true);
   const [viewReceipt, setViewReceipt] = useState(null);
   const [downloading, setDownloading] = useState(null);
+  const [pendingDownload, setPendingDownload] = useState(null);
+  const receiptRef = useRef(null);
 
   const fetchReceipts = useCallback(async () => {
     try {
@@ -55,22 +59,65 @@ export default function PayrollReceiptPage() {
   // Real-time: refresh receipts when payroll is paid
   useRealtimeData(['payroll:paid'], fetchReceipts);
 
-  const handleDownload = async (receipt) => {
+  // Capture the on-screen receipt div and save as PDF (looks identical to the modal view)
+  const captureAndDownloadPDF = useCallback(async (receipt) => {
+    if (!receiptRef.current) return;
     try {
       setDownloading(receipt._id);
-      const res = await proPayrollAPI.downloadReceiptPDF(receipt._id);
-      const blob = new Blob([res.data], { type: 'application/pdf' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
+      const canvas = await html2canvas(receiptRef.current, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+      });
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pdfW = pdf.internal.pageSize.getWidth();
+      const pdfH = (canvas.height * pdfW) / canvas.width;
+      // If content taller than one page, split across pages
+      const pageH = pdf.internal.pageSize.getHeight();
+      if (pdfH <= pageH) {
+        pdf.addImage(imgData, 'JPEG', 0, 0, pdfW, pdfH);
+      } else {
+        let remainH = pdfH;
+        let offset = 0;
+        while (remainH > 0) {
+          pdf.addImage(imgData, 'JPEG', 0, -offset, pdfW, pdfH);
+          remainH -= pageH;
+          offset  += pageH;
+          if (remainH > 0) pdf.addPage();
+        }
+      }
       const empName = (receipt.employeeId?.name || 'employee').replace(/\s+/g, '_');
-      a.download = `payroll_receipt_${empName}_${receipt.month}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
+      pdf.save(`payslip_${empName}_${receipt.month}.pdf`);
     } catch (err) {
-      console.error('Download error:', err);
+      console.error('PDF generation error:', err);
     } finally {
       setDownloading(null);
+    }
+  }, []);
+
+  // When a download is triggered from the card (modal not yet open),
+  // we open the modal first then capture after render.
+  useEffect(() => {
+    if (pendingDownload && viewReceipt?._id === pendingDownload && receiptRef.current) {
+      const timer = setTimeout(() => {
+        captureAndDownloadPDF(viewReceipt);
+        setPendingDownload(null);
+      }, 350); // wait for DOM to fully paint
+      return () => clearTimeout(timer);
+    }
+  }, [viewReceipt, pendingDownload, captureAndDownloadPDF]);
+
+  const handleDownload = (receipt) => {
+    if (viewReceipt?._id === receipt._id && receiptRef.current) {
+      // Modal already open — capture immediately
+      captureAndDownloadPDF(receipt);
+    } else {
+      // Open modal first; useEffect above will trigger capture once rendered
+      setViewReceipt(receipt);
+      setPendingDownload(receipt._id);
     }
   };
 
@@ -204,196 +251,167 @@ export default function PayrollReceiptPage() {
       {/* VIEW RECEIPT MODAL */}
       {/* ═══════════════════════════════════════════ */}
       {viewReceipt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3" onClick={() => setViewReceipt(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3" onClick={() => setViewReceipt(null)}>
           <div
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[95vh] overflow-y-auto"
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[96vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Modal Header */}
-            <div className="sticky top-0 bg-gradient-to-r from-indigo-700 to-blue-700 text-white p-5 rounded-t-2xl flex items-center justify-between z-10">
-              <div>
-                <h2 className="text-lg font-bold">Payroll Receipt</h2>
-                <p className="text-indigo-200 text-sm">{monthLabel(viewReceipt.month)}</p>
-              </div>
+            {/* ── Top action bar ── */}
+            <div className="sticky top-0 z-10 flex items-center justify-between bg-white/95 backdrop-blur px-5 py-3 border-b border-gray-100">
+              <span className="text-sm font-semibold text-gray-600">Payslip — {monthLabel(viewReceipt.month)}</span>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => handleDownload(viewReceipt)}
-                  className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition"
-                  title="Download PDF"
+                  disabled={downloading === viewReceipt._id}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 transition disabled:opacity-50"
                 >
-                  <FiDownload size={18} />
+                  <FiDownload size={13} />
+                  {downloading === viewReceipt._id ? 'Downloading…' : 'Download PDF'}
                 </button>
-                <button
-                  onClick={() => setViewReceipt(null)}
-                  className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition"
-                >
+                <button onClick={() => setViewReceipt(null)} className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition">
                   <FiX size={18} />
                 </button>
               </div>
             </div>
 
-            <div className="p-5 space-y-5">
+            {/* ══════════════════════════════════════════════════
+                PAYSLIP BODY — captured by html2canvas for PDF
+            ══════════════════════════════════════════════════ */}
+            <div className="p-5" ref={receiptRef}>
 
-              {/* Company Header */}
-              <div className="text-center py-3 border-b border-gray-200">
-                <h3 className="text-lg font-bold text-gray-800">Properties Professor Pvt. Ltd.</h3>
-                <p className="text-xs text-gray-400">Professional Payroll System</p>
-                <span className="inline-block mt-2 px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">
-                  PAID
+              {/* ── 1. COMPANY HEADER BANNER ── */}
+              <div className="flex items-center gap-4 bg-[#1e3a8a] rounded-xl px-5 py-4 mb-5">
+                <img
+                  src="/logo.png"
+                  alt="logo"
+                  className="w-14 h-14 object-contain rounded-lg bg-white/10 p-1 flex-shrink-0"
+                  onError={(e) => { e.target.style.display='none'; }}
+                />
+                <div>
+                  <h2 className="text-lg font-bold text-white leading-tight">Properties Professor</h2>
+                  <p className="text-blue-300 text-xs mt-0.5">Professional Payroll System</p>
+                  <p className="text-yellow-300 text-xs font-semibold mt-1">PAYSLIP — {monthLabel(viewReceipt.month)}</p>
+                </div>
+              </div>
+
+              {/* ── 2. COMPANY + EMPLOYEE DETAILS (2 columns) ── */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+                {/* Company Details */}
+                <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  <div className="bg-blue-50 px-4 py-2 border-b border-gray-200">
+                    <h3 className="text-xs font-bold text-blue-800 uppercase tracking-wide">Company Details</h3>
+                  </div>
+                  {[
+                    ['Company Name',  'Properties Professor'],
+                    ['Address',       'Noida, Uttar Pradesh, India'],
+                    ['Payslip Month', monthLabel(viewReceipt.month)],
+                    ['Payslip No',    viewReceipt.payslipNumber || `PP-${(viewReceipt.month||'').replace('-','')}-${String(viewReceipt._id||'').slice(-4).toUpperCase()}`],
+                  ].map(([label, value], i) => (
+                    <div key={label} className={`flex px-4 py-2 text-xs ${i%2===0?'bg-gray-50':'bg-white'}`}>
+                      <span className="text-gray-500 w-2/5 flex-shrink-0">{label}</span>
+                      <span className="font-semibold text-gray-800 w-3/5">{value}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Employee Details */}
+                <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  <div className="bg-blue-50 px-4 py-2 border-b border-gray-200">
+                    <h3 className="text-xs font-bold text-blue-800 uppercase tracking-wide">Employee Details</h3>
+                  </div>
+                  {[
+                    ['Employee Name',          viewReceipt.employeeId?.name || 'N/A'],
+                    ['Employee ID',            String(viewReceipt.employeeId?._id||'').slice(-12).toUpperCase()],
+                    ['Designation',            viewReceipt.employeeId?.designation || viewReceipt.employeeId?.role || 'N/A'],
+                    ['Department',             viewReceipt.employeeId?.department || viewReceipt.employeeId?.role || 'General'],
+                    ['Date of Joining',        viewReceipt.employeeId?.joiningDate ? new Date(viewReceipt.employeeId.joiningDate).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : 'N/A'],
+                    ['UAN / PF No',            viewReceipt.employeeId?.uanNumber || 'N/A'],
+                    ['Bank A/c Last 4 Digits', viewReceipt.employeeId?.bankAccountLast4 || 'XXXX'],
+                  ].map(([label, value], i) => (
+                    <div key={label} className={`flex px-4 py-2 text-xs ${i%2===0?'bg-gray-50':'bg-white'}`}>
+                      <span className="text-gray-500 w-2/5 flex-shrink-0">{label}</span>
+                      <span className="font-semibold text-gray-800 w-3/5">{value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* ── 3. EARNINGS & DEDUCTIONS TABLE (4-column) ── */}
+              <div className="border border-gray-200 rounded-xl overflow-hidden mb-4">
+                {/* Table header */}
+                <div className="grid grid-cols-4 bg-gray-300">
+                  <div className="px-3 py-2 text-xs font-bold text-gray-800 text-center border-r border-gray-400">EARNINGS</div>
+                  <div className="px-3 py-2 text-xs font-bold text-gray-800 text-center border-r border-gray-400">AMOUNT</div>
+                  <div className="px-3 py-2 text-xs font-bold text-gray-800 text-center border-r border-gray-400">DEDUCTIONS</div>
+                  <div className="px-3 py-2 text-xs font-bold text-gray-800 text-center">AMOUNT</div>
+                </div>
+
+                {/* Row builder */}
+                {[
+                  ['Basic Salary',      viewReceipt.basic,             'PF (12%)',        viewReceipt.pfDeduction],
+                  ['HRA',               viewReceipt.hra,               'ESI',             0],
+                  ['Conveyance',        viewReceipt.conveyance,        'Professional Tax',viewReceipt.taxDeduction],
+                  ['Special Allowance', viewReceipt.specialAllowance,  'TDS',             0],
+                  ['Bonus/Incentive',  (viewReceipt.bonus||0)+(viewReceipt.incentives||0), 'Loan/Advance', viewReceipt.attendanceDeduction],
+                  ['Other Allowance',   0,                             '',                null],
+                ].map(([eLabel, eAmt, dLabel, dAmt], idx) => (
+                  <div key={idx} className={`grid grid-cols-4 border-t border-gray-200 ${idx%2===0?'bg-white':'bg-gray-50'}`}>
+                    <div className="px-3 py-2 text-xs text-gray-700 border-r border-gray-200">{eLabel}</div>
+                    <div className="px-3 py-2 text-xs text-gray-700 text-right border-r border-gray-200">{eAmt > 0 ? fmt(eAmt) : ''}</div>
+                    <div className="px-3 py-2 text-xs text-gray-700 border-r border-gray-200">{dLabel}</div>
+                    <div className="px-3 py-2 text-xs text-gray-700 text-right">{(dAmt !== null && dAmt > 0) ? fmt(dAmt) : ''}</div>
+                  </div>
+                ))}
+
+                {/* GROSS SALARY / TOTAL DEDUCTION row */}
+                <div className="grid grid-cols-4 border-t border-gray-300 bg-gray-200">
+                  <div className="px-3 py-2 text-xs font-bold text-gray-800 border-r border-gray-400">GROSS SALARY</div>
+                  <div className="px-3 py-2 text-xs font-bold text-gray-800 text-right border-r border-gray-400">{fmt(viewReceipt.grossSalary)}</div>
+                  <div className="px-3 py-2 text-xs font-bold text-gray-800 border-r border-gray-400">TOTAL DEDUCTION</div>
+                  <div className="px-3 py-2 text-xs font-bold text-gray-800 text-right">{fmt(viewReceipt.totalDeductions)}</div>
+                </div>
+
+                {/* NET SALARY row (green) */}
+                <div className="grid grid-cols-4 bg-green-700">
+                  <div className="px-3 py-3 text-sm font-bold text-white border-r border-green-600">NET SALARY</div>
+                  <div className="px-3 py-3 text-sm font-bold text-white text-right border-r border-green-600 col-span-3">{fmt(viewReceipt.netSalary)}</div>
+                </div>
+              </div>
+
+              {/* ── 4. ATTENDANCE SUMMARY ── */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 mb-5">
+                <span className="text-xs font-semibold text-slate-600 mr-3">Attendance:</span>
+                <span className="text-xs text-slate-600">
+                  Working <strong>{viewReceipt.totalWorkingDays||0}</strong> &nbsp;|&nbsp;
+                  Present <strong className="text-green-600">{viewReceipt.presentDays||0}</strong> &nbsp;|&nbsp;
+                  Absent <strong className="text-red-600">{viewReceipt.absentDays||0}</strong> &nbsp;|&nbsp;
+                  Half-Day <strong className="text-yellow-600">{viewReceipt.halfDays||0}</strong> &nbsp;|&nbsp;
+                  Leave <strong className="text-blue-600">{viewReceipt.leaveDays||0}</strong>
                 </span>
               </div>
 
-              {/* Employee Details */}
-              <div className="bg-gray-50 rounded-xl p-4">
-                <h4 className="text-xs font-semibold text-gray-500 uppercase mb-3">Employee Details</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                  <div className="flex items-center gap-2">
-                    <FiUser className="text-gray-400" size={14} />
-                    <span className="text-gray-500">Name:</span>
-                    <span className="font-semibold text-gray-800">{viewReceipt.employeeId?.name || 'N/A'}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <FiMail className="text-gray-400" size={14} />
-                    <span className="text-gray-500">Email:</span>
-                    <span className="font-semibold text-gray-800 text-xs">{viewReceipt.employeeId?.email || 'N/A'}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <FiBriefcase className="text-gray-400" size={14} />
-                    <span className="text-gray-500">Designation:</span>
-                    <span className="font-semibold text-gray-800">{viewReceipt.employeeId?.designation || viewReceipt.employeeId?.role || 'N/A'}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <FiCalendar className="text-gray-400" size={14} />
-                    <span className="text-gray-500">Pay Period:</span>
-                    <span className="font-semibold text-gray-800">{monthLabel(viewReceipt.month)}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <FiHash className="text-gray-400" size={14} />
-                    <span className="text-gray-500">Employee ID:</span>
-                    <span className="font-semibold text-gray-800 text-xs">{(viewReceipt.employeeId?._id || '').toString().slice(-6).toUpperCase()}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <FiClock className="text-gray-400" size={14} />
-                    <span className="text-gray-500">Paid On:</span>
-                    <span className="font-semibold text-gray-800">
-                      {viewReceipt.paidAt ? new Date(viewReceipt.paidAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A'}
-                    </span>
+              {/* ── 5. DIRECTOR SIGNATURE ── */}
+              <div className="flex justify-end mb-4">
+                <div className="text-center">
+                  <img
+                    src="/directorsignature.png"
+                    alt="Director Signature"
+                    className="h-14 object-contain mx-auto mb-1"
+                    onError={(e) => { e.target.style.display='none'; }}
+                  />
+                  <div className="border-t border-gray-400 pt-1 w-40 mx-auto">
+                    <p className="text-xs text-gray-600 font-semibold">Director / Authorized Signatory</p>
                   </div>
                 </div>
               </div>
 
-              {/* Attendance Summary */}
-              <div className="bg-blue-50 rounded-xl p-4">
-                <h4 className="text-xs font-semibold text-blue-600 uppercase mb-3">Attendance Summary</h4>
-                <div className="grid grid-cols-5 gap-2 text-center text-sm">
-                  <div>
-                    <p className="text-xs text-gray-400">Working</p>
-                    <p className="font-bold text-gray-800">{viewReceipt.totalWorkingDays}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-400">Present</p>
-                    <p className="font-bold text-green-600">{viewReceipt.presentDays}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-400">Absent</p>
-                    <p className="font-bold text-red-600">{viewReceipt.absentDays}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-400">Half-Day</p>
-                    <p className="font-bold text-yellow-600">{viewReceipt.halfDays}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-400">Leave</p>
-                    <p className="font-bold text-blue-600">{viewReceipt.leaveDays}</p>
-                  </div>
-                </div>
+              {/* ── 6. FOOTER NOTE ── */}
+              <div className="border-t border-gray-200 pt-3 text-center space-y-1">
+                <p className="text-xs text-gray-500">This is a system generated payslip and does not require signature.</p>
+                <p className="text-[11px] text-gray-400">Generated on: {new Date().toLocaleString('en-IN')}</p>
               </div>
 
-              {/* Earnings Table */}
-              <div>
-                <h4 className="text-xs font-semibold text-gray-500 uppercase mb-3">Earnings</h4>
-                <div className="bg-white border rounded-xl overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="text-left px-4 py-2.5 text-gray-600 font-semibold text-xs">Component</th>
-                        <th className="text-right px-4 py-2.5 text-gray-600 font-semibold text-xs">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      <tr><td className="px-4 py-2.5">Basic Salary</td><td className="px-4 py-2.5 text-right font-medium">{fmt(viewReceipt.basic)}</td></tr>
-                      <tr><td className="px-4 py-2.5">HRA</td><td className="px-4 py-2.5 text-right font-medium">{fmt(viewReceipt.hra)}</td></tr>
-                      <tr><td className="px-4 py-2.5">Conveyance</td><td className="px-4 py-2.5 text-right font-medium">{fmt(viewReceipt.conveyance)}</td></tr>
-                      <tr><td className="px-4 py-2.5">Special Allowance</td><td className="px-4 py-2.5 text-right font-medium">{fmt(viewReceipt.specialAllowance)}</td></tr>
-                      {(viewReceipt.bonus > 0) && (
-                        <tr><td className="px-4 py-2.5 text-blue-600">Bonus</td><td className="px-4 py-2.5 text-right font-medium text-blue-600">{fmt(viewReceipt.bonus)}</td></tr>
-                      )}
-                      {(viewReceipt.incentives > 0) && (
-                        <tr><td className="px-4 py-2.5 text-blue-600">Incentives</td><td className="px-4 py-2.5 text-right font-medium text-blue-600">{fmt(viewReceipt.incentives)}</td></tr>
-                      )}
-                      <tr className="bg-indigo-50 font-bold">
-                        <td className="px-4 py-2.5 text-indigo-700">Gross Salary</td>
-                        <td className="px-4 py-2.5 text-right text-indigo-700">{fmt(viewReceipt.grossSalary)}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Deductions Table */}
-              <div>
-                <h4 className="text-xs font-semibold text-gray-500 uppercase mb-3">Deductions</h4>
-                <div className="bg-white border rounded-xl overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="text-left px-4 py-2.5 text-gray-600 font-semibold text-xs">Deduction</th>
-                        <th className="text-right px-4 py-2.5 text-gray-600 font-semibold text-xs">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      <tr><td className="px-4 py-2.5">PF Deduction</td><td className="px-4 py-2.5 text-right font-medium text-red-600">{fmt(viewReceipt.pfDeduction)}</td></tr>
-                      <tr><td className="px-4 py-2.5">Tax Deduction</td><td className="px-4 py-2.5 text-right font-medium text-red-600">{fmt(viewReceipt.taxDeduction)}</td></tr>
-                      <tr><td className="px-4 py-2.5">Attendance Deduction</td><td className="px-4 py-2.5 text-right font-medium text-red-600">{fmt(viewReceipt.attendanceDeduction)}</td></tr>
-                      <tr className="bg-red-50 font-bold">
-                        <td className="px-4 py-2.5 text-red-700">Total Deductions</td>
-                        <td className="px-4 py-2.5 text-right text-red-700">{fmt(viewReceipt.totalDeductions)}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Net Salary */}
-              <div className="bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl p-5 text-white text-center">
-                <p className="text-green-200 text-sm font-medium">Net Salary (Take Home)</p>
-                <p className="text-3xl font-bold mt-1">{fmt(viewReceipt.netSalary)}</p>
-              </div>
-
-              {/* Audit Trail */}
-              <div className="bg-gray-50 rounded-xl p-4 text-xs text-gray-400 space-y-1">
-                <p><strong>Generated by:</strong> {viewReceipt.generatedBy?.name || 'System'} on {viewReceipt.generatedAt ? new Date(viewReceipt.generatedAt).toLocaleString('en-IN') : 'N/A'}</p>
-                <p><strong>Approved by:</strong> {viewReceipt.approvedBy?.name || 'N/A'} on {viewReceipt.approvedAt ? new Date(viewReceipt.approvedAt).toLocaleString('en-IN') : 'N/A'}</p>
-                <p><strong>Paid by:</strong> {viewReceipt.paidBy?.name || 'N/A'} on {viewReceipt.paidAt ? new Date(viewReceipt.paidAt).toLocaleString('en-IN') : 'N/A'}</p>
-                {viewReceipt.notes && <p><strong>Notes:</strong> {viewReceipt.notes}</p>}
-              </div>
-
-              {/* Footer */}
-              <div className="text-center text-xs text-gray-400 pt-3 border-t border-gray-200">
-                <p>This is a computer-generated document. No physical signature is required.</p>
-                <p className="mt-1">Generated on: {new Date().toLocaleString('en-IN')}</p>
-              </div>
-
-              {/* Download Button */}
-              <button
-                onClick={() => handleDownload(viewReceipt)}
-                disabled={downloading === viewReceipt._id}
-                className="w-full py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                <FiDownload size={16} />
-                {downloading === viewReceipt._id ? 'Downloading...' : 'Download PDF Receipt'}
-              </button>
-            </div>
+            </div>{/* end payslip body */}
           </div>
         </div>
       )}
