@@ -71,6 +71,7 @@ export default function Sidebar({
     { icon: FiHardDrive, label: 'NAS', path: '/nas', permission: 'NAS' },
     { icon: FiPhone, label: 'Callers', path: '/callers', permission: 'Caller' },
     { icon: FiUsers, label: 'Employees', path: '/employees', permission: 'Employees' },
+    { icon: FiBarChart2, label: 'Team Dashboard', path: '/manager-dashboard', permission: 'Employees' },
     { icon: FiDollarSign, label: 'Payroll', path: '/payroll', permission: 'Payroll' },
     { icon: FiDollarSign, label: 'Payroll Manage', path: '/pro-payroll', permission: 'Payroll Manage' },
     { icon: FiFileText, label: 'Payroll Receipt', path: '/payroll-receipt', permission: 'Payroll Receipt' },

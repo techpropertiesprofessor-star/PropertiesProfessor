@@ -20,8 +20,11 @@ const upload = multer({ storage });
 // Allow EMPLOYEE to view employees list (for name display in dashboards)
 router.get('/', auth, role(['ADMIN', 'MANAGER', 'EMPLOYEE']), employeeController.getEmployees);
 
-// Get comprehensive employee statistics (Manager Dashboard)
-router.get('/statistics/all', auth, role(['ADMIN', 'MANAGER']), employeeController.getEmployeesStatistics);
+// Get comprehensive employee statistics (Manager Dashboard) - also accessible by employees with "Employees" permission
+router.get('/statistics/all', auth, role(['ADMIN', 'MANAGER'], 'Employees'), employeeController.getEmployeesStatistics);
+
+// Get employee details (tasks, leads, callers) - accessible by employees with "Employees" permission
+router.get('/:id/details', auth, role(['ADMIN', 'MANAGER'], 'Employees'), employeeController.getEmployeeDetails);
 
 // Online status update (accessible by all authenticated users)
 router.put('/status/online', auth, employeeController.updateOnlineStatus);

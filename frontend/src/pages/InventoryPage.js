@@ -9,7 +9,7 @@ import AddInventoryForm from '../components/AddInventoryForm';
 import InventoryCard from '../components/InventoryCard';
 import useRealtimeData from '../hooks/useRealtimeData';
 import { useSocket } from '../context/SocketContext';
-import { FiX, FiHome, FiMapPin, FiLayers, FiMaximize, FiGrid, FiSun, FiUser, FiPhone, FiCalendar, FiFileText, FiEdit2, FiEye, FiDownload, FiKey, FiTruck, FiCheckCircle, FiDollarSign, FiMessageSquare, FiShield, FiTag, FiBriefcase, FiWifi, FiNavigation, FiBox, FiPackage, FiActivity, FiAward, FiClipboard } from 'react-icons/fi';
+import { FiX, FiHome, FiMapPin, FiLayers, FiMaximize, FiGrid, FiSun, FiUser, FiPhone, FiCalendar, FiFileText, FiEdit2, FiEye, FiDownload, FiKey, FiTruck, FiCheckCircle, FiDollarSign, FiMessageSquare, FiShield, FiTag, FiBriefcase, FiWifi, FiNavigation, FiBox, FiPackage, FiActivity, FiAward, FiClipboard, FiClock } from 'react-icons/fi';
 
 function InventoryPage() {
   const sidebarCollapsed = useSidebarCollapsed();
@@ -64,6 +64,13 @@ function InventoryPage() {
   });
   const [hasSearched, setHasSearched] = useState(false);
 
+  // Activity logs state (managers/admin only)
+  const [logsModalOpen, setLogsModalOpen] = useState(false);
+  const [inventoryLogs, setInventoryLogs] = useState([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+
+  const isManager = user?.role === 'ADMIN' || user?.role === 'MANAGER';
+
   // Fetch projects
   const fetchProjects = async () => {
     try {
@@ -71,6 +78,20 @@ function InventoryPage() {
       setProjects(response.data || []);
     } catch (err) {
       console.error('Failed to fetch projects:', err);
+    }
+  };
+
+  // Fetch activity logs (managers/admin)
+  const fetchLogs = async () => {
+    if (!isManager) return;
+    setLogsLoading(true);
+    try {
+      const res = await api.get('/inventory/logs?limit=100');
+      setInventoryLogs(res.data?.logs || []);
+    } catch (err) {
+      console.error('Failed to fetch inventory logs:', err);
+    } finally {
+      setLogsLoading(false);
     }
   };
 
@@ -258,6 +279,16 @@ function InventoryPage() {
     fetchProjects();
   }, [fetchUnits]);
   useRealtimeData(['inventory-created'], refreshInventory);
+
+  // Real-time inventory logs (managers/admin)
+  useEffect(() => {
+    if (!on || !off || !isManager) return;
+    const handleNewLog = (log) => {
+      setInventoryLogs((prev) => [log, ...prev].slice(0, 100));
+    };
+    on('inventory-log', handleNewLog);
+    return () => off('inventory-log', handleNewLog);
+  }, [on, off, isManager]);
 
   // Helpers
   const buildMediaUrl = (url) => {
@@ -728,13 +759,23 @@ function InventoryPage() {
               </button>
               <h1 className="text-2xl font-bold text-gray-800">Inventory</h1>
             </div>
-            <button
-              onClick={() => setCreateModalOpen(true)}
-              className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 font-semibold"
-              style={{ minWidth: '140px' }}
-            >
-              + Add Inventory
-            </button>
+            <div className="flex items-center gap-3">
+              {isManager && (
+                <button
+                  onClick={() => { setLogsModalOpen(true); fetchLogs(); }}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 font-semibold flex items-center gap-2"
+                >
+                  <FiClock className="w-4 h-4" /> Activity Logs
+                </button>
+              )}
+              <button
+                onClick={() => setCreateModalOpen(true)}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 font-semibold"
+                style={{ minWidth: '140px' }}
+              >
+                + Add Inventory
+              </button>
+            </div>
           </div>
 
           {/* Stats Cards — use liveStats (computed from loaded units) for accurate counts */}
@@ -1753,6 +1794,92 @@ function InventoryPage() {
               <source src={videoModalSrc} />
               Your browser does not support the video tag.
             </video>
+          </div>
+        </div>
+      )}
+
+      {/* Activity Logs Modal (Managers/Admin Only) */}
+      {logsModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                <FiClock className="text-indigo-600" /> Inventory Activity Logs
+              </h2>
+              <button onClick={() => setLogsModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full">
+                <FiX className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {logsLoading ? (
+                <div className="text-center py-8 text-gray-500">Loading logs...</div>
+              ) : inventoryLogs.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">No activity logs found</div>
+              ) : (
+                <div className="space-y-3">
+                  {inventoryLogs.map((log, idx) => {
+                    const actionColors = {
+                      UNIT_CREATED: 'bg-green-100 text-green-700',
+                      UNIT_UPDATED: 'bg-blue-100 text-blue-700',
+                      UNIT_VIEWED: 'bg-gray-100 text-gray-600',
+                      STATUS_BOOKED: 'bg-purple-100 text-purple-700',
+                      STATUS_HOLD: 'bg-yellow-100 text-yellow-700',
+                      STATUS_SOLD: 'bg-red-100 text-red-700',
+                      STATUS_AVAILABLE: 'bg-emerald-100 text-emerald-700',
+                      MEDIA_UPLOADED: 'bg-cyan-100 text-cyan-700',
+                      MEDIA_DELETED: 'bg-orange-100 text-orange-700',
+                      PROJECT_CREATED: 'bg-indigo-100 text-indigo-700',
+                      TOWER_CREATED: 'bg-teal-100 text-teal-700'
+                    };
+                    const colorClass = actionColors[log.action] || 'bg-gray-100 text-gray-700';
+                    const actionLabels = {
+                      UNIT_CREATED: 'Unit Created',
+                      UNIT_UPDATED: 'Unit Updated',
+                      UNIT_VIEWED: 'Unit Viewed',
+                      STATUS_BOOKED: 'Booked',
+                      STATUS_HOLD: 'On Hold',
+                      STATUS_SOLD: 'Sold',
+                      STATUS_AVAILABLE: 'Available',
+                      MEDIA_UPLOADED: 'Media Uploaded',
+                      MEDIA_DELETED: 'Media Deleted',
+                      PROJECT_CREATED: 'Project Created',
+                      TOWER_CREATED: 'Tower Created'
+                    };
+                    const label = actionLabels[log.action] || log.action;
+                    const dateStr = log.createdAt
+                      ? new Date(log.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
+                      : '';
+                    return (
+                      <div key={log._id || idx} className="bg-gray-50 rounded-lg p-3 border hover:shadow-sm transition-shadow">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`px-2 py-0.5 rounded text-xs font-semibold ${colorClass}`}>{label}</span>
+                              {log.unitNumber && (
+                                <span className="text-sm font-medium text-gray-800">Unit: {log.unitNumber}</span>
+                              )}
+                              {log.projectName && (
+                                <span className="text-sm text-gray-500">({log.projectName}{log.towerName ? ` / ${log.towerName}` : ''})</span>
+                              )}
+                            </div>
+                            <p className="text-sm text-gray-600 mt-1">{log.details}</p>
+                            <p className="text-xs text-gray-400 mt-1">
+                              By: <span className="font-medium text-gray-600">{log.employeeName || 'Unknown'}</span>
+                              {' • '}{dateStr}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            <div className="p-4 border-t bg-gray-50 flex justify-end">
+              <button onClick={() => setLogsModalOpen(false)} className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

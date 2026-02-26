@@ -116,7 +116,7 @@ function AppContent() {
         <Route path="/callers" element={<ProtectedRoute><PermissionRoute permission="Caller"><CallersPage /></PermissionRoute></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><PermissionRoute permission="Profile"><ProfilePage /></PermissionRoute></ProtectedRoute>} />
         <Route path="/employees" element={<ProtectedRoute><PermissionRoute permission="Employees"><EmployeesPage /></PermissionRoute></ProtectedRoute>} />
-        <Route path="/manager-dashboard" element={<ProtectedRoute><PermissionRoute permission="Dashboard"><ManagerDashboard /></PermissionRoute></ProtectedRoute>} />
+        <Route path="/manager-dashboard" element={<ProtectedRoute><PermissionRoute permission="Employees"><ManagerDashboard /></PermissionRoute></ProtectedRoute>} />
         <Route path="/leads" element={<ProtectedRoute><PermissionRoute permission="Leads"><LeadsPage /></PermissionRoute></ProtectedRoute>} />
         <Route path="/leaves" element={<ProtectedRoute><PermissionRoute permission="Leave Request"><LeaveRequestsPage /></PermissionRoute></ProtectedRoute>} />
         <Route path="/leaves/new" element={<ProtectedRoute><PermissionRoute permission="Leave Request"><LeaveRequestFormPage /></PermissionRoute></ProtectedRoute>} />

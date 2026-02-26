@@ -30,6 +30,9 @@ router.use(requirePermission('Inventory'));
 router.post('/thumbnails', inventoryController.getUnitThumbnails);
 router.post('/units/thumbnails', inventoryController.getUnitThumbnails); // keep old path too
 
+// Activity logs (managers/admin only)
+router.get('/logs', role(['ADMIN', 'MANAGER']), inventoryController.getInventoryLogs);
+
 // Project routes
 router.get('/projects', inventoryController.getProjects);
 router.post('/projects', role(['ADMIN', 'MANAGER', 'EMPLOYEE']), inventoryController.createProject);

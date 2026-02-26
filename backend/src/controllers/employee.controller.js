@@ -3,6 +3,8 @@ const Task = require('../models/Task');
 const Attendance = require('../models/Attendance');
 const LeaveRequest = require('../models/LeaveRequest');
 const User = require('../models/User');
+const Lead = require('../models/Lead');
+const Caller = require('../models/Caller');
 
 // Get basic info for all employees (for chat member count)
 exports.getEmployeesBasic = async (req, res, next) => {
@@ -187,6 +189,52 @@ exports.getDocuments = async (req, res, next) => {
     if (!employee) return res.status(404).json({ message: 'Employee not found' });
     res.json(employee.documents);
   } catch (err) {
+    next(err);
+  }
+};
+
+// Get employee details (tasks, leads, callers) for Employee Dashboard
+exports.getEmployeeDetails = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const employee = await Employee.findById(id).select('name email phone role');
+    if (!employee) return res.status(404).json({ message: 'Employee not found' });
+
+    // Fetch tasks assigned to employee
+    const tasks = await Task.find({ assignedTo: id })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .select('title description status priority dueDate createdAt')
+      .lean();
+
+    // Fetch leads assigned to employee
+    const leads = await Lead.find({ assignedTo: id })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .select('name phone email status source createdAt')
+      .lean();
+
+    // Fetch callers assigned to employee
+    const callers = await Caller.find({ assignedTo: id })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .select('name phone company lastResponse action createdAt')
+      .lean();
+
+    res.json({
+      employee: {
+        _id: employee._id,
+        name: employee.name || '',
+        email: employee.email,
+        phone: employee.phone,
+        role: employee.role
+      },
+      tasks,
+      leads,
+      callers
+    });
+  } catch (err) {
+    console.error('Error fetching employee details:', err);
     next(err);
   }
 };

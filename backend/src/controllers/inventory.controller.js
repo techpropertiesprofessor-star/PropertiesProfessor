@@ -2,8 +2,81 @@ const Project = require('../models/Project');
 const Tower = require('../models/Tower');
 const InventoryUnit = require('../models/InventoryUnit');
 const InventoryPriceHistory = require('../models/InventoryPriceHistory');
+const InventoryLog = require('../models/InventoryLog');
+const Employee = require('../models/Employee');
 const { emitToAll } = require('../utils/socket.util');
 const spacesService = require('../services/spaces.service');
+
+// ── Helper: create inventory log and emit real-time event ──
+async function logInventoryAction(action, { req, unitId, unitNumber, projectId, projectName, towerId, towerName, details, oldStatus, newStatus, metadata }) {
+  try {
+    console.log('[INVENTORY_LOG] Creating log:', action, { unitId, unitNumber, details });
+    let employeeName = 'Unknown';
+    let employeeId = null;
+    if (req && req.user) {
+      employeeId = req.user.employeeId || null;
+      // Try to get name from user token first
+      if (req.user.name) {
+        employeeName = req.user.name;
+      } else if (req.user.email) {
+        // Try to find employee by email
+        const emp = await Employee.findOne({ email: req.user.email }).select('name');
+        if (emp) {
+          employeeName = emp.name;
+          employeeId = emp._id;
+        }
+      } else if (employeeId) {
+        const emp = await Employee.findById(employeeId).select('name');
+        if (emp) employeeName = emp.name;
+      }
+    }
+    console.log('[INVENTORY_LOG] Employee:', employeeName, employeeId);
+    const log = await InventoryLog.create({
+      action,
+      unitId: unitId || null,
+      projectId: projectId || null,
+      towerId: towerId || null,
+      employeeId,
+      employeeName,
+      unitNumber: unitNumber || '',
+      projectName: projectName || '',
+      towerName: towerName || '',
+      details: details || '',
+      oldStatus: oldStatus || '',
+      newStatus: newStatus || '',
+      metadata: metadata || {},
+    });
+    console.log('[INVENTORY_LOG] Created:', log._id);
+    emitToAll('inventory-log', log.toObject());
+  } catch (e) {
+    console.error('[INVENTORY_LOG] Failed to create inventory log:', e.message, e.stack);
+  }
+}
+
+// Get inventory activity logs (for managers/admin)
+exports.getInventoryLogs = async (req, res, next) => {
+  try {
+    const { page = 1, limit = 50, employeeId, unitId, action, startDate, endDate } = req.query;
+    const filter = {};
+    if (employeeId) filter.employeeId = employeeId;
+    if (unitId) filter.unitId = unitId;
+    if (action) filter.action = action;
+    if (startDate || endDate) {
+      filter.createdAt = {};
+      if (startDate) filter.createdAt.$gte = new Date(startDate);
+      if (endDate) filter.createdAt.$lte = new Date(endDate);
+    }
+    const logs = await InventoryLog.find(filter)
+      .sort({ createdAt: -1 })
+      .skip((Number(page) - 1) * Number(limit))
+      .limit(Number(limit))
+      .lean();
+    const total = await InventoryLog.countDocuments(filter);
+    res.json({ logs, total, page: Number(page), limit: Number(limit) });
+  } catch (err) {
+    next(err);
+  }
+};
 
 // Project CRUD
 exports.createProject = async (req, res, next) => {
@@ -12,6 +85,7 @@ exports.createProject = async (req, res, next) => {
     if (!name) return res.status(400).json({ message: 'Name is required' });
     const project = new Project({ name, location, description });
     await project.save();
+    logInventoryAction('PROJECT_CREATED', { req, projectId: project._id, projectName: name, details: `Project "${name}" created` });
     res.status(201).json(project);
   } catch (err) {
     next(err);
@@ -40,6 +114,7 @@ exports.createTower = async (req, res, next) => {
     }
     const tower = new Tower({ project: projectId, name, description });
     await tower.save();
+    logInventoryAction('TOWER_CREATED', { req, projectId, towerName: name, towerId: tower._id, details: `Tower "${name}" created` });
     res.status(201).json(tower);
   } catch (err) {
     next(err);
@@ -190,6 +265,14 @@ exports.createUnit = async (req, res, next) => {
     });
     await unit.save();
 
+    // Log inventory creation
+    logInventoryAction('UNIT_CREATED', {
+      req, unitId: unit._id, unitNumber: unitNumber,
+      projectId: project, details: `Unit "${unitNumber}" added`,
+      newStatus: status || 'AVAILABLE',
+      metadata: { bhk, listing_type, city, building_name }
+    });
+
     // Broadcast inventory creation for real-time updates
     emitToAll('inventory-created', { unit: unit.toObject(), timestamp: Date.now() });
 
@@ -206,6 +289,7 @@ exports.getUnitById = async (req, res, next) => {
       .populate({ path: 'project', select: 'name location description' })
       .populate({ path: 'tower', select: 'name description' });
     if (!unit) return res.status(404).json({ message: 'Unit not found' });
+    logInventoryAction('UNIT_VIEWED', { req, unitId: unit._id, unitNumber: unit.unitNumber, details: `Viewed unit "${unit.unitNumber}"` });
     res.json(unit);
   } catch (err) {
     next(err);
@@ -325,12 +409,28 @@ exports.updateUnit = async (req, res, next) => {
       tenant_end_date: req.body.tenant_end_date,
       updatedAt: Date.now()
     };
+
+    // Get old unit to detect status change
+    const oldUnit = await InventoryUnit.findById(req.params.id).select('status unitNumber');
+    const oldStatus = oldUnit ? (oldUnit.status || '').toUpperCase() : '';
+    const newStatus = (req.body.status || '').toUpperCase();
+
     const unit = await InventoryUnit.findByIdAndUpdate(
       req.params.id,
       updateFields,
       { new: true }
     );
     if (!unit) return res.status(404).json({ message: 'Unit not found' });
+
+    // Log update action
+    const statusMap = { 'BOOKED': 'STATUS_BOOKED', 'HOLD': 'STATUS_HOLD', 'SOLD': 'STATUS_SOLD', 'AVAILABLE': 'STATUS_AVAILABLE' };
+    const logAction = (newStatus && oldStatus !== newStatus && statusMap[newStatus]) ? statusMap[newStatus] : 'UNIT_UPDATED';
+    logInventoryAction(logAction, {
+      req, unitId: unit._id, unitNumber: unit.unitNumber || (oldUnit && oldUnit.unitNumber),
+      details: logAction === 'UNIT_UPDATED' ? `Unit updated` : `Status changed from ${oldStatus || 'N/A'} to ${newStatus}`,
+      oldStatus, newStatus
+    });
+
     // Emit real-time update so other connected clients can refresh
     try {
       emitToAll('unit-updated', {
@@ -627,6 +727,9 @@ exports.uploadUnitMedia = async (req, res, next) => {
 
     console.log(`[UPLOAD_MEDIA] Completed: ${results.length} OK, ${errors.length} failed`);
     console.log(`[UPLOAD_MEDIA] Response files:`, responseFiles.map(f => ({ key: f.key, type: f.type, hasDownloadUrl: !!f.downloadUrl, hasUrl: !!f.url })));
+
+    logInventoryAction('MEDIA_UPLOADED', { req, unitId: id, unitNumber: unit.unitNumber, details: `Uploaded ${results.length} file(s)`, metadata: { fileCount: results.length, fileNames: newMediaEntries.map(e => e.name) } });
+
     res.status(201).json({
       message: 'Files uploaded successfully',
       files: responseFiles,
@@ -734,6 +837,8 @@ exports.deleteUnitMedia = async (req, res, next) => {
       id,
       { $pull: { mediaFiles: { key: key } } }
     );
+
+    logInventoryAction('MEDIA_DELETED', { req, unitId: id, unitNumber: unit.unitNumber, details: `Deleted media file`, metadata: { key } });
 
     res.json({ message: 'Media deleted from DigitalOcean Spaces', key });
   } catch (err) {

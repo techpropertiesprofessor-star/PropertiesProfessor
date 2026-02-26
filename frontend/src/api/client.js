@@ -222,7 +222,15 @@ export const taskAPI = {
     api.post(`/tasks/${id}/pin-manager`),
 
   unpinByManager: (id) =>
-    api.post(`/tasks/${id}/unpin-manager`)
+    api.post(`/tasks/${id}/unpin-manager`),
+
+  // Get stats for an employee
+  getStats: (empId) =>
+    api.get(`/tasks/employee/${empId}/stats`),
+
+  // Get backlog for an employee
+  getBacklog: (empId) =>
+    api.get(`/tasks/employee/${empId}/backlog`)
 };
 /**
  * =====================================================
