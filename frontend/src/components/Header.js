@@ -498,7 +498,10 @@ export default function Header({ user, onLogout, onSearch, notificationCount = 0
               )}
             </button>
             {showDropdown && (
-              <div className="absolute right-0 mt-3 w-full sm:w-80 bg-white rounded-xl shadow-xl z-50 max-h-[28rem] overflow-hidden border border-gray-200">
+              <div
+                className="absolute right-0 sm:left-auto sm:right-0 left-0 mt-3 sm:mt-3 mx-2 sm:mx-0 w-auto sm:w-80 bg-white rounded-xl shadow-xl z-50 max-h-[28rem] overflow-hidden border border-gray-200"
+                style={{ top: 'calc(100% + 0.5rem)', left: 0, right: 0 }}
+              >
                 {/* Header with categories */}
                 <div className="p-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50">
                   <div className="flex items-center justify-between mb-3">
