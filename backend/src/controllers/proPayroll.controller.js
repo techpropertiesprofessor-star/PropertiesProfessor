@@ -260,6 +260,16 @@ exports.markPaid = async (req, res, next) => {
     await payroll.save();
 
     await payroll.populate('employeeId', 'name email designation role');
+
+    // ── Real-time update: emit to employee and all managers ──
+    try {
+      const { emitToUser, emitToAll } = require('../utils/socket.util');
+      // Notify the employee
+      emitToUser(payroll.employeeId._id, 'payroll:paid', { payrollId: payroll._id, month: payroll.month });
+      // Notify all managers (for dashboard refresh)
+      emitToAll('payroll:managerUpdate', { month: payroll.month });
+    } catch (e) { /* ignore socket errors */ }
+
     res.json({ message: 'Payroll marked as Paid (locked)', data: payroll });
   } catch (err) {
     next(err);

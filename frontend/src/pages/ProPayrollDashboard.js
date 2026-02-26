@@ -19,6 +19,7 @@
  * ============================================================
  */
 import React, { useState, useEffect, useContext, useCallback } from 'react';
+import useRealtimeData from '../hooks/useRealtimeData';
 import { AuthContext } from '../context/AuthContext';
 import { proPayrollAPI } from '../api/client';
 import Sidebar from '../components/Sidebar';
@@ -139,6 +140,15 @@ export default function ProPayrollDashboard() {
     if (isAdmin || isManager) fetchStructures();
     if (isEmployee) fetchMySalary();
   }, [selectedMonth, isAdmin, isManager, isEmployee, fetchDashboard, fetchPayrolls, fetchEmployees, fetchStructures, fetchMySalary]);
+
+  // Real-time: refresh dashboard and payrolls for managers
+  useRealtimeData(['payroll:managerUpdate'], () => {
+    if (isAdmin || isManager) {
+      fetchDashboard();
+      fetchPayrolls();
+    }
+    if (isEmployee) fetchMySalary();
+  });
 
   // ── Handlers ──
 

@@ -8,6 +8,7 @@
  * ============================================================
  */
 import React, { useState, useEffect, useContext, useCallback } from 'react';
+import useRealtimeData from '../hooks/useRealtimeData';
 import { AuthContext } from '../context/AuthContext';
 import { proPayrollAPI } from '../api/client';
 import Sidebar from '../components/Sidebar';
@@ -50,6 +51,9 @@ export default function PayrollReceiptPage() {
   useEffect(() => {
     fetchReceipts();
   }, [fetchReceipts]);
+
+  // Real-time: refresh receipts when payroll is paid
+  useRealtimeData(['payroll:paid'], fetchReceipts);
 
   const handleDownload = async (receipt) => {
     try {
