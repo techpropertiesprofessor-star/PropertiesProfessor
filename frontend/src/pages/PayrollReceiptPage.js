@@ -40,17 +40,28 @@ export default function PayrollReceiptPage() {
   const [pendingDownload, setPendingDownload] = useState(null);
   const receiptRef = useRef(null);
 
+  const isManager = user?.role === 'MANAGER' || user?.role === 'ADMIN';
+
   const fetchReceipts = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await proPayrollAPI.getMyReceipts();
-      setReceipts(res.data.data || []);
+      let data;
+      if (isManager) {
+        // Manager/Admin: fetch all employees' paid payrolls
+        const res = await proPayrollAPI.getAllPayrolls({ status: 'Paid' });
+        data = res.data.data || [];
+      } else {
+        // Employee: fetch only own receipts
+        const res = await proPayrollAPI.getMyReceipts();
+        data = res.data.data || [];
+      }
+      setReceipts(data);
     } catch (err) {
       console.error('Error fetching receipts:', err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isManager]);
 
   useEffect(() => {
     fetchReceipts();
@@ -136,7 +147,9 @@ export default function PayrollReceiptPage() {
               </div>
               <div>
                 <h1 className="text-xl md:text-2xl font-bold text-gray-800">Payroll Receipts</h1>
-                <p className="text-sm text-gray-500">Your salary payment receipts</p>
+                <p className="text-sm text-gray-500">
+                  {isManager ? 'All employees salary payment receipts' : 'Your salary payment receipts'}
+                </p>
               </div>
             </div>
           </div>
@@ -180,6 +193,11 @@ export default function PayrollReceiptPage() {
                           <FiCheckCircle className="text-green-600" size={20} />
                         </div>
                         <div>
+                          {isManager && receipt.employeeId?.name && (
+                            <p className="text-xs font-bold text-indigo-700 mb-0.5">
+                              <FiUser className="inline mr-1" size={11} />{receipt.employeeId.name}
+                            </p>
+                          )}
                           <h3 className="font-semibold text-gray-800">{monthLabel(receipt.month)}</h3>
                           <p className="text-xs text-gray-400">
                             Paid on {receipt.paidAt ? new Date(receipt.paidAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A'}

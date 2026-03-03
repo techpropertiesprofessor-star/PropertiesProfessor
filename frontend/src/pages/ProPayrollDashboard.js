@@ -296,10 +296,25 @@ export default function ProPayrollDashboard() {
       const a = document.createElement('a');
       a.href = url;
       a.download = `payroll_${selectedMonth}.xlsx`;
+      // Must be in DOM for Firefox & some Chromium versions
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      // Delay revoke so the browser has time to start the download
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err) {
-      showToast(err.response?.data?.message || 'Error exporting', 'error');
+      // res.data is arraybuffer — decode JSON error message if present
+      let msg = 'Error exporting Excel';
+      try {
+        if (err.response?.data instanceof ArrayBuffer) {
+          const text = new TextDecoder().decode(err.response.data);
+          const json = JSON.parse(text);
+          msg = json.message || msg;
+        } else if (err.response?.data?.message) {
+          msg = err.response.data.message;
+        }
+      } catch {}
+      showToast(msg, 'error');
     }
   };
 

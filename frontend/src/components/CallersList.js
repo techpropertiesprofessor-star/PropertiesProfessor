@@ -93,7 +93,21 @@ export default function CallersList() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [allEmployees, setAllEmployees] = useState([]);
   const pageSize = 10;
+
+  // Fetch employees once for name resolution
+  useEffect(() => {
+    async function loadEmployees() {
+      try {
+        const res = await employeeAPI.getAll();
+        setAllEmployees(res.data || []);
+      } catch {
+        setAllEmployees([]);
+      }
+    }
+    loadEmployees();
+  }, []);
 
   const fetchCallers = async () => {
     setLoading(true);
@@ -180,9 +194,15 @@ export default function CallersList() {
                   <td className="px-4 py-3 text-gray-700">{caller.company}</td>
                   <td className="px-4 py-3 text-gray-700">{caller.lastResponse}</td>
                   <td className="px-4 py-3 text-gray-700">
-                    {caller.assignedToName
-                      || (caller.assignedTo && (caller.assignedTo.name || (caller.assignedTo.first_name ? (caller.assignedTo.first_name + ' ' + (caller.assignedTo.last_name || '')) : caller.assignedTo.email || caller.assignedTo.phone))
-                      || '-')}
+                    {(() => {
+                      if (caller.assignedToName) return caller.assignedToName;
+                      if (!caller.assignedTo) return '-';
+                      const assignedId = typeof caller.assignedTo === 'object'
+                        ? String(caller.assignedTo._id || caller.assignedTo)
+                        : String(caller.assignedTo);
+                      const emp = allEmployees.find(e => String(e._id) === assignedId);
+                      return emp ? (emp.name || (emp.first_name ? `${emp.first_name} ${emp.last_name || ''}`.trim() : emp.email)) : '-';
+                    })()}
                   </td>
                   <td className="px-4 py-3 text-gray-700">{caller.action}</td>
                   <td className="px-4 py-3">

@@ -106,9 +106,9 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
   const [employeeSelectedMonth, setEmployeeSelectedMonth] = useState(new Date());
   const [myJoiningDate, setMyJoiningDate] = useState(null); // Track when employee joined
   
-  // Reload team attendance when selected month changes
+  // Reload team attendance when selected month changes (for both daily & monthly views)
   useEffect(() => {
-    if (user && user.role === 'MANAGER' && viewMode === 'monthly') {
+    if (user && user.role === 'MANAGER') {
       console.log('📅 Loading attendance for month:', format(selectedMonth, 'MMMM yyyy'));
       loadTeamAttendance();
     }
@@ -339,14 +339,16 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
   const loadAttendance = async () => {
     try {
       const response = await attendanceAPI.getHistory();
-      // Map backend fields to expected frontend fields
-      const mapped = (response.data || []).map((a) => ({
-        ...a,
-        check_in: a.check_in || a.checkIn,
-        check_out: a.check_out || a.checkOut,
-        date: a.date,
-        status: (a.status || '').toLowerCase(),
-      }));
+      // Map backend fields to expected frontend fields, sorted newest first
+      const mapped = (response.data || [])
+        .map((a) => ({
+          ...a,
+          check_in: a.check_in || a.checkIn,
+          check_out: a.check_out || a.checkOut,
+          date: a.date,
+          status: (a.status || '').toLowerCase(),
+        }))
+        .sort((a, b) => new Date(b.date) - new Date(a.date));
       setAttendance(mapped);
     } catch (err) {
       console.error('Failed to load attendance:', err);
@@ -561,6 +563,11 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
   // Respects joiningDate — only counts absences from joining date onwards
   const calculateEmployeeAbsentDays = useCallback((employeeId, targetMonth, targetYear, empAttendanceData, employeeJoiningDate) => {
     const now = new Date();
+    // Future month — no absent days to count yet
+    const isFutureMonth = targetYear > now.getFullYear() ||
+      (targetYear === now.getFullYear() && targetMonth > now.getMonth());
+    if (isFutureMonth) return 0;
+
     const isCurrentMonth = now.getMonth() === targetMonth && now.getFullYear() === targetYear;
     const lastDay = isCurrentMonth ? now.getDate() : new Date(targetYear, targetMonth + 1, 0).getDate();
 
@@ -883,10 +890,14 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                           </tr>
                         ) : (
                           employees.map(emp => {
-                            const empAttendance = teamAttendance.filter(a => String(a.employee) === String(emp._id));
-                            const todayStatus = getEmployeeAttendanceForDate(emp._id, new Date());
-                            const present = empAttendance.filter(a => getAttendanceStatus(a) === 'P').length;
                             const now = new Date();
+                            // empAttendance scoped to current month so counts reset on month change
+                            const empAttendance = teamAttendance.filter(a =>
+                              String(a.employee) === String(emp._id) &&
+                              isSameMonth(new Date(a.date), now)
+                            );
+                            const todayStatus = getEmployeeAttendanceForDate(emp._id, now);
+                            const present = empAttendance.filter(a => getAttendanceStatus(a) === 'P').length;
                             const absent = calculateEmployeeAbsentDays(emp._id, now.getMonth(), now.getFullYear(), empAttendance, emp.joiningDate || emp.createdAt);
                             const leave = empAttendance.filter(a => getAttendanceStatus(a) === 'L').length;
                             const consecutive = getConsecutiveAbsences(emp._id);
@@ -1543,14 +1554,17 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                     </tr>
                   </thead>
                   <tbody className="divide-y">
-                    {attendance.length === 0 ? (
+                    {attendance.filter(record => isSameMonth(new Date(record.date), new Date())).length === 0 ? (
                       <tr>
                         <td colSpan="4" className="px-4 py-6 text-center text-xs text-gray-500">
-                          No attendance records
+                          No attendance records for this month
                         </td>
                       </tr>
                     ) : (
-                      attendance.slice(0, 10).map((record) => {
+                      attendance
+                        .filter(record => isSameMonth(new Date(record.date), new Date()))
+                        .slice(0, 10)
+                        .map((record) => {
                         const status = getAttendanceStatus(record);
                         const recordDate = new Date(record.date);
                         const dayName = format(recordDate, 'EEE');

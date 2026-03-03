@@ -552,15 +552,37 @@ exports.exportExcel = async (req, res, next) => {
       return res.status(400).json({ message: 'month query param required in YYYY-MM format' });
     }
 
-    const payrolls = await Payroll.find({ month })
+    // ── NEW Payroll model ──
+    const newPayrolls = await Payroll.find({ month })
       .populate('employeeId', 'name email designation role')
       .sort({ createdAt: 1 });
 
-    if (payrolls.length === 0) {
-      return res.status(404).json({ message: `No payroll records found for ${month}` });
+    // ── OLD Salary model ──
+    const parsed = parseYYYYMM(month);
+    let oldPayrolls = [];
+    if (parsed) {
+      const oldSalaries = await Salary.find({ month: parsed.month, year: parsed.year })
+        .populate('employee', 'name email designation role')
+        .sort({ createdAt: 1 });
+      oldPayrolls = oldSalaries.map(normalizeSalaryToPayroll);
     }
 
-    const buffer = await generatePayrollExcel(payrolls, month);
+    // Deduplicate: for same employee + month, prefer new system
+    const seen = new Set();
+    newPayrolls.forEach(p => {
+      const empId = (p.employeeId?._id || p.employeeId || '').toString();
+      seen.add(empId);
+    });
+    const merged = [
+      ...newPayrolls,
+      ...oldPayrolls.filter(r => {
+        const empId = (r.employeeId?._id || r.employeeId || '').toString();
+        return !seen.has(empId);
+      }),
+    ];
+
+    // Always generate Excel — even if no records (sheet will show empty state)
+    const buffer = await generatePayrollExcel(merged, month);
     const filename = `payroll_${month}.xlsx`;
 
     res.set({

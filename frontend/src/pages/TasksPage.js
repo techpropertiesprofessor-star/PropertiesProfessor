@@ -82,12 +82,16 @@ export default function TasksPage({ newMessageCount = 0, resetNewMessageCount })
     }
   };
 
-  // On tasks load, trigger fetch for all missing manager IDs
+  // On tasks load, trigger fetch for all missing manager / assignedTo IDs
   useEffect(() => {
-    const missingManagerIds = tasks
-      .map(task => task.assignedBy || task.manager || task.createdBy || task.created_by)
-      .filter(id => id && !employees.find(e => String(e.id || e._id) === String(id)) && !managerNames[id]);
-    missingManagerIds.forEach(id => fetchManagerName(id));
+    const allIds = tasks.flatMap(task => [
+      task.assignedBy || task.manager || task.createdBy || task.created_by,
+      task.assignedTo || task.assigned_to,
+    ]);
+    const missingIds = allIds
+      .map(id => (id && typeof id === 'object' ? String(id._id || id) : String(id || '')))
+      .filter(id => id && !employees.find(e => String(e.id || e._id) === id) && !managerNames[id]);
+    [...new Set(missingIds)].forEach(id => fetchManagerName(id));
     // eslint-disable-next-line
   }, [tasks, employees]);
 
@@ -409,10 +413,15 @@ export default function TasksPage({ newMessageCount = 0, resetNewMessageCount })
                       <div className="text-xs text-gray-700 mb-2">
                         <span className="font-semibold">Assigned To:</span> {
                           (() => {
-                            const assignedToId = task.assignedTo || task.assignee || task.assigned_to;
-                            if (!assignedToId) return '--';
-                            const emp = employees.find(e => String(e.id || e._id) === String(assignedToId));
-                            return emp ? (emp.first_name ? `${emp.first_name} ${emp.last_name}` : emp.name || emp.email) : (user && user.role === 'EMPLOYEE' ? (user.name || user.email) : assignedToId);
+                            const assignedToRaw = task.assignedTo || task.assignee || task.assigned_to;
+                            if (!assignedToRaw) return '--';
+                            if (typeof assignedToRaw === 'object' && assignedToRaw?.name) return assignedToRaw.name;
+                            const idStr = String(typeof assignedToRaw === 'object' ? (assignedToRaw._id || assignedToRaw) : assignedToRaw);
+                            const emp = employees.find(e => String(e.id || e._id) === idStr);
+                            if (emp) return emp.first_name ? `${emp.first_name} ${emp.last_name}` : emp.name || emp.email;
+                            if (managerNames[idStr]) return managerNames[idStr];
+                            fetchManagerName(idStr);
+                            return user && user.role === 'EMPLOYEE' ? (user.name || user.email) : '...';
                           })()
                         }
                       </div>
@@ -497,10 +506,13 @@ export default function TasksPage({ newMessageCount = 0, resetNewMessageCount })
                   <div className="mb-2 text-sm text-gray-700">
                     <span className="font-semibold">Assigned To:</span> {
                       (() => {
-                        const assignedToId = viewTask.assignedTo || viewTask.assignee || viewTask.assigned_to;
-                        if (!assignedToId) return '--';
-                        const emp = employees.find(e => String(e.id || e._id) === String(assignedToId));
-                        return emp ? (emp.first_name ? `${emp.first_name} ${emp.last_name}` : emp.name || emp.email) : (user && user.role === 'EMPLOYEE' ? (user.name || user.email) : assignedToId);
+                        const assignedToRaw = viewTask.assignedTo || viewTask.assignee || viewTask.assigned_to;
+                        if (!assignedToRaw) return '--';
+                        if (typeof assignedToRaw === 'object' && assignedToRaw?.name) return assignedToRaw.name;
+                        const idStr = String(typeof assignedToRaw === 'object' ? (assignedToRaw._id || assignedToRaw) : assignedToRaw);
+                        const emp = employees.find(e => String(e.id || e._id) === idStr);
+                        if (emp) return emp.first_name ? `${emp.first_name} ${emp.last_name}` : emp.name || emp.email;
+                        return managerNames[idStr] || (user && user.role === 'EMPLOYEE' ? (user.name || user.email) : idStr);
                       })()
                     }
                   </div>

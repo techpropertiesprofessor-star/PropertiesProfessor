@@ -66,6 +66,13 @@ async function generatePayrollExcel(payrolls, month) {
     totalDeductions: 0, netSalary: 0,
   };
 
+  if (payrolls.length === 0) {
+    const emptyRow = sheet.addRow({ name: `No payroll records for ${month}` });
+    emptyRow.font = { italic: true, color: { argb: '888888' } };
+    sheet.mergeCells(`A${emptyRow.number}:K${emptyRow.number}`);
+    emptyRow.getCell(1).alignment = { horizontal: 'center' };
+  }
+
   payrolls.forEach((p) => {
     const emp = p.employeeId || {};
     const row = sheet.addRow({
@@ -107,7 +114,8 @@ async function generatePayrollExcel(payrolls, month) {
     }
   });
 
-  // ── Grand Total Row ──
+  // ── Grand Total Row (only if there are records) ──
+  if (payrolls.length > 0) {
   const totalRow = sheet.addRow({
     name: 'GRAND TOTAL',
     designation: '',
@@ -134,6 +142,7 @@ async function generatePayrollExcel(payrolls, month) {
   totalRow.border = {
     top: { style: 'double', color: { argb: '000000' } },
   };
+  } // end if payrolls.length > 0
 
   // ── Generate Buffer ──
   const buffer = await workbook.xlsx.writeBuffer();
