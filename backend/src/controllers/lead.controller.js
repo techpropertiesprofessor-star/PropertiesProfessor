@@ -43,6 +43,8 @@ const LeadComment = require('../models/LeadComment');
 const UploadHistory = require('../models/UploadHistory');
 const Notification = require('../models/Notification');
 const Employee = require('../models/Employee');
+const InventoryUnit = require('../models/InventoryUnit');
+const Project = require('../models/Project');
 
 const { emitToAll, emitToUser } = require('../utils/socket.util');
 
@@ -95,11 +97,11 @@ exports.downloadLeadsCSV = async (req, res, next) => {
 
 
 // =======================================
-// CREATE LEAD (Manual / Dashboard)
+// CREATE LEAD (Website / Dashboard)
 // =======================================
 exports.createLead = async (req, res, next) => {
   try {
-    const { name, phone, email, source, assignedTo, status, remarks } = req.body;
+    const { name, phone, email, source, assignedTo, status, remarks, propertyId, message, visitTime, createdBy } = req.body;
 
     if (!name || !phone) {
       return res.status(400).json({ message: 'Name and phone are required' });
@@ -113,15 +115,112 @@ exports.createLead = async (req, res, next) => {
         assignedToId = null;
       }
     }
+
+    // Resolve property details
+    let resolvedPropertyId = null;
+    let propertyName = '';
+    let propertyUrl = '';
+
+    // Priority 1: Direct propertyId (if website/dashboard sends it)
+    if (propertyId) {
+      try {
+        const validId = new (require('mongoose').Types.ObjectId)(propertyId);
+        const unit = await InventoryUnit.findById(validId)
+          .populate({ path: 'project', select: 'name' })
+          .populate({ path: 'tower', select: 'name' });
+
+        if (unit) {
+          resolvedPropertyId = unit._id;
+          const parts = [
+            unit.project?.name,
+            unit.tower?.name,
+            unit.unitNumber
+          ].filter(Boolean);
+          propertyName = parts.join(' - ') || `Unit ${unit._id}`;
+          propertyUrl = `https://dashboard.propertiesprofessor.com/property/${unit._id}`;
+        }
+      } catch (e) {
+        console.warn('Invalid propertyId provided for lead:', propertyId);
+      }
+    }
+
+    // Priority 2: Auto-match from message field (website leads)
+    if (!resolvedPropertyId && message && message.trim()) {
+      try {
+        const msgLower = message.trim().toLowerCase();
+
+        // Search projects whose name appears in the message
+        const projects = await Project.find({}).select('name').lean();
+        let matchedProject = null;
+        for (const proj of projects) {
+          if (proj.name && msgLower.includes(proj.name.toLowerCase())) {
+            matchedProject = proj;
+            break;
+          }
+        }
+
+        // If project matched, find a unit in that project
+        if (matchedProject) {
+          const unit = await InventoryUnit.findOne({ project: matchedProject._id })
+            .populate({ path: 'project', select: 'name' })
+            .populate({ path: 'tower', select: 'name' })
+            .sort({ createdAt: -1 });
+
+          if (unit) {
+            resolvedPropertyId = unit._id;
+            const parts = [
+              unit.project?.name,
+              unit.tower?.name,
+              unit.unitNumber
+            ].filter(Boolean);
+            propertyName = parts.join(' - ') || `Unit ${unit._id}`;
+            propertyUrl = `https://dashboard.propertiesprofessor.com/property/${unit._id}`;
+          }
+        }
+
+        // If no project match, try matching building_name directly
+        if (!resolvedPropertyId) {
+          const unitByBuilding = await InventoryUnit.findOne({
+            building_name: { $regex: new RegExp(msgLower.split(/\s+/).filter(w => w.length > 2).join('|'), 'i') }
+          })
+            .populate({ path: 'project', select: 'name' })
+            .populate({ path: 'tower', select: 'name' })
+            .sort({ createdAt: -1 });
+
+          if (unitByBuilding) {
+            resolvedPropertyId = unitByBuilding._id;
+            const parts = [
+              unitByBuilding.project?.name,
+              unitByBuilding.tower?.name,
+              unitByBuilding.unitNumber
+            ].filter(Boolean);
+            propertyName = parts.join(' - ') || `Unit ${unitByBuilding._id}`;
+            propertyUrl = `https://dashboard.propertiesprofessor.com/property/${unitByBuilding._id}`;
+          }
+        }
+      } catch (e) {
+        console.warn('Auto-match property from message failed:', e.message);
+      }
+    }
+
+    // Determine createdBy — website sources auto-detect, or accept from body
+    const websiteSources = ['contact_form', 'schedule_visit', 'property_enquiry', 'Website', 'website', 'whatsapp', 'chatbot'];
+    const isWebsite = createdBy === 'website' || websiteSources.includes(source);
+
     const lead = new Lead({
       name,
       phone,
       email,
       source: source || 'manual',
+      message: message || '',
+      visitTime: visitTime || null,
       assignedTo: assignedToId,
       status: status || 'new',
       remarks: remarks || '',
-      createdBy: 'dashboard'
+      createdBy: isWebsite ? 'website' : 'dashboard',
+      propertyId: resolvedPropertyId,
+      propertyName,
+      propertyUrl
     });
 
     await lead.save();
@@ -129,14 +228,15 @@ exports.createLead = async (req, res, next) => {
     // If lead is assigned to someone during creation, notify them
     if (assignedToId) {
       try {
+        const propertyInfo = propertyName ? ` | Property: ${propertyName}` : '';
         const notification = await Notification.create({
           userId: assignedToId,
           type: 'LEAD_ASSIGNED',
           title: 'New Lead Assigned',
-          message: `A new lead has been assigned to you: ${name} (${phone})`,
+          message: `A new lead has been assigned to you: ${name} (${phone})${propertyInfo}`,
           relatedId: lead._id,
           relatedModel: 'Lead',
-          data: { leadId: lead._id }
+          data: { leadId: lead._id, propertyId: resolvedPropertyId, propertyUrl }
         });
 
         emitToUser(assignedToId.toString(), 'new-notification', {
@@ -145,6 +245,7 @@ exports.createLead = async (req, res, next) => {
           title: 'New Lead Assigned',
           message: notification.message,
           leadId: lead._id,
+          propertyUrl,
           createdAt: notification.createdAt
         });
       } catch (notifErr) {
@@ -192,6 +293,7 @@ exports.getLeads = async (req, res, next) => {
     const leads = await Lead.find(filter)
       .populate({ path: 'assignedTo', select: 'name email role' })
       .populate({ path: 'remarkNotes.addedBy', select: 'name email' })
+      .populate({ path: 'propertyId', select: 'unitNumber project tower bhk floor_number' })
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(pageLimit);
@@ -219,7 +321,8 @@ exports.getLeadById = async (req, res, next) => {
   try {
     const lead = await Lead.findById(req.params.id)
       .populate({ path: 'assignedTo', select: 'name email role' })
-      .populate({ path: 'remarkNotes.addedBy', select: 'name email' });
+      .populate({ path: 'remarkNotes.addedBy', select: 'name email' })
+      .populate({ path: 'propertyId', select: 'unitNumber project tower bhk floor_number' });
 
     if (!lead) {
       return res.status(404).json({ message: 'Lead not found' });
@@ -327,6 +430,68 @@ exports.updateRemarks = async (req, res, next) => {
 
 
 // =======================================
+// UPDATE LEAD PROPERTY (MANAGER / ADMIN)
+// =======================================
+exports.updateLeadProperty = async (req, res, next) => {
+  try {
+    const { propertyId } = req.body;
+
+    if (!propertyId) {
+      return res.status(400).json({ message: 'propertyId is required' });
+    }
+
+    // Validate and fetch unit
+    let validId;
+    try {
+      validId = new mongoose.Types.ObjectId(propertyId);
+    } catch (e) {
+      return res.status(400).json({ message: 'Invalid propertyId format' });
+    }
+
+    const unit = await InventoryUnit.findById(validId)
+      .populate({ path: 'project', select: 'name' })
+      .populate({ path: 'tower', select: 'name' });
+
+    if (!unit) {
+      return res.status(404).json({ message: 'Property not found' });
+    }
+
+    const parts = [
+      unit.project?.name,
+      unit.tower?.name,
+      unit.unitNumber
+    ].filter(Boolean);
+    const propertyName = parts.join(' - ') || `Unit ${unit._id}`;
+    const propertyUrl = `https://dashboard.propertiesprofessor.com/property/${unit._id}`;
+
+    const lead = await Lead.findByIdAndUpdate(
+      req.params.id,
+      {
+        $set: {
+          propertyId: unit._id,
+          propertyName,
+          propertyUrl,
+          updatedAt: Date.now()
+        }
+      },
+      { new: true }
+    ).populate({ path: 'assignedTo', select: 'name email role' })
+     .populate({ path: 'propertyId', select: 'unitNumber project tower bhk floor_number' });
+
+    if (!lead) {
+      return res.status(404).json({ message: 'Lead not found' });
+    }
+
+    emitToAll('lead-updated', { lead: lead.toObject(), timestamp: Date.now() });
+
+    res.json(lead);
+  } catch (err) {
+    next(err);
+  }
+};
+
+
+// =======================================
 // ASSIGN LEAD (MANAGER / ADMIN)
 // =======================================
 const mongoose = require('mongoose');
@@ -400,14 +565,15 @@ exports.assignLead = async (req, res, next) => {
 
     // Create notification for the assigned employee
     try {
+      const propertyInfo = existingLead.propertyName ? ` | Property: ${existingLead.propertyName}` : '';
       const notification = await Notification.create({
         userId: employee._id,
         type: 'LEAD_ASSIGNED',
         title: 'Lead Assigned',
-        message: `A new lead has been assigned to you: ${updatedLead.name} (${updatedLead.phone})`,
+        message: `A new lead has been assigned to you: ${updatedLead.name} (${updatedLead.phone})${propertyInfo}`,
         relatedId: updatedLead._id,
         relatedModel: 'Lead',
-        data: { leadId: updatedLead._id }
+        data: { leadId: updatedLead._id, propertyId: existingLead.propertyId, propertyUrl: existingLead.propertyUrl }
       });
 
       // Emit socket notification to assigned employee
@@ -417,6 +583,7 @@ exports.assignLead = async (req, res, next) => {
         title: 'Lead Assigned',
         message: notification.message,
         leadId: updatedLead._id,
+        propertyUrl: existingLead.propertyUrl || '',
         createdAt: notification.createdAt
       });
     } catch (notifErr) {

@@ -624,7 +624,8 @@ useEffect(() => {
                   <p className="text-2xl font-extrabold tracking-tight drop-shadow-lg">{tasks.filter(task => task.status !== 'COMPLETED').length}</p>
                   <p className="text-xs opacity-80 mt-2 drop-shadow">Pending tasks</p>
                 </div>
-                <div 
+                {(['ADMIN', 'MANAGER'].includes(user?.role?.toUpperCase()) || user?.teamDashboardAccess) && (
+                <div
                   onClick={() => navigate('/manager-dashboard')}
                   className="relative rounded-2xl p-5 overflow-hidden shadow-2xl group transition-transform hover:scale-105 cursor-pointer"
                   style={{background: 'linear-gradient(135deg, rgba(34,197,94,0.7) 0%, rgba(20,184,166,0.7) 100%)', backdropFilter: 'blur(12px)'}}
@@ -634,6 +635,7 @@ useEffect(() => {
                   <p className="text-2xl font-extrabold tracking-tight drop-shadow-lg">{userCount}</p>
                   <p className="text-xs opacity-80 mt-2 drop-shadow">View Dashboard →</p>
                 </div>
+                )}
                 <div 
                   onClick={() => setShowNotifications(!showNotifications)}
                   className="relative rounded-2xl p-5 overflow-hidden shadow-2xl group transition-transform hover:scale-105 cursor-pointer"

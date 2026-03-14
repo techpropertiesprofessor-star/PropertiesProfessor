@@ -128,20 +128,26 @@ exports.createTask = async (req, res, next) => {
   try {
     const { title, description, assignedTo, dueDate, priority } = req.body;
     if (!title) return res.status(400).json({ message: 'Title is required' });
-    const task = new Task({
-      title,
-      description,
-      assignedTo,
-      dueDate,
-      priority,
-      createdBy: req.user.id
-    });
-    await task.save();
 
-    // Emit real-time event and create notification if assignedTo exists (only to assigned employee)
-    if (assignedTo) {
+    // Support multi-assign: assignedTo can be a single ID or an array of IDs
+    const assignees = Array.isArray(assignedTo) ? assignedTo : (assignedTo ? [assignedTo] : []);
+
+    const createdTasks = [];
+    for (const empId of assignees) {
+      const task = new Task({
+        title,
+        description,
+        assignedTo: empId,
+        dueDate,
+        priority,
+        createdBy: req.user.id
+      });
+      await task.save();
+      createdTasks.push(task);
+
+      // Emit real-time event and create notification for each assigned employee
       const notification = await Notification.create({
-        userId: assignedTo,
+        userId: empId,
         type: 'TASK_ASSIGNED',
         title: 'Task Assigned',
         message: `A new task has been assigned to you: ${task.title}`,
@@ -149,9 +155,8 @@ exports.createTask = async (req, res, next) => {
         relatedModel: 'Task',
         data: { taskId: task._id }
       });
-      
-      // Emit socket notification to assigned employee only
-      emitToUser(assignedTo, 'new-notification', {
+
+      emitToUser(empId, 'new-notification', {
         id: notification._id,
         type: 'TASK_ASSIGNED',
         title: 'Task Assigned',
@@ -162,9 +167,9 @@ exports.createTask = async (req, res, next) => {
     }
 
     // Broadcast task creation to all connected clients for real-time updates
-    emitToAll('task-created', { task: task.toObject(), timestamp: Date.now() });
+    emitToAll('task-created', { timestamp: Date.now() });
 
-    res.status(201).json(task);
+    res.status(201).json(createdTasks.length === 1 ? createdTasks[0] : createdTasks);
   } catch (err) {
     next(err);
   }

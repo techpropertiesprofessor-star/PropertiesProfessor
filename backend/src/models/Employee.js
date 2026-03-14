@@ -12,6 +12,8 @@ const EmployeeSchema = new mongoose.Schema({
   bankAccountLast4: { type: String, trim: true, default: '' },  // Last 4 digits of bank account
   status: { type: String, enum: ['active', 'inactive'], default: 'active' },
   permissions: [{ type: String }],
+  teamAttendanceAccess: { type: Boolean, default: false },
+  teamDashboardAccess: { type: Boolean, default: false },
   basicSalary: { type: Number, default: 0, min: 0 },
   salaryStructureId: { type: mongoose.Schema.Types.ObjectId, ref: 'SalaryStructure' },
   isOnline: { type: Boolean, default: false },

@@ -32,10 +32,20 @@ const leadSchema = new mongoose.Schema(
         'website'
       ]
     },
-    property: {
+    propertyId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Property',
+      ref: 'InventoryUnit',
       default: null
+    },
+
+    propertyName: {
+      type: String,
+      default: ''
+    },
+
+    propertyUrl: {
+      type: String,
+      default: ''
     },
 
     // Time for schedule_visit leads

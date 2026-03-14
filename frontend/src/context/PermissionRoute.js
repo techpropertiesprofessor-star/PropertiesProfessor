@@ -13,7 +13,7 @@ import { AuthContext } from './AuthContext';
  * Usage:
  *   <PermissionRoute permission="Leads"><LeadsPage /></PermissionRoute>
  */
-export const PermissionRoute = ({ permission, children }) => {
+export const PermissionRoute = ({ permission, accessField, children }) => {
   const { user, loading } = useContext(AuthContext);
   const [checking, setChecking] = useState(true);
 
@@ -51,8 +51,9 @@ export const PermissionRoute = ({ permission, children }) => {
   }
 
   // For EMPLOYEE / CALLER – check the permissions array
+  // When accessField is specified, it MUST be true (overrides permission check)
   const userPermissions = user.permissions || [];
-  const hasAccess = userPermissions.includes(permission);
+  const hasAccess = accessField ? !!user[accessField] : userPermissions.includes(permission);
 
   if (!hasAccess) {
     return (

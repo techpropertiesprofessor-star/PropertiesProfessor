@@ -74,10 +74,11 @@ export default function EmployeesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [passwordForm, setPasswordForm] = useState({ oldPassword: '', newPassword: '' });
+  const [passwordForm, setPasswordForm] = useState({ newPassword: '', confirmPassword: '' });
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [resetTargetEmployee, setResetTargetEmployee] = useState(null);
   
   // Socket.IO ref to maintain connection
   const socketRef = React.useRef(null);
@@ -351,21 +352,36 @@ export default function EmployeesPage() {
 
   const handlePasswordChange = async (e) => {
     e.preventDefault();
-    setPasswordLoading(true);
     setPasswordError('');
     setPasswordSuccess('');
+
+    if (passwordForm.newPassword.length < 6) {
+      setPasswordError('Password must be at least 6 characters');
+      return;
+    }
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPasswordError('Passwords do not match');
+      return;
+    }
+
+    setPasswordLoading(true);
     try {
-      // You may need to adjust API endpoint and payload as per backend
-      await authAPI.changePassword({
-        userId: employeeDetails.id || employeeDetails._id,
-        currentPassword: passwordForm.oldPassword,
-        newPassword: passwordForm.newPassword
+      // Use resetTargetEmployee (list view) or employeeDetails (details view)
+      const target = resetTargetEmployee || employeeDetails;
+      const empId = target._id || target.id;
+      await employeeAPI.resetPassword(empId, {
+        newPassword: passwordForm.newPassword,
+        confirmPassword: passwordForm.confirmPassword
       });
-      setPasswordSuccess('Password changed successfully!');
-      setPasswordForm({ oldPassword: '', newPassword: '' });
-      setShowPasswordModal(false);
+      setPasswordSuccess('Password updated successfully');
+      setPasswordForm({ newPassword: '', confirmPassword: '' });
+      setTimeout(() => {
+        setShowPasswordModal(false);
+        setResetTargetEmployee(null);
+        setPasswordSuccess('');
+      }, 1500);
     } catch (err) {
-      setPasswordError(err.response?.data?.message || 'Failed to change password');
+      setPasswordError(err.response?.data?.message || 'Failed to reset password');
     } finally {
       setPasswordLoading(false);
     }
@@ -420,6 +436,45 @@ export default function EmployeesPage() {
               {errorMsg}
             </div>
           )}
+
+                  {user?.role === 'MANAGER' && showPasswordModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+                      <div className="bg-white rounded-lg p-6 max-w-sm w-full shadow-lg relative">
+                        <button onClick={() => { setShowPasswordModal(false); setResetTargetEmployee(null); setPasswordError(''); setPasswordSuccess(''); }} className="absolute top-2 right-2 text-gray-400 hover:text-gray-600 text-xl">&times;</button>
+                        <h3 className="text-lg font-bold mb-1">Reset Password</h3>
+                        <p className="text-xs text-gray-500 mb-4">Set a new password for {resetTargetEmployee?.name || employeeDetails?.name || 'this employee'}</p>
+                        {passwordError && <div className="mb-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{passwordError}</div>}
+                        {passwordSuccess && <div className="mb-2 text-sm text-green-600 bg-green-50 border border-green-200 rounded px-3 py-2">{passwordSuccess}</div>}
+                        <form onSubmit={handlePasswordChange} className="space-y-3">
+                          <input
+                            type="password"
+                            placeholder="New Password"
+                            value={passwordForm.newPassword}
+                            onChange={e => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                            className="w-full px-3 py-2 border rounded-md"
+                            required
+                            minLength={6}
+                          />
+                          <input
+                            type="password"
+                            placeholder="Confirm Password"
+                            value={passwordForm.confirmPassword}
+                            onChange={e => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                            className="w-full px-3 py-2 border rounded-md"
+                            required
+                            minLength={6}
+                          />
+                          <button
+                            type="submit"
+                            disabled={passwordLoading}
+                            className="w-full px-3 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 font-semibold disabled:opacity-60"
+                          >
+                            {passwordLoading ? 'Resetting...' : 'Reset Password'}
+                          </button>
+                        </form>
+                      </div>
+                    </div>
+                  )}
 
           {viewMode === 'list' ? (
             // ===== EMPLOYEES LIST VIEW (Modern) =====
@@ -548,12 +603,28 @@ export default function EmployeesPage() {
                         </div>
                       </div>
                       <div className="flex gap-2">
-                        <button 
+                        <button
                           className="flex-1 px-3 py-2 text-xs bg-gradient-to-r from-blue-500 to-blue-700 text-white rounded-xl font-bold shadow hover:from-blue-600 hover:to-blue-800 transition-all duration-150 group-hover:scale-105"
                           onClick={() => handleSelectEmployee(emp)}
                         >
-                          View →
+                          View
                         </button>
+                        {user?.role === 'MANAGER' && (
+                          <button
+                            className="px-3 py-2 text-xs bg-gradient-to-r from-amber-500 to-amber-700 text-white rounded-xl font-bold shadow hover:from-amber-600 hover:to-amber-800 transition-all duration-150"
+                            title="Reset Password"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setResetTargetEmployee(emp);
+                              setPasswordForm({ newPassword: '', confirmPassword: '' });
+                              setPasswordError('');
+                              setPasswordSuccess('');
+                              setShowPasswordModal(true);
+                            }}
+                          >
+                            Key
+                          </button>
+                        )}
                         {(user?.role === 'MANAGER' || user?.role === 'ADMIN') && (
                           <button
                             className="px-3 py-2 text-xs bg-gradient-to-r from-red-500 to-red-700 text-white rounded-xl font-bold shadow hover:from-red-600 hover:to-red-800 transition-all duration-150 disabled:opacity-50"
@@ -725,6 +796,56 @@ export default function EmployeesPage() {
                               </div>
                             );
                           })}
+
+                                {/* Team Access Toggles - inside same grid */}
+                                {isEditable && [
+                                  { key: 'teamAttendanceAccess', label: 'Team Attendance', icon: '📋' },
+                                  { key: 'teamDashboardAccess', label: 'Team Dashboard', icon: '📈' },
+                                ].map(({ key, label, icon }) => {
+                                  const isOn = !!employeeDetails?.[key];
+                                  return (
+                                    <div
+                                      key={key}
+                                      className={`relative group flex items-center justify-between p-4 rounded-lg border-2 transition-all duration-200 ${
+                                        isOn
+                                          ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-200 hover:border-green-300'
+                                          : 'bg-gray-50 border-gray-200 hover:border-gray-300'
+                                      } hover:shadow-md cursor-pointer`}
+                                    >
+                                      <div className="flex items-center gap-3">
+                                        <span className="text-2xl">{icon}</span>
+                                        <div>
+                                          <span className="font-semibold text-gray-900 text-sm block">{label}</span>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                          <input
+                                            type="checkbox"
+                                            checked={isOn}
+                                            onChange={async () => {
+                                              try {
+                                                const newVal = !isOn;
+                                                await employeeAPI.toggleAttendanceAccess(employeeDetails._id, { [key]: newVal });
+                                                setEmployeeDetails(prev => ({ ...prev, [key]: newVal }));
+                                                showSuccess(`${label} access ${newVal ? 'granted' : 'revoked'}`);
+                                              } catch (err) {
+                                                showError(err.response?.data?.message || 'Failed to update access');
+                                              }
+                                            }}
+                                            className="sr-only peer"
+                                          />
+                                          <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-200 rounded-full peer peer-checked:bg-gradient-to-r peer-checked:from-green-500 peer-checked:to-emerald-500 transition-all duration-300 shadow-inner"></div>
+                                          <span className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full shadow-md transition-all duration-300 peer-checked:translate-x-5"></span>
+                                        </label>
+                                        <span className={`text-xs font-bold px-2 py-1 rounded-full ${isOn ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                                          {isOn ? '✓' : '✗'}
+                                        </span>
+                                      </div>
+                                      <div className="absolute inset-0 bg-indigo-500 opacity-0 group-hover:opacity-5 rounded-lg transition-opacity pointer-events-none"></div>
+                                    </div>
+                                  );
+                                })}
                         </div>
 
                         {/* Info Footer */}
@@ -771,51 +892,16 @@ export default function EmployeesPage() {
                     </div>
                   </div>
 
-                  {/* Change Password - Manager Only */}
+                  {/* Reset Password - Manager Only */}
                   {user?.role === 'MANAGER' && (
                     <div className="bg-white rounded-lg p-4 mt-4">
-                      <h4 className="text-sm font-bold text-gray-900 mb-3">Change Password</h4>
+                      <h4 className="text-sm font-bold text-gray-900 mb-3">Reset Password</h4>
                       <button
                         className="w-full px-3 py-2 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded font-semibold transition"
                         onClick={() => setShowPasswordModal(true)}
                       >
-                        🔒 Change Password
+                        Reset Password
                       </button>
-                    </div>
-                  )}
-                  {user?.role === 'MANAGER' && showPasswordModal && (
-                    <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-                      <div className="bg-white rounded-lg p-6 max-w-sm w-full shadow-lg relative">
-                        <button onClick={() => setShowPasswordModal(false)} className="absolute top-2 right-2 text-gray-400 hover:text-gray-600 text-xl">✕</button>
-                        <h3 className="text-lg font-bold mb-4">Change Password</h3>
-                        {passwordError && <div className="mb-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{passwordError}</div>}
-                        {passwordSuccess && <div className="mb-2 text-sm text-green-600 bg-green-50 border border-green-200 rounded px-3 py-2">{passwordSuccess}</div>}
-                        <form onSubmit={handlePasswordChange} className="space-y-3">
-                          <input
-                            type="password"
-                            placeholder="Old Password"
-                            value={passwordForm.oldPassword}
-                            onChange={e => setPasswordForm({ ...passwordForm, oldPassword: e.target.value })}
-                            className="w-full px-3 py-2 border rounded-md"
-                            required
-                          />
-                          <input
-                            type="password"
-                            placeholder="New Password"
-                            value={passwordForm.newPassword}
-                            onChange={e => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
-                            className="w-full px-3 py-2 border rounded-md"
-                            required
-                          />
-                          <button
-                            type="submit"
-                            disabled={passwordLoading}
-                            className="w-full px-3 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 font-semibold disabled:opacity-60"
-                          >
-                            {passwordLoading ? 'Changing...' : 'Change Password'}
-                          </button>
-                        </form>
-                      </div>
                     </div>
                   )}
                 </div>

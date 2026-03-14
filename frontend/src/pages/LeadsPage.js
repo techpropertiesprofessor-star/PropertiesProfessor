@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import { leadAPI, employeeAPI } from '../api/client';
+import { leadAPI, employeeAPI, propertyAPI } from '../api/client';
 import { useSocket } from '../context/SocketContext';
 import useRealtimeData from '../hooks/useRealtimeData';
 import LeadUpload from '../components/LeadUpload';
@@ -65,6 +65,7 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
   const [remarkNoteText, setRemarkNoteText] = useState('');
   const [remarkFilter, setRemarkFilter] = useState('All'); // Filter tabs: All, Interested, Not Interested, Busy, Invalid Number
   const [employees, setEmployees] = useState([]); // All employees/managers
+  const [inventoryUnits, setInventoryUnits] = useState([]); // For property selection in Add Lead
   const [loading, setLoading] = useState(false);  const [showUpload, setShowUpload] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
 
@@ -105,7 +106,7 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
   // ADD LEAD STATE & HANDLERS
   // =====================
   const [showAddLead, setShowAddLead] = useState(false);
-  const [newLead, setNewLead] = useState({ name: '', phone: '', source: '', assignedTo: '' });
+  const [newLead, setNewLead] = useState({ name: '', phone: '', source: '', assignedTo: '', propertyId: '' });
 
   const handleNewLeadChange = (e) => {
     const { name, value } = e.target;
@@ -120,10 +121,11 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
         name: newLead.name,
         phone: newLead.phone,
         source: newLead.source,
-        assignedTo: newLead.assignedTo || undefined
+        assignedTo: newLead.assignedTo || undefined,
+        propertyId: newLead.propertyId || undefined
       });
       setShowAddLead(false);
-      setNewLead({ name: '', phone: '', source: '', assignedTo: '' });
+      setNewLead({ name: '', phone: '', source: '', assignedTo: '', propertyId: '' });
       fetchLeads(currentPage);
     } catch (err) {
       alert('Failed to add lead');
@@ -133,6 +135,7 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
   useEffect(() => {
     fetchLeads(currentPage);
     fetchEmployees();
+    fetchInventoryUnits();
     // Check if a leadId is set for viewing (from notification click)
     const viewLeadId = localStorage.getItem('viewLeadId');
     if (viewLeadId) {
@@ -195,6 +198,16 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
       }
     } catch (err) {
       console.error('Failed to fetch employees:', err);
+    }
+  };
+
+  const fetchInventoryUnits = async () => {
+    try {
+      const res = await propertyAPI.list();
+      const units = Array.isArray(res.data) ? res.data : [];
+      setInventoryUnits(units);
+    } catch (err) {
+      console.error('Failed to fetch inventory units:', err);
     }
   };
 
@@ -328,6 +341,14 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
                         <option key={emp._id} value={emp._id}>{emp.name || (emp.first_name ? (emp.first_name + ' ' + (emp.last_name || '')) : emp.email || emp.phone)}</option>
                       ))}
                     </select>
+                    <select name="propertyId" value={newLead.propertyId} onChange={handleNewLeadChange} className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-indigo-200">
+                      <option value="">Link Property (Optional)</option>
+                      {inventoryUnits.map(unit => (
+                        <option key={unit._id} value={unit._id}>
+                          {[unit.project?.name || unit.building_name, unit.tower?.name, unit.unitNumber, unit.bhk ? `${unit.bhk} BHK` : ''].filter(Boolean).join(' - ') || `Unit ${unit._id}`}
+                        </option>
+                      ))}
+                    </select>
                     <div className="flex gap-2 justify-end">
                       <button type="button" onClick={() => setShowAddLead(false)} className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">Cancel</button>
                       <button type="submit" className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-blue-500 text-white rounded hover:from-indigo-600 hover:to-blue-600">Add Lead</button>
@@ -383,6 +404,7 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
                       <th className="px-4 py-3 text-xs font-bold text-gray-700 uppercase text-left tracking-wider">Contact Name</th>
                       <th className="px-4 py-3 text-xs font-bold text-gray-700 uppercase text-left tracking-wider">Phone</th>
                       <th className="px-4 py-3 text-xs font-bold text-gray-700 uppercase text-left tracking-wider">Source</th>
+                      <th className="px-4 py-3 text-xs font-bold text-gray-700 uppercase text-left tracking-wider">Property</th>
                       <th className="px-4 py-3 text-xs font-bold text-gray-700 uppercase text-left tracking-wider">Status</th>
                       <th className="px-4 py-3 text-xs font-bold text-gray-700 uppercase text-left tracking-wider">Assign To</th>
                       <th className="px-4 py-3 text-xs font-bold text-gray-700 uppercase text-left tracking-wider">Remarks</th>
@@ -413,6 +435,54 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
                         <td className="px-4 py-3 align-middle whitespace-nowrap font-semibold text-gray-900">{lead.name || '-'}</td>
                         <td className="px-4 py-3 align-middle whitespace-nowrap">{lead.phone}</td>
                         <td className="px-4 py-3 align-middle whitespace-nowrap capitalize text-indigo-700">{lead.source}</td>
+                        <td className="px-4 py-3 align-middle whitespace-nowrap">
+                          {lead.propertyId ? (
+                            <a
+                              href={`/property/${typeof lead.propertyId === 'object' ? lead.propertyId._id : lead.propertyId}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                              {lead.propertyName || 'View Property'}
+                            </a>
+                          ) : (
+                            <div className="flex flex-col gap-1">
+                              {lead.message && (
+                                <span className="text-amber-600 text-xs font-medium bg-amber-50 px-2 py-0.5 rounded" title={lead.message}>
+                                  {lead.message.length > 25 ? lead.message.substring(0, 25) + '...' : lead.message}
+                                </span>
+                              )}
+                              {user && user.role !== 'EMPLOYEE' && (
+                                <select
+                                  value=""
+                                  onChange={async (e) => {
+                                    const pid = e.target.value;
+                                    if (!pid) return;
+                                    try {
+                                      await leadAPI.updateProperty(lead._id, pid);
+                                      fetchLeads(currentPage);
+                                    } catch (err) {
+                                      console.error('Failed to link property:', err);
+                                      alert('Failed to link property');
+                                    }
+                                  }}
+                                  className="border rounded px-2 py-1 text-xs bg-white shadow-sm focus:ring-2 focus:ring-emerald-200 w-36 text-gray-500"
+                                >
+                                  <option value="">Link Property</option>
+                                  {inventoryUnits.map(unit => (
+                                    <option key={unit._id} value={unit._id}>
+                                      {[unit.project?.name || unit.building_name, unit.tower?.name, unit.unitNumber].filter(Boolean).join(' - ') || `Unit ${unit._id}`}
+                                    </option>
+                                  ))}
+                                </select>
+                              )}
+                              {!lead.message && (!user || user.role === 'EMPLOYEE') && (
+                                <span className="text-gray-400 text-xs">-</span>
+                              )}
+                            </div>
+                          )}
+                        </td>
                         <td className="px-4 py-3 align-middle whitespace-nowrap">
                           <span className={`inline-flex items-center gap-1 px-3 py-1 text-xs rounded-full font-bold ${getStatusColor(lead.status)}`}>{lead.status === 'assigned' ? '🟡' : lead.status === 'interested' ? '🟢' : lead.status === 'callback' ? '🟣' : lead.status === 'closed' ? '⚫' : '🔵'} {lead.status}</span>
                         </td>
@@ -624,6 +694,22 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
                             : 'Unassigned'}
                         </div>
                       </div>
+                      {selectedLead.propertyId && (
+                        <div className="md:col-span-2">
+                          <span className="text-gray-500 text-xs font-semibold uppercase">Linked Property</span>
+                          <div className="mt-1">
+                            <a
+                              href={`/property/${typeof selectedLead.propertyId === 'object' ? selectedLead.propertyId._id : selectedLead.propertyId}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                              {selectedLead.propertyName || 'View Property'}
+                            </a>
+                          </div>
+                        </div>
+                      )}
                       {selectedLead.message && (
                         <div className="md:col-span-2">
                           <span className="text-gray-500 text-xs font-semibold uppercase">Property / Inquiry</span>

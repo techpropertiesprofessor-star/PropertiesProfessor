@@ -33,6 +33,12 @@ router.get('/:id/status', auth, employeeController.getEmployeeWithStatus);
 // Public endpoint for basic member info (for chat @ tagging) - accessible by all authenticated users
 router.get('/basic', auth, employeeController.getEmployeesBasic);
 
+// Manager-only: reset employee password
+router.post('/reset-password/:employeeId', auth, role(['MANAGER']), employeeController.resetPassword);
+
+// Manager-only: toggle team attendance access
+router.patch('/toggle-attendance-access/:employeeId', auth, role(['MANAGER']), employeeController.toggleAttendanceAccess);
+
 // Only ADMIN or MANAGER can access other routes
 router.use(auth, role(['ADMIN', 'MANAGER']));
 

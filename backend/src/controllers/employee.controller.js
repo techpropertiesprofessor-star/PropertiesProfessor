@@ -5,6 +5,7 @@ const LeaveRequest = require('../models/LeaveRequest');
 const User = require('../models/User');
 const Lead = require('../models/Lead');
 const Caller = require('../models/Caller');
+const bcrypt = require('bcryptjs');
 
 // Get basic info for all employees (for chat member count)
 exports.getEmployeesBasic = async (req, res, next) => {
@@ -315,6 +316,85 @@ function formatTimeDiff(date) {
   if (minutes > 0) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
   return 'just now';
 }
+
+// Manager-only: toggle team attendance access for an employee
+exports.toggleAttendanceAccess = async (req, res, next) => {
+  try {
+    const { employeeId } = req.params;
+    const { teamAttendanceAccess, teamDashboardAccess } = req.body;
+
+    const update = {};
+    if (typeof teamAttendanceAccess === 'boolean') update.teamAttendanceAccess = teamAttendanceAccess;
+    if (typeof teamDashboardAccess === 'boolean') update.teamDashboardAccess = teamDashboardAccess;
+
+    if (Object.keys(update).length === 0) {
+      return res.status(400).json({ message: 'Provide teamAttendanceAccess or teamDashboardAccess as boolean' });
+    }
+
+    const employee = await Employee.findByIdAndUpdate(
+      employeeId,
+      update,
+      { new: true }
+    );
+
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+
+    res.json({ success: true, message: 'Access updated successfully', employee });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Manager-controlled password reset for an employee
+exports.resetPassword = async (req, res, next) => {
+  try {
+    const { employeeId } = req.params;
+    const { newPassword, confirmPassword } = req.body;
+
+    // Validate required fields
+    if (!newPassword || !confirmPassword) {
+      return res.status(400).json({ message: 'New password and confirm password are required' });
+    }
+
+    // Validate password length
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    }
+
+    // Validate passwords match
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ message: 'Passwords do not match' });
+    }
+
+    // Validate employee ID format
+    if (!employeeId || !employeeId.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ message: 'Invalid employee ID' });
+    }
+
+    // Find the employee record
+    const employee = await Employee.findById(employeeId);
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+
+    // Find the associated user account
+    const user = await User.findOne({ employeeId: employeeId }) ||
+                 await User.findOne({ email: employee.email });
+    if (!user) {
+      return res.status(404).json({ message: 'User account not found for this employee' });
+    }
+
+    // Hash the new password and update
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await User.findByIdAndUpdate(user._id, { password: hashedPassword });
+
+    res.json({ success: true, message: 'Password updated successfully' });
+  } catch (err) {
+    next(err);
+  }
+};
 
 // Get comprehensive statistics for all employees (Manager Dashboard)
 exports.getEmployeesStatistics = async (req, res, next) => {

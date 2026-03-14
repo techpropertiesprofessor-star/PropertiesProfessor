@@ -70,11 +70,15 @@ exports.login = async (req, res, next) => {
     if (!isMatch) return res.status(401).json({ message: 'Invalid credentials' });
     let employeeId = null;
     let permissions = [];
+    let teamAttendanceAccess = false;
+    let teamDashboardAccess = false;
     // Fetch employeeId for both EMPLOYEE and MANAGER roles
     if (user.role === 'EMPLOYEE' || user.role === 'MANAGER') {
       const emp = await Employee.findOne({ email: user.email });
       if (emp) {
         employeeId = emp._id;
+        teamAttendanceAccess = emp.teamAttendanceAccess || false;
+        teamDashboardAccess = emp.teamDashboardAccess || false;
         if (user.role === 'EMPLOYEE') {
           permissions = emp.permissions || [];
         }
@@ -85,10 +89,10 @@ exports.login = async (req, res, next) => {
       }
     }
     const token = generateToken(user, employeeId);
-    res.json({ 
-      success: true, 
-      token, 
-      user: { id: user._id, name: user.name, email: user.email, phone: user.phone, role: user.role, photoUrl: user.photoUrl, employeeId, permissions } 
+    res.json({
+      success: true,
+      token,
+      user: { id: user._id, name: user.name, email: user.email, phone: user.phone, role: user.role, photoUrl: user.photoUrl, employeeId, permissions, teamAttendanceAccess, teamDashboardAccess }
     });
   } catch (err) {
     next(err);
@@ -126,17 +130,21 @@ exports.verifyToken = async (req, res, next) => {
     if (!user) return res.status(404).json({ message: 'User not found' });
     let employeeId = null;
     let permissions = [];
+    let teamAttendanceAccess = false;
+    let teamDashboardAccess = false;
     // Fetch employeeId for both EMPLOYEE and MANAGER roles
     if (user.role === 'EMPLOYEE' || user.role === 'MANAGER') {
       const emp = await Employee.findOne({ email: user.email });
       if (emp) {
         employeeId = emp._id;
+        teamAttendanceAccess = emp.teamAttendanceAccess || false;
+        teamDashboardAccess = emp.teamDashboardAccess || false;
         if (user.role === 'EMPLOYEE') {
           permissions = emp.permissions || [];
         }
       }
     }
-    res.json({ valid: true, user: { ...user.toObject(), employeeId, permissions } });
+    res.json({ valid: true, user: { ...user.toObject(), employeeId, permissions, teamAttendanceAccess, teamDashboardAccess } });
   } catch (err) {
     next(err);
   }

@@ -108,6 +108,10 @@ export const employeeAPI = {
   // Update online status (socketId / isOnline)
   updateOnlineStatus: (payload) => api.put('/employees/status/online', payload),
   delete: (id) => api.delete(`/employees/${id}`),
+  // Manager-only: reset employee password
+  resetPassword: (employeeId, data) => api.post(`/employees/reset-password/${employeeId}`, data),
+  // Manager-only: toggle team attendance access
+  toggleAttendanceAccess: (employeeId, data) => api.patch(`/employees/toggle-attendance-access/${employeeId}`, data),
 };
 
 /**
@@ -363,11 +367,27 @@ export const leadAPI = {
   updateRemarks: (leadId, remarks, note) =>
     api.put(`leads/${leadId}/remarks`, { remarks, note }),
 
+  updateProperty: (leadId, propertyId) =>
+    api.put(`leads/${leadId}/property`, { propertyId }),
+
   download: ({ start, end }) =>
     api.get("leads/download", {
       params: { start, end },
       responseType: 'blob'
     })
+};
+
+/**
+ * =====================================================
+ * PROPERTY APIs (Lead → Property deep link)
+ * =====================================================
+ */
+export const propertyAPI = {
+  getById: (id) =>
+    api.get(`/property/${id}`),
+
+  list: () =>
+    api.get('/property/list'),
 };
 
 

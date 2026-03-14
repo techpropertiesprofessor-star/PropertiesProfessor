@@ -71,7 +71,7 @@ export default function Sidebar({
     { icon: FiHardDrive, label: 'NAS', path: '/nas', permission: 'NAS' },
     { icon: FiPhone, label: 'Callers', path: '/callers', permission: 'Caller' },
     { icon: FiUsers, label: 'Employees', path: '/employees', permission: 'Employees' },
-    { icon: FiBarChart2, label: 'Team Dashboard', path: '/manager-dashboard', permission: 'Employees' },
+    { icon: FiBarChart2, label: 'Team Dashboard', path: '/manager-dashboard', permission: 'Employees', accessField: 'teamDashboardAccess' },
     { icon: FiDollarSign, label: 'Payroll', path: '/payroll', permission: 'Payroll' },
     { icon: FiDollarSign, label: 'Payroll Manage', path: '/pro-payroll', permission: 'Payroll Manage' },
     { icon: FiFileText, label: 'Payroll Receipt', path: '/payroll-receipt', permission: 'Payroll Receipt' },
@@ -106,7 +106,12 @@ export default function Sidebar({
     if (userRole === 'EMPLOYEE') {
       // Profile is always accessible
       if (item.permission === 'Profile') return true;
-      
+
+      // If item has accessField, that boolean must be true (overrides permission check)
+      if (item.accessField) {
+        return !!user?.[item.accessField];
+      }
+
       // Check if permission exists in user's permissions array
       const hasAccess = user?.permissions?.includes(item.permission) || false;
       console.log('  → Has access to', item.label, ':', hasAccess);

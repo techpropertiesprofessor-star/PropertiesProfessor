@@ -51,6 +51,9 @@ router.get('/:id/comments', leadController.getComments);
 // Remarks update (both EMPLOYEE and MANAGER can update)
 router.put('/:id/remarks', auth, requirePermission('Leads'), leadController.updateRemarks);
 
+// Link property to existing lead (MANAGER/ADMIN only)
+router.put('/:id/property', auth, role(['MANAGER', 'ADMIN']), leadController.updateLeadProperty);
+
 // CRUD
 router.post('/', leadController.createLead); // <-- Add this line for manual lead creation
 router.get('/:id', leadController.getLeadById);

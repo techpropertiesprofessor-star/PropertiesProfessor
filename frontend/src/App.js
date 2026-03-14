@@ -33,6 +33,7 @@ import LeadsPage from './pages/LeadsPage';
 import LeaveRequestsPage from './pages/LeaveRequestsPage';
 import LeaveRequestFormPage from './pages/LeaveRequestFormPage';
 import InventoryPage from './pages/InventoryPage';
+import PropertyDetailsPage from './pages/PropertyDetailsPage';
 import NasPage from './pages/NasPage';
 import ContentCalendarPage from './pages/ContentCalendarPage';
 import PermissionsPage from './pages/PermissionsPage';
@@ -116,11 +117,12 @@ function AppContent() {
         <Route path="/callers" element={<ProtectedRoute><PermissionRoute permission="Caller"><CallersPage /></PermissionRoute></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><PermissionRoute permission="Profile"><ProfilePage /></PermissionRoute></ProtectedRoute>} />
         <Route path="/employees" element={<ProtectedRoute><PermissionRoute permission="Employees"><EmployeesPage /></PermissionRoute></ProtectedRoute>} />
-        <Route path="/manager-dashboard" element={<ProtectedRoute><PermissionRoute permission="Employees"><ManagerDashboard /></PermissionRoute></ProtectedRoute>} />
+        <Route path="/manager-dashboard" element={<ProtectedRoute><PermissionRoute permission="Employees" accessField="teamDashboardAccess"><ManagerDashboard /></PermissionRoute></ProtectedRoute>} />
         <Route path="/leads" element={<ProtectedRoute><PermissionRoute permission="Leads"><LeadsPage /></PermissionRoute></ProtectedRoute>} />
         <Route path="/leaves" element={<ProtectedRoute><PermissionRoute permission="Leave Request"><LeaveRequestsPage /></PermissionRoute></ProtectedRoute>} />
         <Route path="/leaves/new" element={<ProtectedRoute><PermissionRoute permission="Leave Request"><LeaveRequestFormPage /></PermissionRoute></ProtectedRoute>} />
         <Route path="/inventory" element={<ProtectedRoute><PermissionRoute permission="Inventory"><InventoryPage /></PermissionRoute></ProtectedRoute>} />
+        <Route path="/property/:id" element={<ProtectedRoute><PermissionRoute permission="Leads"><PropertyDetailsPage /></PermissionRoute></ProtectedRoute>} />
         <Route path="/nas" element={<ProtectedRoute><PermissionRoute permission="NAS"><NasPage /></PermissionRoute></ProtectedRoute>} />
         <Route path="/calendar" element={<ProtectedRoute><PermissionRoute permission="Calendar"><ContentCalendarPage /></PermissionRoute></ProtectedRoute>} />
         <Route path="/permissions" element={<ProtectedRoute><PermissionRoute permission="Employees"><PermissionsPage /></PermissionRoute></ProtectedRoute>} />

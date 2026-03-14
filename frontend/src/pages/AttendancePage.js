@@ -70,6 +70,7 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
     };
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
+  const canViewTeamAttendance = user?.role === 'MANAGER' || (user?.role === 'EMPLOYEE' && user?.teamAttendanceAccess);
   const { canViewAttendance, canMarkAttendance, loading: permissionsLoading } = usePermissions();
   const [attendance, setAttendance] = useState([]);
   const [leaveRequests, setLeaveRequests] = useState([]);
@@ -108,7 +109,7 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
   
   // Reload team attendance when selected month changes (for both daily & monthly views)
   useEffect(() => {
-    if (user && user.role === 'MANAGER') {
+    if (user && canViewTeamAttendance) {
       console.log('📅 Loading attendance for month:', format(selectedMonth, 'MMMM yyyy'));
       loadTeamAttendance();
     }
@@ -132,7 +133,7 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
     }
     
     // Load manager-specific data
-    if (user && user.role === 'MANAGER') {
+    if (user && canViewTeamAttendance) {
       loadEmployees();
       loadTeamAttendance();
     }
@@ -142,7 +143,7 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
       loadAttendance();
       loadLeaveRequests();
       checkTodayAttendance();
-      if (user && user.role === 'MANAGER') {
+      if (user && canViewTeamAttendance) {
         loadTeamAttendance();
       }
     }, 30000);
@@ -154,7 +155,7 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
     loadAttendance();
     loadLeaveRequests();
     checkTodayAttendance();
-    if (user && user.role === 'MANAGER') loadTeamAttendance();
+    if (user && canViewTeamAttendance) loadTeamAttendance();
   }, [user]);
   useRealtimeData(['attendance-updated', 'team-attendance-updated'], refreshAttendance);
 
@@ -810,7 +811,7 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
           </div>
           
           {/* Manager Team Attendance View */}
-          {user && user.role === 'MANAGER' && (
+          {user && canViewTeamAttendance && (
             <div className="mb-8 bg-white rounded-2xl shadow-xl border border-blue-100 p-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-blue-800">Team Attendance</h2>

@@ -25,13 +25,17 @@ export default function TasksPage({ newMessageCount = 0, resetNewMessageCount })
     description: '',
     priority: 'medium',
     due_date: '',
-    assignedTo: ''
+    assignedTo: []
   });
 
   // Modal state for viewing task details
   const [viewTask, setViewTask] = useState(null);
 
   const [showCallerModal, setShowCallerModal] = useState(false);
+
+  // Multi-select dropdown state
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
 
   // Cache for manager/creator names not in employees list
   const [managerNames, setManagerNames] = useState({});
@@ -40,7 +44,7 @@ export default function TasksPage({ newMessageCount = 0, resetNewMessageCount })
   useEffect(() => {
     loadTasks();
     loadEmployees();
-    
+
     // Check for add parameter in URL and auto-open add form
     if (searchParams.get('add') === 'true' && canCreateTasks) {
       setShowForm(true);
@@ -50,6 +54,35 @@ export default function TasksPage({ newMessageCount = 0, resetNewMessageCount })
       setSearchParams(newParams, { replace: true });
     }
   }, [searchParams, setSearchParams, canCreateTasks]);
+
+  // Close multi-select dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Multi-select helpers
+  const toggleEmployee = (empId) => {
+    setFormData(prev => ({
+      ...prev,
+      assignedTo: prev.assignedTo.includes(empId)
+        ? prev.assignedTo.filter(id => id !== empId)
+        : [...prev.assignedTo, empId]
+    }));
+  };
+
+  const toggleSelectAll = () => {
+    const allIds = employees.map(emp => emp.id || emp._id);
+    setFormData(prev => ({
+      ...prev,
+      assignedTo: prev.assignedTo.length === allIds.length ? [] : allIds
+    }));
+  };
 
   // Helper to get employeeId from user context
   const getEmployeeId = () => {
@@ -296,7 +329,7 @@ export default function TasksPage({ newMessageCount = 0, resetNewMessageCount })
 
             {/* Task Form */}
             {showForm && canCreateTasks && (
-              <div className="relative bg-white/70 backdrop-blur-lg rounded-2xl shadow-xl p-4 sm:p-6 md:p-8 mb-6 sm:mb-10 border border-indigo-100 overflow-hidden">
+              <div className="relative bg-white/70 backdrop-blur-lg rounded-2xl shadow-xl p-4 sm:p-6 md:p-8 mb-6 sm:mb-10 border border-indigo-100">
                 <div className="absolute inset-0 pointer-events-none rounded-2xl" style={{background: 'linear-gradient(120deg, rgba(99,102,241,0.08) 0%, rgba(236,72,153,0.07) 100%)', filter: 'blur(2px)'}}></div>
                 <h2 className="text-2xl font-extrabold text-indigo-700 mb-6 flex items-center gap-2 tracking-tight relative z-10">
                   <span className="text-2xl">📝</span> Assign New Task
@@ -304,6 +337,10 @@ export default function TasksPage({ newMessageCount = 0, resetNewMessageCount })
                 <form
                   onSubmit={async (e) => {
                     e.preventDefault();
+                    if (formData.assignedTo.length === 0) {
+                      alert('Please select at least one employee');
+                      return;
+                    }
                     setLoading(true);
                     try {
                       // Send correct fields to backend
@@ -315,7 +352,7 @@ export default function TasksPage({ newMessageCount = 0, resetNewMessageCount })
                         priority: formData.priority
                       };
                       await taskAPI.create(submitData);
-                      setFormData({ title: '', description: '', priority: 'medium', due_date: '', assignedTo: '' });
+                      setFormData({ title: '', description: '', priority: 'medium', due_date: '', assignedTo: [] });
                       setShowForm(false);
                       await loadTasks();
                     } catch (err) {
@@ -360,21 +397,50 @@ export default function TasksPage({ newMessageCount = 0, resetNewMessageCount })
                       required
                     />
                   </div>
-                  <div>
+                  <div ref={dropdownRef} className="relative">
                     <label className="block text-sm font-semibold mb-1 text-gray-700">Assign To</label>
-                    <select
-                      value={formData.assignedTo}
-                      onChange={(e) => setFormData({ ...formData, assignedTo: e.target.value })}
-                      className="w-full px-4 py-2 text-base border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 shadow-sm"
-                      required
+                    <div
+                      onClick={() => setDropdownOpen(!dropdownOpen)}
+                      className="w-full px-4 py-2 text-base border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 shadow-sm cursor-pointer bg-white flex items-center justify-between min-h-[42px]"
                     >
-                      <option value="">Select Employee</option>
-                      {employees.map(emp => (
-                        <option key={emp.id || emp._id} value={emp.id || emp._id}>
-                          {emp.first_name ? `${emp.first_name} ${emp.last_name}` : emp.name || emp.email}
-                        </option>
-                      ))}
-                    </select>
+                      <span className={formData.assignedTo.length === 0 ? 'text-gray-400' : 'text-gray-900'}>
+                        {formData.assignedTo.length === 0
+                          ? 'Select Employee(s)'
+                          : formData.assignedTo.length === employees.length
+                            ? `All Selected (${employees.length})`
+                            : `${formData.assignedTo.length} Selected`}
+                      </span>
+                      <svg className={`w-4 h-4 text-gray-500 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    </div>
+                    {dropdownOpen && (
+                      <div className="w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                        {/* Select All */}
+                        <label className="flex items-center gap-2 px-4 py-2 hover:bg-indigo-50 cursor-pointer border-b border-gray-100 font-semibold text-indigo-700">
+                          <input
+                            type="checkbox"
+                            checked={employees.length > 0 && formData.assignedTo.length === employees.length}
+                            onChange={toggleSelectAll}
+                            className="accent-indigo-600 w-4 h-4"
+                          />
+                          Select All
+                        </label>
+                        {employees.map(emp => {
+                          const empId = emp.id || emp._id;
+                          const empName = emp.first_name ? `${emp.first_name} ${emp.last_name}` : emp.name || emp.email;
+                          return (
+                            <label key={empId} className="flex items-center gap-2 px-4 py-2 hover:bg-indigo-50 cursor-pointer text-gray-700">
+                              <input
+                                type="checkbox"
+                                checked={formData.assignedTo.includes(empId)}
+                                onChange={() => toggleEmployee(empId)}
+                                className="accent-indigo-600 w-4 h-4"
+                              />
+                              {empName}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                   <button
                     type="submit"
