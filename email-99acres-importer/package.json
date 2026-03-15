@@ -1,0 +1,18 @@
+{
+  "name": "email-99acres-importer",
+  "version": "1.0.0",
+  "description": "Microservice to import 99acres email leads into PropertiesProfessor CRM",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test:imap": "node scripts/testImap.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.0",
+    "dotenv": "^16.6.1",
+    "imap": "^0.8.19",
+    "mailparser": "^3.7.0",
+    "node-cron": "^3.0.3"
+  }
+}

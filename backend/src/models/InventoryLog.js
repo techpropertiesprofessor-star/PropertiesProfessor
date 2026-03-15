@@ -16,7 +16,10 @@ const InventoryLogSchema = new mongoose.Schema({
       'MEDIA_UPLOADED',
       'MEDIA_DELETED',
       'PROJECT_CREATED',
-      'TOWER_CREATED'
+      'TOWER_CREATED',
+      'OWNER_ACCESS_REQUESTED',
+      'OWNER_ACCESS_APPROVED',
+      'OWNER_ACCESS_REJECTED'
     ]
   },
   unitId: { type: mongoose.Schema.Types.ObjectId, ref: 'InventoryUnit' },

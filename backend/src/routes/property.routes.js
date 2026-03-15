@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const auth = require('../middlewares/auth.middleware');
 const InventoryUnit = require('../models/InventoryUnit');
+const { hasValidAccess, stripOwnerFields } = require('../controllers/ownerAccess.controller');
 
 // All routes require authentication
 router.use(auth);
@@ -59,6 +60,15 @@ router.get('/:id', async (req, res, next) => {
 
     if (!unit) {
       return res.status(404).json({ message: 'Property not found' });
+    }
+
+    // Strip owner fields for non-admin/manager users without active access
+    if (!['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(role)) {
+      const employeeId = req.user.employeeId || req.user.id;
+      const { hasAccess } = await hasValidAccess(unit._id, employeeId);
+      if (!hasAccess) {
+        return res.json(stripOwnerFields(unit.toObject()));
+      }
     }
 
     res.json(unit);
