@@ -5,6 +5,7 @@ const Employee = require('../models/Employee');
  * Usage:
  *   role(['ADMIN', 'MANAGER'])                       — only these roles
  *   role(['ADMIN', 'MANAGER'], 'Payroll Manage')     — also allows EMPLOYEE with that permission
+ *   role(['ADMIN', 'MANAGER'], { field: 'teamAttendanceAccess' }) — also allows EMPLOYEE with that boolean flag
  */
 module.exports = (roles = [], permissionOverride = null) => async (req, res, next) => {
   if (!req.user) {
@@ -22,8 +23,17 @@ module.exports = (roles = [], permissionOverride = null) => async (req, res, nex
   if (permissionOverride && userRole === 'EMPLOYEE') {
     try {
       const emp = await Employee.findOne({ email: req.user.email });
-      if (emp && Array.isArray(emp.permissions) && emp.permissions.includes(permissionOverride)) {
-        return next();
+      if (emp) {
+        // Support boolean field check: { field: 'teamAttendanceAccess' }
+        if (typeof permissionOverride === 'object' && permissionOverride.field) {
+          if (emp[permissionOverride.field] === true) {
+            return next();
+          }
+        }
+        // Support string permission check
+        if (typeof permissionOverride === 'string' && Array.isArray(emp.permissions) && emp.permissions.includes(permissionOverride)) {
+          return next();
+        }
       }
     } catch (e) {
       // fall through to deny

@@ -312,6 +312,34 @@ createTower: (projectId, data) =>
 
 /**
  * =====================================================
+ * OWNER ACCESS APIs (Time-Based Owner Details Locking)
+ * =====================================================
+ */
+export const ownerAccessAPI = {
+  requestAccess: (data) =>
+    api.post('/owner-access/request', data),
+
+  getMyRequests: () =>
+    api.get('/owner-access/my-requests'),
+
+  getAllRequests: (params = {}) =>
+    api.get('/owner-access/all', { params }),
+
+  approveRequest: (id, data = {}) =>
+    api.patch(`/owner-access/${id}/approve`, data),
+
+  rejectRequest: (id, data = {}) =>
+    api.patch(`/owner-access/${id}/reject`, data),
+
+  checkAccess: (unitId) =>
+    api.get(`/owner-access/check/${unitId}`),
+
+  checkAccessBatch: (unitIds) =>
+    api.post('/owner-access/check-batch', { unitIds }),
+};
+
+/**
+ * =====================================================
  * STORAGE APIs (DigitalOcean Spaces)
  * =====================================================
  */

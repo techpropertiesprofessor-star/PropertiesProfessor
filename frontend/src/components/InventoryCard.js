@@ -133,15 +133,15 @@ export default function InventoryCard({data, onView, onEdit, user}){
         {/* Divider */}
         <div className="border-t border-gray-100 my-2" />
 
-        {/* Owner Info - Manager/Admin only */}
+        {/* Owner Info - shown when data present (backend strips for unauthorized) */}
         <div className="space-y-1.5 mb-4">
-          {(user?.role === 'ADMIN' || user?.role === 'MANAGER') && d.owner_name && d.owner_name !== '-' && (
+          {d.owner_name && d.owner_name !== '-' && (
             <div className="flex items-center gap-2 text-xs text-gray-600">
               <FiUser size={12} className="text-gray-400" />
               <span className="font-medium text-gray-800">{d.owner_name}</span>
             </div>
           )}
-          {(user?.role === 'ADMIN' || user?.role === 'MANAGER') && d.owner_phone && d.owner_phone !== '-' && (
+          {d.owner_phone && d.owner_phone !== '-' && (
             <div className="flex items-center gap-2 text-xs text-gray-600">
               <FiPhone size={12} className="text-gray-400" />
               <span>{d.owner_phone}</span>

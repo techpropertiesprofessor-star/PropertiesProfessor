@@ -18,7 +18,8 @@ router.get('/history/mine', attendanceController.myHistory);
 // Monthly summary - must come before /:employeeId to avoid route conflict
 router.get('/monthly-summary', attendanceController.monthlySummary);
 // Team attendance must come before /:employeeId to avoid route conflict
-router.get('/team', role(['ADMIN', 'MANAGER']), attendanceController.getTeamAttendance);
+// Also allow employees with teamAttendanceAccess flag
+router.get('/team', role(['ADMIN', 'MANAGER'], { field: 'teamAttendanceAccess' }), attendanceController.getTeamAttendance);
 // Employee-specific history (this catches any /:employeeId pattern)
 router.get('/:employeeId', role(['ADMIN', 'MANAGER']), attendanceController.employeeHistory);
 

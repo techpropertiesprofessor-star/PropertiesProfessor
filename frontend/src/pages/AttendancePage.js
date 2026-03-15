@@ -570,7 +570,9 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
     if (isFutureMonth) return 0;
 
     const isCurrentMonth = now.getMonth() === targetMonth && now.getFullYear() === targetYear;
-    const lastDay = isCurrentMonth ? now.getDate() : new Date(targetYear, targetMonth + 1, 0).getDate();
+    // For current month, count up to yesterday (exclude today — day isn't over)
+    // For past months, count all days including the last day
+    const lastDay = isCurrentMonth ? now.getDate() - 1 : new Date(targetYear, targetMonth + 1, 0).getDate();
 
     // Determine start day based on joining date
     let startDay = 1;
@@ -614,7 +616,7 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
     });
 
     let absent = 0;
-    for (let day = startDay; day < lastDay; day++) {
+    for (let day = startDay; day <= lastDay; day++) {
       const date = new Date(targetYear, targetMonth, day);
       const dayOfWeek = date.getDay();
       // Skip Sundays (0) and Mondays (1 = weekly off)
@@ -668,7 +670,7 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
     let csv = `Attendance Report - ${month}\n\n`;
     csv += 'Employee Name,Total Present,Total Absent,Total Leave,Weekly Off/Holiday,Consecutive Absences\n';
     
-    employees.forEach(emp => {
+    employees.filter(e => e.status !== 'inactive').forEach(emp => {
       const empAttendance = teamAttendance.filter(a => a.employee === emp._id);
       const present = empAttendance.filter(a => getAttendanceStatus(a) === 'P').length;
       const absent = calculateEmployeeAbsentDays(emp._id, selectedMonth.getMonth(), selectedMonth.getFullYear(), empAttendance, emp.joiningDate || emp.createdAt);
@@ -835,39 +837,33 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
               {viewMode === 'daily' && (
                 <>
                   {/* Team Summary Cards */}
+                  {(() => {
+                    const activeEmployees = employees.filter(e => e.status !== 'inactive');
+                    const activeCount = activeEmployees.length;
+                    const presentToday = teamAttendance.filter(a => isToday(new Date(a.date)) && (a.checkIn || a.check_in)).length;
+                    const leaveToday = teamAttendance.filter(a => isToday(new Date(a.date)) && getAttendanceStatus(a) === 'L').length;
+                    const absentToday = Math.max(0, activeCount - presentToday - leaveToday);
+                    return (
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                     <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4 border border-green-200">
                       <p className="text-xs text-green-700 font-semibold mb-1">Total Team</p>
-                      <p className="text-3xl font-extrabold text-green-800">{employees.length}</p>
+                      <p className="text-3xl font-extrabold text-green-800">{activeCount}</p>
                     </div>
                     <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 border border-blue-200">
                       <p className="text-xs text-blue-700 font-semibold mb-1">Present Today</p>
-                      <p className="text-3xl font-extrabold text-blue-800">
-                        {(() => {
-                          const count = teamAttendance.filter(a => isToday(new Date(a.date)) && getAttendanceStatus(a) === 'P').length;
-                          console.log('🟢 Present today count:', count, 'Today records:', teamAttendance.filter(a => isToday(new Date(a.date))).length);
-                          return count;
-                        })()}
-                      </p>
+                      <p className="text-3xl font-extrabold text-blue-800">{presentToday}</p>
                     </div>
                     <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-4 border border-red-200">
                       <p className="text-xs text-red-700 font-semibold mb-1">Absent Today</p>
-                      <p className="text-3xl font-extrabold text-red-800">
-                        {(() => {
-                          if (!isTodayWorkingDay()) return 0;
-                          const presentToday = teamAttendance.filter(a => isToday(new Date(a.date)) && getAttendanceStatus(a) === 'P').length;
-                          const leaveToday = teamAttendance.filter(a => isToday(new Date(a.date)) && getAttendanceStatus(a) === 'L').length;
-                          return Math.max(0, employees.length - presentToday - leaveToday);
-                        })()}
-                      </p>
+                      <p className="text-3xl font-extrabold text-red-800">{absentToday}</p>
                     </div>
                     <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-4 border border-orange-200">
                       <p className="text-xs text-orange-700 font-semibold mb-1">On Leave</p>
-                      <p className="text-3xl font-extrabold text-orange-800">
-                        {teamAttendance.filter(a => isToday(new Date(a.date)) && getAttendanceStatus(a) === 'L').length}
-                      </p>
+                      <p className="text-3xl font-extrabold text-orange-800">{leaveToday}</p>
                     </div>
                   </div>
+                    );
+                  })()}
                   
                   {/* Employee-wise Attendance Table */}
                   <div className="overflow-x-auto">
@@ -883,14 +879,14 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                        {employees.length === 0 ? (
+                        {employees.filter(e => e.status !== 'inactive').length === 0 ? (
                           <tr>
                             <td colSpan="6" className="px-4 py-8 text-center text-gray-500">
                               No team members found
                             </td>
                           </tr>
                         ) : (
-                          employees.map(emp => {
+                          employees.filter(e => e.status !== 'inactive').map(emp => {
                             const now = new Date();
                             // empAttendance scoped to current month so counts reset on month change
                             const empAttendance = teamAttendance.filter(a =>
@@ -997,7 +993,7 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mb-6">
                     <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 border border-purple-200">
                       <p className="text-xs text-purple-700 font-semibold mb-1">Total Employees</p>
-                      <p className="text-3xl font-extrabold text-purple-800">{employees.length}</p>
+                      <p className="text-3xl font-extrabold text-purple-800">{employees.filter(e => e.status !== 'inactive').length}</p>
                     </div>
                     <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4 border border-green-200">
                       <p className="text-xs text-green-700 font-semibold mb-1">Avg Present/Day</p>
@@ -1019,10 +1015,10 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                       <p className="text-3xl font-extrabold text-red-800">
                         {(() => {
                           let totalAbsent = 0;
-                          employees.forEach(emp => {
+                          employees.filter(e => e.status !== 'inactive').forEach(emp => {
                             const empAtt = teamAttendance.filter(a => {
                               const attDate = new Date(a.date);
-                              return attDate.getMonth() === selectedMonth.getMonth() && 
+                              return attDate.getMonth() === selectedMonth.getMonth() &&
                                      attDate.getFullYear() === selectedMonth.getFullYear() &&
                                      String(a.employee) === String(emp._id);
                             });
@@ -1046,7 +1042,7 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                     <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl p-4 border border-yellow-200">
                       <p className="text-xs text-yellow-700 font-semibold mb-1">High Risk</p>
                       <p className="text-3xl font-extrabold text-yellow-800">
-                        {employees.filter(emp => getConsecutiveAbsences(emp._id) >= 3).length}
+                        {employees.filter(emp => emp.status !== 'inactive' && getConsecutiveAbsences(emp._id) >= 3).length}
                       </p>
                     </div>
                   </div>
@@ -1068,14 +1064,14 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                        {employees.length === 0 ? (
+                        {employees.filter(e => e.status !== 'inactive').length === 0 ? (
                           <tr>
                             <td colSpan="9" className="px-4 py-8 text-center text-gray-500">
                               No team members found
                             </td>
                           </tr>
                         ) : (
-                          employees.map(emp => {
+                          employees.filter(e => e.status !== 'inactive').map(emp => {
                             // Filter attendance for selected month
                             const monthAttendance = teamAttendance.filter(a => {
                               const attDate = new Date(a.date);
@@ -1209,10 +1205,10 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                           {(() => {
                             let best = null;
                             let maxPercent = 0;
-                            employees.forEach(emp => {
+                            employees.filter(e => e.status !== 'inactive').forEach(emp => {
                               const monthAtt = teamAttendance.filter(a => {
                                 const attDate = new Date(a.date);
-                                return attDate.getMonth() === selectedMonth.getMonth() && 
+                                return attDate.getMonth() === selectedMonth.getMonth() &&
                                        attDate.getFullYear() === selectedMonth.getFullYear() &&
                                        String(a.employee) === String(emp._id);
                               });
@@ -1233,10 +1229,10 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                       <div>
                         <p className="text-red-700 font-semibold mb-1">⚠ Requires Attention</p>
                         <p className="text-xs text-red-600">
-                          {employees.filter(emp => {
+                          {employees.filter(emp => emp.status !== 'inactive').filter(emp => {
                             const monthAtt = teamAttendance.filter(a => {
                               const attDate = new Date(a.date);
-                              return attDate.getMonth() === selectedMonth.getMonth() && 
+                              return attDate.getMonth() === selectedMonth.getMonth() &&
                                      attDate.getFullYear() === selectedMonth.getFullYear() &&
                                      String(a.employee) === String(emp._id);
                             });
@@ -1246,10 +1242,10 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                             const workingDays = totalDays - wo;
                             const percent = workingDays > 0 ? Math.round((p / workingDays) * 100) : 0;
                             return percent < 75 || getConsecutiveAbsences(emp._id) >= 3;
-                          }).length} employee{employees.filter(emp => {
+                          }).length} employee{employees.filter(emp => emp.status !== 'inactive').filter(emp => {
                             const monthAtt = teamAttendance.filter(a => {
                               const attDate = new Date(a.date);
-                              return attDate.getMonth() === selectedMonth.getMonth() && 
+                              return attDate.getMonth() === selectedMonth.getMonth() &&
                                      attDate.getFullYear() === selectedMonth.getFullYear() &&
                                      String(a.employee) === String(emp._id);
                             });

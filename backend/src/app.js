@@ -92,6 +92,7 @@ app.use('/api/nas', require('./routes/nas.routes'));
 app.use('/api/payroll', require('./routes/payroll.routes'));
 app.use('/api/pro-payroll', require('./routes/proPayroll.routes'));
 app.use('/api/property', require('./routes/property.routes'));
+app.use('/api/owner-access', require('./routes/ownerAccess.routes'));
 
 /* ========================
    MANAGER ANALYTICS ROUTES

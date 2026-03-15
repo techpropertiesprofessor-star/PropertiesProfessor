@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import api, { inventoryAPI } from '../api/client';
+import api, { inventoryAPI, ownerAccessAPI } from '../api/client';
 import { AuthContext } from '../context/AuthContext';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import useSidebarCollapsed from '../hooks/useSidebarCollapsed';
 import AddInventoryForm from '../components/AddInventoryForm';
 import InventoryCard from '../components/InventoryCard';
+import OwnerAccessSection from '../components/OwnerAccessSection';
+import CountdownTimer from '../components/CountdownTimer';
 import useRealtimeData from '../hooks/useRealtimeData';
 import { useSocket } from '../context/SocketContext';
 import { FiX, FiHome, FiMapPin, FiLayers, FiMaximize, FiGrid, FiSun, FiUser, FiPhone, FiCalendar, FiFileText, FiEdit2, FiEye, FiDownload, FiKey, FiTruck, FiCheckCircle, FiDollarSign, FiMessageSquare, FiShield, FiTag, FiBriefcase, FiWifi, FiNavigation, FiBox, FiPackage, FiActivity, FiAward, FiClipboard, FiClock } from 'react-icons/fi';
@@ -71,6 +73,11 @@ function InventoryPage() {
 
   const isManager = user?.role === 'ADMIN' || user?.role === 'MANAGER';
 
+  // My Owner Requests state (employees only)
+  const [myOwnerRequests, setMyOwnerRequests] = useState([]);
+  const [myRequestsLoading, setMyRequestsLoading] = useState(false);
+  const [myRequestsExpanded, setMyRequestsExpanded] = useState(true);
+
   // Fetch projects
   const fetchProjects = async () => {
     try {
@@ -106,6 +113,20 @@ function InventoryPage() {
       console.error('Failed to fetch stats:', err);
     }
   };
+
+  // Fetch my owner access requests (employees only)
+  const fetchMyOwnerRequests = useCallback(async () => {
+    if (isManager) return;
+    setMyRequestsLoading(true);
+    try {
+      const res = await ownerAccessAPI.getMyRequests();
+      setMyOwnerRequests(res.data?.requests || res.data || []);
+    } catch (err) {
+      console.error('Failed to fetch my owner requests:', err);
+    } finally {
+      setMyRequestsLoading(false);
+    }
+  }, [isManager, user?.permissions]);
 
   // Fetch units
   const fetchUnits = useCallback(async () => {
@@ -239,7 +260,20 @@ function InventoryPage() {
     fetchProjects();
     fetchUnits();
     fetchStats();
+    fetchMyOwnerRequests();
   }, [fetchUnits]);
+
+  // Auto-open unit from URL query param (?unit=<id>)
+  useEffect(() => {
+    const unitParam = searchParams.get('unit');
+    if (unitParam && !loading) {
+      viewUnit(unitParam);
+      // Clear the query param so it doesn't re-trigger
+      searchParams.delete('unit');
+      setSearchParams(searchParams, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
 
   // Auto-refresh stats every 30 seconds for real-time accuracy
   useEffect(() => {
@@ -280,6 +314,9 @@ function InventoryPage() {
   }, [fetchUnits]);
   useRealtimeData(['inventory-created'], refreshInventory);
 
+  // Real-time: refresh "My Owner Requests" when access is approved/rejected
+  useRealtimeData(['owner-access-approved', 'owner-access-updated', 'owner-access-rejected'], fetchMyOwnerRequests);
+
   // Real-time inventory logs (managers/admin)
   useEffect(() => {
     if (!on || !off || !isManager) return;
@@ -291,6 +328,18 @@ function InventoryPage() {
   }, [on, off, isManager]);
 
   // Helpers
+  const getRequestUnitDisplay = (req) => {
+    const unit = req.unitId;
+    if (!unit || typeof unit === 'string') return 'Unit';
+    const parts = [];
+    if (unit.unitNumber) parts.push(`Unit ${unit.unitNumber}`);
+    if (unit.bhk) parts.push(unit.bhk);
+    if (unit.project?.name) parts.push(unit.project.name);
+    if (unit.tower?.name) parts.push(unit.tower.name);
+    if (unit.building_name) parts.push(unit.building_name);
+    return parts.join(' - ') || 'Unit';
+  };
+
   const buildMediaUrl = (url) => {
     if (!url) return '';
     if (url.startsWith('http')) return url;
@@ -425,6 +474,11 @@ function InventoryPage() {
     } catch (err) {
       console.error('Failed to view unit:', err);
     }
+  };
+
+  // Re-fetch the currently selected unit (e.g. after owner access granted)
+  const refreshUnitDetails = (unitId) => {
+    if (unitId) viewUnit(unitId);
   };
 
   const handleUploadMedia = async (files) => {
@@ -900,6 +954,106 @@ function InventoryPage() {
             </div>
           </div>
 
+          {/* My Owner Requests - Employees Only */}
+          {!isManager && myOwnerRequests.length > 0 && (
+            <div className="bg-white rounded-lg shadow mb-6 border border-indigo-100">
+              <div
+                className="flex items-center justify-between px-5 py-3 cursor-pointer bg-gradient-to-r from-indigo-50 to-blue-50 rounded-t-lg"
+                onClick={() => setMyRequestsExpanded(!myRequestsExpanded)}
+              >
+                <div className="flex items-center gap-2">
+                  <FiShield className="text-indigo-600" size={18} />
+                  <h3 className="font-bold text-indigo-800 text-sm">My Owner Access Requests</h3>
+                  <span className="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                    {myOwnerRequests.length}
+                  </span>
+                </div>
+                <span className="text-gray-500 hover:text-gray-700 transition-transform duration-200"
+                  style={{ transform: myRequestsExpanded ? 'rotate(0deg)' : 'rotate(-90deg)' }}>
+                  ▼
+                </span>
+              </div>
+
+              {myRequestsExpanded && (
+                <div className="p-4">
+                  {myRequestsLoading ? (
+                    <div className="text-center text-gray-500 py-4">Loading your requests...</div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {myOwnerRequests.map((req) => {
+                        const statusStyles = {
+                          PENDING: { card: 'border-amber-200 bg-amber-50', badge: 'bg-amber-100 text-amber-700' },
+                          APPROVED: { card: 'border-green-200 bg-green-50', badge: 'bg-green-100 text-green-700' },
+                          REJECTED: { card: 'border-red-200 bg-red-50', badge: 'bg-red-100 text-red-700' },
+                          EXPIRED: { card: 'border-gray-200 bg-gray-50', badge: 'bg-gray-100 text-gray-600' },
+                        };
+                        const style = statusStyles[req.status] || statusStyles.EXPIRED;
+                        const unitId = req.unitId?._id || req.unitId;
+                        const isClickable = unitId && typeof unitId === 'string';
+
+                        return (
+                          <div
+                            key={req._id}
+                            onClick={() => isClickable && viewUnit(unitId)}
+                            className={`rounded-xl border-2 p-4 transition-all duration-200 ${style.card} ${isClickable ? 'cursor-pointer hover:shadow-md hover:-translate-y-0.5' : ''}`}
+                          >
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <FiHome className="text-indigo-500 flex-shrink-0" size={16} />
+                                <span className="font-semibold text-gray-800 text-sm truncate">
+                                  {getRequestUnitDisplay(req)}
+                                </span>
+                              </div>
+                              <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${style.badge}`}>
+                                {req.status}
+                              </span>
+                            </div>
+
+                            {req.reason && (
+                              <p className="text-xs text-gray-500 mb-2 truncate" title={req.reason}>
+                                Reason: {req.reason}
+                              </p>
+                            )}
+
+                            <p className="text-xs text-gray-400 mb-2">
+                              Requested: {new Date(req.createdAt).toLocaleDateString('en-IN', {
+                                day: '2-digit', month: 'short', year: 'numeric'
+                              })}
+                            </p>
+
+                            {req.status === 'APPROVED' && req.expiresAt && (
+                              <div className="mt-2 pt-2 border-t border-green-200">
+                                {new Date(req.expiresAt) > new Date() ? (
+                                  <div className="flex items-center gap-2">
+                                    <FiClock className="text-green-500" size={13} />
+                                    <CountdownTimer
+                                      expiresAt={req.expiresAt}
+                                      onExpire={() => fetchMyOwnerRequests()}
+                                    />
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-red-500 font-medium">Expired</span>
+                                )}
+                              </div>
+                            )}
+
+                            {req.status === 'APPROVED' && req.approvedByName && (
+                              <p className="text-xs text-gray-400 mt-1">Approved by {req.approvedByName}</p>
+                            )}
+
+                            {req.status === 'REJECTED' && req.rejectionReason && (
+                              <p className="text-xs text-red-500 mt-1">Reason: {req.rejectionReason}</p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Results */}
           <div className="bg-white rounded-lg shadow overflow-hidden">
             {loading ? (
@@ -1294,28 +1448,12 @@ function InventoryPage() {
                         </div>
                       </div>
 
-                      {/* Owner Information - Manager/Admin only */}
-                      {(user?.role === 'ADMIN' || user?.role === 'MANAGER') && (selectedUnit.owner_name || selectedUnit.owner_phone) && (
-                        <div className="mb-5">
-                          <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                            <FiUser className="text-blue-500" /> Owner Information
-                          </h4>
-                          <div className="bg-blue-50 rounded-xl p-4 space-y-2">
-                            {selectedUnit.owner_name && (
-                              <div className="flex items-center gap-2 text-sm">
-                                <FiUser className="text-blue-600" />
-                                <span className="text-gray-800 font-medium">{selectedUnit.owner_name}</span>
-                              </div>
-                            )}
-                            {selectedUnit.owner_phone && (
-                              <div className="flex items-center gap-2 text-sm">
-                                <FiPhone className="text-blue-600" />
-                                <span className="text-gray-800">{selectedUnit.owner_phone}</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
+                      {/* Owner Information - Access controlled */}
+                      <OwnerAccessSection
+                        unit={selectedUnit}
+                        user={user}
+                        onAccessGranted={() => refreshUnitDetails(selectedUnit._id || selectedUnit.id)}
+                      />
 
                       {/* Remarks */}
                       {selectedUnit.remarks && (

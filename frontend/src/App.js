@@ -40,6 +40,7 @@ import PermissionsPage from './pages/PermissionsPage';
 import PayrollPage from './pages/PayrollPage';
 import ProPayrollDashboard from './pages/ProPayrollDashboard';
 import PayrollReceiptPage from './pages/PayrollReceiptPage';
+import OwnerAccessRequestsPage from './pages/OwnerAccessRequestsPage';
 import { PermissionRoute } from './context/PermissionRoute';
 import NotificationsPage from './pages/NotificationsPage';
 
@@ -122,6 +123,7 @@ function AppContent() {
         <Route path="/leaves" element={<ProtectedRoute><PermissionRoute permission="Leave Request"><LeaveRequestsPage /></PermissionRoute></ProtectedRoute>} />
         <Route path="/leaves/new" element={<ProtectedRoute><PermissionRoute permission="Leave Request"><LeaveRequestFormPage /></PermissionRoute></ProtectedRoute>} />
         <Route path="/inventory" element={<ProtectedRoute><PermissionRoute permission="Inventory"><InventoryPage /></PermissionRoute></ProtectedRoute>} />
+        <Route path="/owner-access-requests" element={<ProtectedRoute><PermissionRoute permission="Inventory"><OwnerAccessRequestsPage /></PermissionRoute></ProtectedRoute>} />
         <Route path="/property/:id" element={<ProtectedRoute><PermissionRoute permission="Leads"><PropertyDetailsPage /></PermissionRoute></ProtectedRoute>} />
         <Route path="/nas" element={<ProtectedRoute><PermissionRoute permission="NAS"><NasPage /></PermissionRoute></ProtectedRoute>} />
         <Route path="/calendar" element={<ProtectedRoute><PermissionRoute permission="Calendar"><ContentCalendarPage /></PermissionRoute></ProtectedRoute>} />

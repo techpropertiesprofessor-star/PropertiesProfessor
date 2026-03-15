@@ -6,6 +6,7 @@ const InventoryLog = require('../models/InventoryLog');
 const Employee = require('../models/Employee');
 const { emitToAll } = require('../utils/socket.util');
 const spacesService = require('../services/spaces.service');
+const { hasValidAccess, hasValidAccessBatch, stripOwnerFields } = require('./ownerAccess.controller');
 
 // ── Helper: create inventory log and emit real-time event ──
 async function logInventoryAction(action, { req, unitId, unitNumber, projectId, projectName, towerId, towerName, details, oldStatus, newStatus, metadata }) {
@@ -290,6 +291,16 @@ exports.getUnitById = async (req, res, next) => {
       .populate({ path: 'tower', select: 'name description' });
     if (!unit) return res.status(404).json({ message: 'Unit not found' });
     logInventoryAction('UNIT_VIEWED', { req, unitId: unit._id, unitNumber: unit.unitNumber, details: `Viewed unit "${unit.unitNumber}"` });
+
+    const userRole = (req.user.role || '').toUpperCase();
+    if (!['ADMIN', 'MANAGER', 'SUPER_ADMIN'].includes(userRole)) {
+      const employeeId = req.user.employeeId || req.user.id;
+      const { hasAccess } = await hasValidAccess(unit._id, employeeId);
+      if (!hasAccess) {
+        return res.json(stripOwnerFields(unit.toObject()));
+      }
+    }
+
     res.json(unit);
   } catch (err) {
     next(err);
@@ -369,6 +380,21 @@ exports.listUnits = async (req, res, next) => {
       query_builder,
       InventoryUnit.countDocuments(filter)
     ]);
+
+    const userRole = (req.user.role || '').toUpperCase();
+    if (!['ADMIN', 'MANAGER', 'SUPER_ADMIN'].includes(userRole)) {
+      const employeeId = req.user.employeeId || req.user.id;
+      const unitIds = units.map(u => u._id);
+      const accessMap = await hasValidAccessBatch(unitIds, employeeId);
+      const strippedUnits = units.map(u => {
+        const obj = u.toObject ? u.toObject() : { ...u };
+        if (!accessMap[obj._id.toString()]) {
+          return stripOwnerFields(obj);
+        }
+        return obj;
+      });
+      return res.json({ units: strippedUnits, total, page: pg, limit: lim });
+    }
 
     res.json({ units, total, page: pg, limit: lim });
   } catch (err) {
@@ -536,11 +562,27 @@ exports.searchUnits = async (req, res, next) => {
       .populate('priceHistory')
       .populate({ path: 'project', select: 'name location description' })
       .populate({ path: 'tower', select: 'name description' });
-    console.log('📊 Search results:', { 
-      filter, 
+    console.log('📊 Search results:', {
+      filter,
       count: units.length,
       furnished_statuses: units.map(u => u.furnished_status)
     });
+
+    const userRole = (req.user.role || '').toUpperCase();
+    if (!['ADMIN', 'MANAGER', 'SUPER_ADMIN'].includes(userRole)) {
+      const employeeId = req.user.employeeId || req.user.id;
+      const unitIds = units.map(u => u._id);
+      const accessMap = await hasValidAccessBatch(unitIds, employeeId);
+      const strippedUnits = units.map(u => {
+        const obj = u.toObject ? u.toObject() : { ...u };
+        if (!accessMap[obj._id.toString()]) {
+          return stripOwnerFields(obj);
+        }
+        return obj;
+      });
+      return res.json({ units: strippedUnits });
+    }
+
     res.json({ units });
   } catch (err) {
     next(err);

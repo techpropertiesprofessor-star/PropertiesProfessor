@@ -182,6 +182,7 @@ const startServer = async () => {
       socket.on('identify', async (userId) => {
         try {
           if (userId) {
+            socket.join(userId);
             await require('./src/models/Employee').findByIdAndUpdate(userId, {
               isOnline: true,
               lastSeen: new Date(),
