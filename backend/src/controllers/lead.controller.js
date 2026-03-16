@@ -1,4 +1,18 @@
 // =======================================
+// CHECK LEAD BY PHONE (duplicate check)
+// =======================================
+exports.checkLeadByPhone = async (req, res, next) => {
+  try {
+    const { phone } = req.query;
+    if (!phone) return res.status(400).json({ message: 'phone is required' });
+    const exists = await Lead.exists({ phone });
+    return res.json({ exists: !!exists });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// =======================================
 // GET UPLOAD HISTORY
 // =======================================
 exports.getUploadHistory = async (req, res, next) => {

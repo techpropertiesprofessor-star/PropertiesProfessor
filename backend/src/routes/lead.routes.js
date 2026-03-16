@@ -39,6 +39,9 @@ router.get('/uploads/history', leadController.getUploadHistory);
 // Leads download (MANAGER/ADMIN only)
 router.get('/download', auth, role(['MANAGER', 'ADMIN']), leadController.downloadLeadsCSV);
 
+// Duplicate phone check (no auth — used by email importer)
+router.get('/check', leadController.checkLeadByPhone);
+
 // GET /api/leads - requires Leads permission
 router.get('/', auth, requirePermission('Leads'), leadController.getLeads);
 

@@ -29,7 +29,8 @@ const leadSchema = new mongoose.Schema(
         'Friend',
         'property_enquiry',
         'Website',
-        'website'
+        'website',
+        '99acres'
       ]
     },
     propertyId: {
