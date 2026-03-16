@@ -64,7 +64,7 @@ function extractLead(rawBody) {
 
   const listingMatch = body.match(/\(([A-Z]\d{6,})\)/i);
   const propertyUrl = listingMatch
-    ? `https://www.99acres.com/property-detail-${listingMatch[1]}`
+    ? `https://www.99acres.com/${listingMatch[1]}`
     : "";
 
   return { name, phone, propertyName, propertyUrl };

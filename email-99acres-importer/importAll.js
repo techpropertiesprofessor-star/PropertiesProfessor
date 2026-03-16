@@ -68,7 +68,7 @@ function extractLead(rawBody) {
   // Extract 99acres listing ID (e.g. O88063692) and build URL
   const listingMatch = body.match(/\(([A-Z]\d{6,})\)/i);
   const propertyUrl = listingMatch
-    ? `https://www.99acres.com/property-detail-${listingMatch[1]}`
+    ? `https://www.99acres.com/${listingMatch[1]}`
     : "";
 
   return { name, phone, propertyName, propertyUrl };
