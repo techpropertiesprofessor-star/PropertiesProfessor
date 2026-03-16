@@ -5,8 +5,8 @@ exports.checkLeadByPhone = async (req, res, next) => {
   try {
     const { phone } = req.query;
     if (!phone) return res.status(400).json({ message: 'phone is required' });
-    const exists = await Lead.exists({ phone });
-    return res.json({ exists: !!exists });
+    const lead = await Lead.findOne({ phone }).select('_id name phone');
+    return res.json({ exists: !!lead, lead: lead || null });
   } catch (err) {
     next(err);
   }
@@ -284,13 +284,24 @@ exports.createLead = async (req, res, next) => {
 exports.getLeads = async (req, res, next) => {
   try {
     const filter = {};
-    const { status, category, type, budget, location, page, limit } = req.query;
+    const { status, category, type, budget, location, page, limit, source } = req.query;
 
     if (status) filter.status = status;
     if (category) filter.category = category;
     if (type) filter.type = type;
     if (budget) filter.budget = { $gte: Number(budget) };
     if (location) filter.location = location;
+
+    // Source tab filtering
+    if (source) {
+      if (source === 'website') {
+        filter.source = {
+          $in: ['contact_form', 'schedule_visit', 'whatsapp', 'chatbot', 'manual', 'Friend', 'property_enquiry', 'Website', 'website']
+        };
+      } else {
+        filter.source = source;
+      }
+    }
 
     const currentPage = parseInt(page) || 1;
     const pageLimit = parseInt(limit) || 20;

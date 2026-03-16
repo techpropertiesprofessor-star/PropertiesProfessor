@@ -64,6 +64,7 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
   const [remarkNoteModal, setRemarkNoteModal] = useState(null); // { leadId, remark }
   const [remarkNoteText, setRemarkNoteText] = useState('');
   const [remarkFilter, setRemarkFilter] = useState('All'); // Filter tabs: All, Interested, Not Interested, Busy, Invalid Number
+  const [sourceTab, setSourceTab] = useState('website'); // 'website' | '99acres' | 'housing.com'
   const [employees, setEmployees] = useState([]); // All employees/managers
   const [inventoryUnits, setInventoryUnits] = useState([]); // For property selection in Add Lead
   const [loading, setLoading] = useState(false);  const [showUpload, setShowUpload] = useState(false);
@@ -99,7 +100,7 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
   // Auto-refresh leads list on lead create/update/assign
   const refreshLeads = useCallback(() => {
     fetchLeads(currentPage);
-  }, [currentPage]);
+  }, [currentPage, sourceTab]);
   useRealtimeData(['lead-created', 'lead-updated'], refreshLeads);
 
   // =====================
@@ -151,7 +152,7 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
       newParams.delete('add');
       setSearchParams(newParams, { replace: true });
     }
-  }, [currentPage, searchParams, setSearchParams]);
+  }, [currentPage, sourceTab, searchParams, setSearchParams]);
 
   // =====================
   // FETCH LEADS WITH PAGINATION
@@ -159,7 +160,7 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
   const fetchLeads = async (page = 1) => {
     setLoading(true);
     try {
-      const response = await leadAPI.getAll({ page, limit: pageLimit });
+      const response = await leadAPI.getAll({ page, limit: pageLimit, source: sourceTab });
       
       // Handle new paginated response format
       if (response.data.leads && response.data.pagination) {
@@ -363,6 +364,30 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
               <p className="text-indigo-700 font-semibold">
                 Showing {leads.length > 0 ? ((currentPage - 1) * pageLimit + 1) : 0} - {Math.min(currentPage * pageLimit, totalLeads)} of {totalLeads} leads
               </p>
+            </div>
+
+            {/* Source Tabs */}
+            <div className="flex flex-wrap gap-2 mb-4">
+              {[
+                { key: 'website', label: 'Website' },
+                { key: '99acres', label: '99acres' },
+                { key: 'housing.com', label: 'Housing.com' },
+              ].map((tab) => (
+                <button
+                  key={tab.key}
+                  onClick={() => { setSourceTab(tab.key); setCurrentPage(1); }}
+                  className={`px-5 py-2.5 rounded-xl text-sm font-bold border transition-all duration-200 ${
+                    sourceTab === tab.key
+                      ? 'bg-indigo-600 text-white shadow-lg border-indigo-600'
+                      : 'bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50'
+                  }`}
+                >
+                  {tab.label}
+                  {sourceTab === tab.key && (
+                    <span className="ml-2 text-xs opacity-90">({totalLeads})</span>
+                  )}
+                </button>
+              ))}
             </div>
 
             {/* Remark Filter Tabs */}

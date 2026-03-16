@@ -13,7 +13,7 @@ console.log("===========================================");
 console.log("  99acres Email Lead Importer (Gmail API)");
 console.log("===========================================");
 console.log("  Schedule: every 5 minutes");
-console.log("  API: https://dashboard.propertiesprofessor.com/api/leads");
+console.log("  API: https://propertiesprofessor.onrender.com/api/leads");
 console.log("===========================================\n");
 
 /*

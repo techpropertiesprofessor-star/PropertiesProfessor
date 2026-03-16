@@ -16,9 +16,9 @@ const axios = require("axios");
 const TOKEN_PATH = path.join(__dirname, "token.json");
 const CREDENTIALS_PATH = path.join(__dirname, "credentials.json");
 
-const CRM_API = "https://dashboard.propertiesprofessor.com/api/leads";
+const CRM_API = "https://propertiesprofessor.onrender.com/api/leads";
 const DUPLICATE_API =
-  "https://dashboard.propertiesprofessor.com/api/leads/check?phone=";
+  "https://propertiesprofessor.onrender.com/api/leads/check?phone=";
 
 /*
 Authorize Gmail
@@ -55,7 +55,7 @@ function extractLead(rawBody) {
   const phoneMatch = body.match(/\+91[-\s]?(\d{10})/);
   const phone = phoneMatch ? phoneMatch[1].trim() : null;
 
-  const nameMatch = body.match(/Contact the buyer now\s*[-–]\s*([^<\n]+)/i);
+  const nameMatch = body.match(/Contact the buyer now\s*[-–]\s*(.+?)\s*\+91/i);
   const name = nameMatch ? nameMatch[1].trim() : "Unknown";
 
   return { name, phone };
