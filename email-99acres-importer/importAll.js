@@ -55,7 +55,9 @@ function extractLead(rawBody) {
   const phoneMatch = body.match(/\+91[-\s]?(\d{10})/);
   const phone = phoneMatch ? phoneMatch[1].trim() : null;
 
-  const nameMatch = body.match(/Contact the buyer now\s*[-–]\s*(.+?)\s*\+91/i);
+  const nameMatch =
+    body.match(/Contact the buyer now\s*[-–]\s*(.+?)\s*\+91/i) ||
+    body.match(/Details of the Query\s+(.+?)\s*\+91/i);
   const name = nameMatch ? nameMatch[1].trim() : "Unknown";
 
   return { name, phone };
