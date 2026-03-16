@@ -47,7 +47,7 @@ function stripHtml(html) {
 }
 
 /*
-Extract phone and name from email body
+Extract phone, name and property from email body
 */
 function extractLead(rawBody) {
   const body = stripHtml(rawBody);
@@ -60,7 +60,10 @@ function extractLead(rawBody) {
     body.match(/Details of the Query\s+(.+?)\s*\+91/i);
   const name = nameMatch ? nameMatch[1].trim() : "Unknown";
 
-  return { name, phone };
+  const propertyMatch = body.match(/(?:in|for)\s+(.+?)\s+on\s+99acres\.com/i);
+  const propertyName = propertyMatch ? propertyMatch[1].trim() : "";
+
+  return { name, phone, propertyName };
 }
 
 /*
@@ -76,15 +79,17 @@ async function isDuplicate(phone) {
 }
 
 /*
-Send lead to CRM as closed
+Send lead to CRM
 */
-async function sendLead(name, phone) {
+async function sendLead(name, phone, propertyName) {
   try {
     await axios.post(CRM_API, {
       name,
       phone,
       source: "99acres",
-      status: "closed",
+      status: "new",
+      propertyName: propertyName || "",
+      message: propertyName ? `99acres lead for: ${propertyName}` : "",
     });
     return true;
   } catch (err) {
@@ -153,7 +158,7 @@ async function main() {
     const parsed = await simpleParser(buffer);
     const body = parsed.text || parsed.html || "";
 
-    const { name, phone } = extractLead(body);
+    const { name, phone, propertyName } = extractLead(body);
 
     process.stdout.write(`[${i + 1}/${ids.length}] `);
 
@@ -170,7 +175,7 @@ async function main() {
       continue;
     }
 
-    const saved = await sendLead(name, phone);
+    const saved = await sendLead(name, phone, propertyName);
     if (saved) {
       console.log(`Imported — ${name} ${phone}`);
       imported++;

@@ -429,7 +429,7 @@ exports.updateRemarks = async (req, res, next) => {
     const lead = await Lead.findByIdAndUpdate(
       req.params.id,
       {
-        $set: { remarks, updatedAt: Date.now() },
+        $set: { remarks, status: 'completed', updatedAt: Date.now() },
         $push: { remarkNotes: remarkNote }
       },
       { new: true }

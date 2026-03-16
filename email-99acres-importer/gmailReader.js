@@ -58,7 +58,10 @@ function extractLead(rawBody) {
     body.match(/Details of the Query\s+(.+?)\s*\+91/i);
   const name = nameMatch ? nameMatch[1].trim() : "Unknown";
 
-  return { name, phone };
+  const propertyMatch = body.match(/(?:in|for)\s+(.+?)\s+on\s+99acres\.com/i);
+  const propertyName = propertyMatch ? propertyMatch[1].trim() : "";
+
+  return { name, phone, propertyName };
 }
 
 /*
@@ -77,12 +80,14 @@ async function isDuplicateLead(phone) {
 /*
 Send lead to CRM — returns true on success, false on failure
 */
-async function sendLead(name, phone) {
+async function sendLead(name, phone, propertyName) {
   try {
     await axios.post(CRM_API, {
       name,
       phone,
       source: "99acres",
+      propertyName: propertyName || "",
+      message: propertyName ? `99acres lead for: ${propertyName}` : "",
     });
     return true;
   } catch (error) {
@@ -129,7 +134,7 @@ async function readAndProcessEmails() {
 
     console.log("Processing email...");
 
-    const { name, phone } = extractLead(body);
+    const { name, phone, propertyName } = extractLead(body);
 
     if (!phone) {
       console.log("Phone not found");
@@ -142,7 +147,7 @@ async function readAndProcessEmails() {
       console.log("Duplicate lead skipped:", phone);
       duplicates++;
     } else {
-      const saved = await sendLead(name, phone);
+      const saved = await sendLead(name, phone, propertyName);
 
       if (saved) {
         console.log("Lead imported:", name, phone);
