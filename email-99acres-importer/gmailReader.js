@@ -58,10 +58,16 @@ function extractLead(rawBody) {
     body.match(/Details of the Query\s+(.+?)\s*\+91/i);
   const name = nameMatch ? nameMatch[1].trim() : "Unknown";
 
-  const propertyMatch = body.match(/(?:in|for)\s+(.+?)\s+on\s+99acres\.com/i);
+  const propertyMatch = body.match(/(?:query on\s+Rs[\d,]+\s*,?\s*)(.+?)\s*\(/i) ||
+    body.match(/(?:in|for)\s+(.+?)\s+on\s+99acres\.com/i);
   const propertyName = propertyMatch ? propertyMatch[1].trim() : "";
 
-  return { name, phone, propertyName };
+  const listingMatch = body.match(/\(([A-Z]\d{6,})\)/i);
+  const propertyUrl = listingMatch
+    ? `https://www.99acres.com/property-detail-${listingMatch[1]}`
+    : "";
+
+  return { name, phone, propertyName, propertyUrl };
 }
 
 /*
@@ -80,13 +86,14 @@ async function isDuplicateLead(phone) {
 /*
 Send lead to CRM — returns true on success, false on failure
 */
-async function sendLead(name, phone, propertyName) {
+async function sendLead(name, phone, propertyName, propertyUrl) {
   try {
     await axios.post(CRM_API, {
       name,
       phone,
       source: "99acres",
       propertyName: propertyName || "",
+      propertyUrl: propertyUrl || "",
       message: propertyName ? `99acres lead for: ${propertyName}` : "",
     });
     return true;
@@ -134,7 +141,7 @@ async function readAndProcessEmails() {
 
     console.log("Processing email...");
 
-    const { name, phone, propertyName } = extractLead(body);
+    const { name, phone, propertyName, propertyUrl } = extractLead(body);
 
     if (!phone) {
       console.log("Phone not found");
@@ -147,7 +154,7 @@ async function readAndProcessEmails() {
       console.log("Duplicate lead skipped:", phone);
       duplicates++;
     } else {
-      const saved = await sendLead(name, phone, propertyName);
+      const saved = await sendLead(name, phone, propertyName, propertyUrl);
 
       if (saved) {
         console.log("Lead imported:", name, phone);

@@ -60,10 +60,18 @@ function extractLead(rawBody) {
     body.match(/Details of the Query\s+(.+?)\s*\+91/i);
   const name = nameMatch ? nameMatch[1].trim() : "Unknown";
 
-  const propertyMatch = body.match(/(?:in|for)\s+(.+?)\s+on\s+99acres\.com/i);
+  // Extract full property description (e.g. "3 BHK, Flat/Apartment in Jaypee Greens...")
+  const propertyMatch = body.match(/(?:query on\s+Rs[\d,]+\s*,?\s*)(.+?)\s*\(/i) ||
+    body.match(/(?:in|for)\s+(.+?)\s+on\s+99acres\.com/i);
   const propertyName = propertyMatch ? propertyMatch[1].trim() : "";
 
-  return { name, phone, propertyName };
+  // Extract 99acres listing ID (e.g. O88063692) and build URL
+  const listingMatch = body.match(/\(([A-Z]\d{6,})\)/i);
+  const propertyUrl = listingMatch
+    ? `https://www.99acres.com/property-detail-${listingMatch[1]}`
+    : "";
+
+  return { name, phone, propertyName, propertyUrl };
 }
 
 /*
@@ -81,7 +89,7 @@ async function isDuplicate(phone) {
 /*
 Send lead to CRM
 */
-async function sendLead(name, phone, propertyName) {
+async function sendLead(name, phone, propertyName, propertyUrl) {
   try {
     await axios.post(CRM_API, {
       name,
@@ -89,6 +97,7 @@ async function sendLead(name, phone, propertyName) {
       source: "99acres",
       status: "new",
       propertyName: propertyName || "",
+      propertyUrl: propertyUrl || "",
       message: propertyName ? `99acres lead for: ${propertyName}` : "",
     });
     return true;
@@ -158,7 +167,7 @@ async function main() {
     const parsed = await simpleParser(buffer);
     const body = parsed.text || parsed.html || "";
 
-    const { name, phone, propertyName } = extractLead(body);
+    const { name, phone, propertyName, propertyUrl } = extractLead(body);
 
     process.stdout.write(`[${i + 1}/${ids.length}] `);
 
@@ -175,7 +184,7 @@ async function main() {
       continue;
     }
 
-    const saved = await sendLead(name, phone, propertyName);
+    const saved = await sendLead(name, phone, propertyName, propertyUrl);
     if (saved) {
       console.log(`Imported — ${name} ${phone}`);
       imported++;

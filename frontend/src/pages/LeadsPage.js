@@ -266,6 +266,7 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
       case 'interested': return 'text-green-700 bg-green-100';
       case 'callback': return 'text-purple-700 bg-purple-100';
       case 'closed': return 'text-gray-700 bg-gray-200';
+      case 'completed': return 'text-emerald-700 bg-emerald-100';
       default: return 'text-gray-600 bg-gray-100';
     }
   };
@@ -471,6 +472,20 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
                               {lead.propertyName || 'View Property'}
                             </a>
+                          ) : lead.propertyUrl ? (
+                            <a
+                              href={lead.propertyUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-700 hover:bg-orange-200 transition-colors"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                              {lead.propertyName ? (lead.propertyName.length > 30 ? lead.propertyName.substring(0, 30) + '...' : lead.propertyName) : '99acres Listing'}
+                            </a>
+                          ) : lead.propertyName ? (
+                            <span className="text-orange-700 text-xs font-medium bg-orange-50 px-2 py-0.5 rounded" title={lead.propertyName}>
+                              {lead.propertyName.length > 30 ? lead.propertyName.substring(0, 30) + '...' : lead.propertyName}
+                            </span>
                           ) : (
                             <div className="flex flex-col gap-1">
                               {lead.message && (
@@ -509,7 +524,7 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
                           )}
                         </td>
                         <td className="px-4 py-3 align-middle whitespace-nowrap">
-                          <span className={`inline-flex items-center gap-1 px-3 py-1 text-xs rounded-full font-bold ${getStatusColor(lead.status)}`}>{lead.status === 'assigned' ? '🟡' : lead.status === 'interested' ? '🟢' : lead.status === 'callback' ? '🟣' : lead.status === 'closed' ? '⚫' : '🔵'} {lead.status}</span>
+                          <span className={`inline-flex items-center gap-1 px-3 py-1 text-xs rounded-full font-bold ${getStatusColor(lead.status)}`}>{lead.status === 'assigned' ? '🟡' : lead.status === 'interested' ? '🟢' : lead.status === 'callback' ? '🟣' : lead.status === 'closed' ? '⚫' : lead.status === 'completed' ? '✅' : '🔵'} {lead.status}</span>
                         </td>
                         <td className="px-4 py-3 align-middle whitespace-nowrap">
                           {/* Assignment dropdown: Only for non-EMPLOYEE roles */}
@@ -731,6 +746,28 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
                             >
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
                               {selectedLead.propertyName || 'View Property'}
+                            </a>
+                          </div>
+                        </div>
+                      )}
+                      {!selectedLead.propertyId && selectedLead.propertyName && (
+                        <div className="md:col-span-2">
+                          <span className="text-gray-500 text-xs font-semibold uppercase">Property Details (99acres)</span>
+                          <div className="text-base text-gray-800 bg-orange-50 rounded-lg px-4 py-2 mt-1 border border-orange-200">{selectedLead.propertyName}</div>
+                        </div>
+                      )}
+                      {!selectedLead.propertyId && selectedLead.propertyUrl && (
+                        <div className="md:col-span-2">
+                          <span className="text-gray-500 text-xs font-semibold uppercase">99acres Property Link</span>
+                          <div className="mt-1">
+                            <a
+                              href={selectedLead.propertyUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100 transition-colors"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                              View on 99acres
                             </a>
                           </div>
                         </div>
