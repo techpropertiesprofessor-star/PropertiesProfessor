@@ -55,18 +55,22 @@ function extractLead(rawBody) {
   const phoneMatch = body.match(/\+91[-\s]?(\d{10})/);
   const phone = phoneMatch ? phoneMatch[1].trim() : null;
 
+  // Name extraction — handle email address between name and +91, and buyer/tenant
   const nameMatch =
-    body.match(/Contact the buyer now\s*[-–]\s*(.+?)\s*\+91/i) ||
+    body.match(/Contact the (?:buyer|tenant) now\s*[-–]\s*(.+?)\s+\S+@\S+\s+\+91/i) ||
+    body.match(/Contact the (?:buyer|tenant) now\s*[-–]\s*(.+?)\s*\+91/i) ||
+    body.match(/Details of the Query\s+(.+?)\s+\S+@\S+\s+\+91/i) ||
     body.match(/Details of the Query\s+(.+?)\s*\+91/i);
   const name = nameMatch ? nameMatch[1].trim() : "Unknown";
 
   // Extract full property description (e.g. "3 BHK, Flat/Apartment in Jaypee Greens...")
   const propertyMatch = body.match(/(?:query on\s+Rs[\d,]+\s*,?\s*)(.+?)\s*\(/i) ||
+    body.match(/listing\s*\([^)]+\)\s*,?\s*(?:in\s+)?(.+?)\s+on\s+99acres\.com/i) ||
     body.match(/(?:in|for)\s+(.+?)\s+on\s+99acres\.com/i);
   const propertyName = propertyMatch ? propertyMatch[1].trim() : "";
 
   // Extract 99acres listing ID (e.g. O88063692) and build URL
-  const listingMatch = body.match(/\(([A-Z]\d{6,})\)/i);
+  const listingMatch = body.match(/\(\s*([A-Z]\d{6,})\s*\)/i);
   const propertyUrl = listingMatch
     ? `https://www.99acres.com/${listingMatch[1]}`
     : "";
