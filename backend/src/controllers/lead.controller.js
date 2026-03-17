@@ -132,8 +132,8 @@ exports.createLead = async (req, res, next) => {
 
     // Resolve property details
     let resolvedPropertyId = null;
-    let propertyName = '';
-    let propertyUrl = '';
+    let resolvedPropertyName = req.body.propertyName || '';
+    let resolvedPropertyUrl = req.body.propertyUrl || '';
 
     // Priority 1: Direct propertyId (if website/dashboard sends it)
     if (propertyId) {
@@ -150,16 +150,16 @@ exports.createLead = async (req, res, next) => {
             unit.tower?.name,
             unit.unitNumber
           ].filter(Boolean);
-          propertyName = parts.join(' - ') || `Unit ${unit._id}`;
-          propertyUrl = `https://dashboard.propertiesprofessor.com/property/${unit._id}`;
+          resolvedPropertyName = parts.join(' - ') || `Unit ${unit._id}`;
+          resolvedPropertyUrl = `https://dashboard.propertiesprofessor.com/property/${unit._id}`;
         }
       } catch (e) {
         console.warn('Invalid propertyId provided for lead:', propertyId);
       }
     }
 
-    // Priority 2: Auto-match from message field (website leads)
-    if (!resolvedPropertyId && message && message.trim()) {
+    // Priority 2: Auto-match from message field (only for website leads, skip if propertyUrl already provided)
+    if (!resolvedPropertyId && !resolvedPropertyUrl && message && message.trim()) {
       try {
         const msgLower = message.trim().toLowerCase();
 
@@ -187,8 +187,8 @@ exports.createLead = async (req, res, next) => {
               unit.tower?.name,
               unit.unitNumber
             ].filter(Boolean);
-            propertyName = parts.join(' - ') || `Unit ${unit._id}`;
-            propertyUrl = `https://dashboard.propertiesprofessor.com/property/${unit._id}`;
+            resolvedPropertyName = parts.join(' - ') || `Unit ${unit._id}`;
+            resolvedPropertyUrl = `https://dashboard.propertiesprofessor.com/property/${unit._id}`;
           }
         }
 
@@ -208,8 +208,8 @@ exports.createLead = async (req, res, next) => {
               unitByBuilding.tower?.name,
               unitByBuilding.unitNumber
             ].filter(Boolean);
-            propertyName = parts.join(' - ') || `Unit ${unitByBuilding._id}`;
-            propertyUrl = `https://dashboard.propertiesprofessor.com/property/${unitByBuilding._id}`;
+            resolvedPropertyName = parts.join(' - ') || `Unit ${unitByBuilding._id}`;
+            resolvedPropertyUrl = `https://dashboard.propertiesprofessor.com/property/${unitByBuilding._id}`;
           }
         }
       } catch (e) {
@@ -233,8 +233,8 @@ exports.createLead = async (req, res, next) => {
       remarks: remarks || '',
       createdBy: isWebsite ? 'website' : 'dashboard',
       propertyId: resolvedPropertyId,
-      propertyName,
-      propertyUrl
+      propertyName: resolvedPropertyName,
+      propertyUrl: resolvedPropertyUrl
     });
 
     await lead.save();
@@ -242,7 +242,7 @@ exports.createLead = async (req, res, next) => {
     // If lead is assigned to someone during creation, notify them
     if (assignedToId) {
       try {
-        const propertyInfo = propertyName ? ` | Property: ${propertyName}` : '';
+        const propertyInfo = resolvedPropertyName ? ` | Property: ${resolvedPropertyName}` : '';
         const notification = await Notification.create({
           userId: assignedToId,
           type: 'LEAD_ASSIGNED',
@@ -250,7 +250,7 @@ exports.createLead = async (req, res, next) => {
           message: `A new lead has been assigned to you: ${name} (${phone})${propertyInfo}`,
           relatedId: lead._id,
           relatedModel: 'Lead',
-          data: { leadId: lead._id, propertyId: resolvedPropertyId, propertyUrl }
+          data: { leadId: lead._id, propertyId: resolvedPropertyId, propertyUrl: resolvedPropertyUrl }
         });
 
         emitToUser(assignedToId.toString(), 'new-notification', {
@@ -259,7 +259,7 @@ exports.createLead = async (req, res, next) => {
           title: 'New Lead Assigned',
           message: notification.message,
           leadId: lead._id,
-          propertyUrl,
+          propertyUrl: resolvedPropertyUrl,
           createdAt: notification.createdAt
         });
       } catch (notifErr) {
