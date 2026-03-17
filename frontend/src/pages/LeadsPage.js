@@ -393,10 +393,12 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
 
             {/* Remark Filter Tabs */}
             <div className="flex flex-wrap gap-2 mb-4">
-              {['All', 'Interested', 'Not Interested', 'Busy', 'Invalid Number'].map((tab) => {
+              {['All', 'Interested', 'Not Interested', 'Busy', 'Invalid Number', 'Closed'].map((tab) => {
                 const count = tab === 'All'
-                  ? leads.filter(l => !l.remarks || l.remarks === '' || !l.assignedTo).length
-                  : leads.filter(l => l.remarks === tab).length;
+                  ? leads.filter(l => l.status !== 'closed' && (!l.remarks || l.remarks === '' || !l.assignedTo)).length
+                  : tab === 'Closed'
+                  ? leads.filter(l => l.status === 'closed').length
+                  : leads.filter(l => l.status !== 'closed' && l.remarks === tab).length;
                 const isActive = remarkFilter === tab;
                 const colorMap = {
                   'All': isActive ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50',
@@ -404,6 +406,7 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
                   'Not Interested': isActive ? 'bg-red-600 text-white shadow-lg' : 'bg-white text-red-700 border-red-200 hover:bg-red-50',
                   'Busy': isActive ? 'bg-yellow-500 text-white shadow-lg' : 'bg-white text-yellow-700 border-yellow-200 hover:bg-yellow-50',
                   'Invalid Number': isActive ? 'bg-gray-600 text-white shadow-lg' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50',
+                  'Closed': isActive ? 'bg-red-800 text-white shadow-lg' : 'bg-white text-red-800 border-red-200 hover:bg-red-50',
                 };
                 return (
                   <button
@@ -440,8 +443,11 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
                   <tbody>
                     {[...leads]
                       .filter(l => {
+                        if (remarkFilter === 'Closed') {
+                          return l.status === 'closed';
+                        }
+                        if (l.status === 'closed') return false;
                         if (remarkFilter === 'All') {
-                          // Show only fresh (no remark) and unassigned leads
                           return !l.remarks || l.remarks === '' || !l.assignedTo;
                         }
                         return l.remarks === remarkFilter;
@@ -614,7 +620,7 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
                             }`}>{lead.remarks || '-'}</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 align-middle whitespace-nowrap">
+                        <td className="px-4 py-3 align-middle whitespace-nowrap flex gap-2">
                           <button
                             onClick={async () => {
                               if (!lead.hasOwnProperty('assignedTo')) {
@@ -632,6 +638,22 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
                           >
                             View
                           </button>
+                          {lead.status !== 'closed' && (
+                            <button
+                              onClick={async () => {
+                                if (!window.confirm('Are you sure you want to close this lead?')) return;
+                                try {
+                                  await leadAPI.update(lead._id, { status: 'closed' });
+                                  fetchLeads(currentPage);
+                                } catch (err) {
+                                  alert('Failed to close lead');
+                                }
+                              }}
+                              className="font-semibold px-3 py-1 rounded-lg transition-colors bg-red-50 text-red-600 border border-red-200 shadow-sm hover:bg-red-100 hover:text-red-800 focus:outline-none focus:ring-2 focus:ring-red-300 text-xs"
+                            >
+                              Close
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}

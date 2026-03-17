@@ -395,6 +395,9 @@ export const leadAPI = {
   updateRemarks: (leadId, remarks, note) =>
     api.put(`leads/${leadId}/remarks`, { remarks, note }),
 
+  update: (leadId, data) =>
+    api.put(`leads/${leadId}`, data),
+
   updateProperty: (leadId, propertyId) =>
     api.put(`leads/${leadId}/property`, { propertyId }),
 
