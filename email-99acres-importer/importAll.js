@@ -150,7 +150,7 @@ async function main() {
   console.log("Fetching all 99acres lead emails...");
   const ids = await fetchAllMessageIds(
     gmail,
-    'subject:"Buyer wants to know"'
+    "from:99acres"
   );
 
   console.log(`Found ${ids.length} emails. Processing...\n`);

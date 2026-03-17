@@ -118,7 +118,7 @@ async function readAndProcessEmails() {
 
   const res = await gmail.users.messages.list({
     userId: "me",
-    q: "subject:\"Buyer wants to know\" is:unread newer_than:7d",
+    q: "from:99acres is:unread newer_than:7d",
     maxResults: 20,
   });
 
