@@ -201,6 +201,7 @@ exports.createUnit = async (req, res, next) => {
 
     if (!unitNumber || !project || !tower) return res.status(400).json({ message: 'Required fields missing' });
     const unit = new InventoryUnit({
+      createdBy: req.user.employeeId || null,
       project,
       tower,
       unitNumber,
@@ -397,6 +398,137 @@ exports.listUnits = async (req, res, next) => {
     }
 
     res.json({ units, total, page: pg, limit: lim });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Get units created by the current employee ("My Inventory")
+exports.getMyUnits = async (req, res, next) => {
+  try {
+    const employeeId = req.user.employeeId;
+    if (!employeeId) {
+      return res.status(400).json({ message: 'Employee ID not found in token' });
+    }
+
+    const {
+      page, limit,
+      listing_type, budget_min, budget_max,
+      area_min, area_max, location, keys_location,
+      facing, furnished_status, query, bhk, status
+    } = req.query || {};
+
+    const filter = { createdBy: employeeId };
+
+    if (listing_type) filter.listing_type = listing_type;
+    if (status) filter.status = { $regex: `^${status}$`, $options: 'i' };
+
+    if (budget_min || budget_max) {
+      filter.final_price = {};
+      if (budget_min) filter.final_price.$gte = Number(budget_min);
+      if (budget_max) filter.final_price.$lte = Number(budget_max);
+    }
+
+    if (area_min || area_max) {
+      filter.carpet_area = {};
+      if (area_min) filter.carpet_area.$gte = Number(area_min);
+      if (area_max) filter.carpet_area.$lte = Number(area_max);
+    }
+
+    if (location) filter.location = { $regex: location, $options: 'i' };
+    if (keys_location) filter.keys_location = keys_location;
+    if (facing) filter.facing = facing;
+
+    if (furnished_status) {
+      const searchPattern = String(furnished_status).trim().replace(/[-\s]+/g, '[_-]');
+      filter.furnished_status = { $regex: searchPattern, $options: 'i' };
+    }
+
+    if (query) {
+      filter.$or = [
+        { unitNumber: { $regex: query, $options: 'i' } },
+        { unit_number: { $regex: query, $options: 'i' } },
+        { location: { $regex: query, $options: 'i' } },
+        { building_name: { $regex: query, $options: 'i' } },
+      ];
+    }
+
+    if (bhk) {
+      const bhkStr = String(bhk).trim();
+      if (/^\d/.test(bhkStr)) {
+        filter.bhk = { $regex: bhkStr, $options: 'i' };
+      } else {
+        filter.bhk = { $regex: bhkStr.replace(/[-_]/g, ' '), $options: 'i' };
+      }
+    }
+
+    const pg = Math.max(1, parseInt(page, 10) || 1);
+    const parsedLimit = parseInt(limit, 10);
+    const lim = parsedLimit === 0 ? 0 : Math.max(1, parsedLimit || 20);
+    const skip = lim === 0 ? 0 : (pg - 1) * lim;
+
+    let query_builder = InventoryUnit.find(filter)
+      .populate('priceHistory')
+      .populate({ path: 'project', select: 'name location description' })
+      .populate({ path: 'tower', select: 'name description' })
+      .sort({ createdAt: -1 });
+
+    if (lim > 0) {
+      query_builder = query_builder.skip(skip).limit(lim);
+    }
+
+    const [units, total] = await Promise.all([
+      query_builder,
+      InventoryUnit.countDocuments(filter)
+    ]);
+
+    const userRole = (req.user.role || '').toUpperCase();
+    if (!['ADMIN', 'MANAGER', 'SUPER_ADMIN'].includes(userRole)) {
+      const unitIds = units.map(u => u._id);
+      const accessMap = await hasValidAccessBatch(unitIds, employeeId);
+      const strippedUnits = units.map(u => {
+        const obj = u.toObject ? u.toObject() : { ...u };
+        if (!accessMap[obj._id.toString()]) {
+          return stripOwnerFields(obj);
+        }
+        return obj;
+      });
+      return res.json({ units: strippedUnits, total, page: pg, limit: lim });
+    }
+
+    res.json({ units, total, page: pg, limit: lim });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Backfill createdBy for existing units using InventoryLog
+exports.backfillCreatedBy = async (req, res, next) => {
+  try {
+    const logs = await InventoryLog.find({ action: 'UNIT_CREATED', employeeId: { $ne: null } })
+      .select('unitId employeeId')
+      .lean();
+
+    let updated = 0;
+    for (const log of logs) {
+      if (!log.unitId || !log.employeeId) continue;
+      const result = await InventoryUnit.updateOne(
+        { _id: log.unitId, createdBy: { $exists: false } },
+        { $set: { createdBy: log.employeeId } }
+      );
+      // Also update units where createdBy is null
+      if (result.modifiedCount === 0) {
+        const result2 = await InventoryUnit.updateOne(
+          { _id: log.unitId, createdBy: null },
+          { $set: { createdBy: log.employeeId } }
+        );
+        if (result2.modifiedCount > 0) updated++;
+      } else {
+        updated++;
+      }
+    }
+
+    res.json({ message: `Backfill complete. Updated ${updated} units from ${logs.length} logs.` });
   } catch (err) {
     next(err);
   }

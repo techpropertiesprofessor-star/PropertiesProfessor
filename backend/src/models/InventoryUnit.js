@@ -68,6 +68,8 @@ const InventoryUnitSchema = new mongoose.Schema({
   is_pre_leased: { type: String },
   commercial_amenities: [{ type: String }],
   maintenance_charges: { type: String },
+  // Track which employee created this unit
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', index: true },
   // DigitalOcean Spaces media references
   mediaFiles: [{
     key: { type: String, required: true },   // full object key in Spaces

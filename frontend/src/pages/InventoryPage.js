@@ -73,6 +73,12 @@ function InventoryPage() {
 
   const isManager = user?.role === 'ADMIN' || user?.role === 'MANAGER';
 
+  // My Inventory tab state
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') === 'my' ? 'my' : 'all');
+  const [myUnits, setMyUnits] = useState([]);
+  const [myUnitsLoading, setMyUnitsLoading] = useState(false);
+  const [myUnitsCount, setMyUnitsCount] = useState(0);
+
   // My Owner Requests state (employees only)
   const [myOwnerRequests, setMyOwnerRequests] = useState([]);
   const [myRequestsLoading, setMyRequestsLoading] = useState(false);
@@ -127,6 +133,115 @@ function InventoryPage() {
       setMyRequestsLoading(false);
     }
   }, [isManager, user?.permissions]);
+
+  // Fetch my inventory units (units created by current employee)
+  const fetchMyUnits = useCallback(async () => {
+    setMyUnitsLoading(true);
+    try {
+      const params = { limit: 0 };
+      Object.keys(filters).forEach((key) => {
+        if (!filters[key]) return;
+        if (key === 'bhk') {
+          const raw = filters.bhk.toString();
+          const digits = (raw.match(/(\d+)/) || [])[0];
+          if (digits) {
+            params.bhk = raw.includes('+') ? `${digits}+` : digits;
+          } else {
+            params.bhk = raw.replace(/\s+/g, '').toLowerCase();
+          }
+          return;
+        }
+        params[key] = filters[key];
+      });
+
+      const bhkFilterForClient = params.bhk || null;
+      if (bhkFilterForClient) delete params.bhk;
+
+      const res = await inventoryAPI.getMyUnits(params);
+      const raw = Array.isArray(res.data) ? res.data : (res.data?.units || res.data || []);
+      const total = res.data?.total || raw.length;
+
+      // Reuse the same normalize function pattern used for all units
+      const normalize = (u) => ({
+        _id: u._id || u.id,
+        id: u._id || u.id,
+        unit_number: u.unit_number || u.unitNumber || u.name || '',
+        name: u.name || u.unit_number || u.unitNumber || '',
+        location: u.location || u.address || '',
+        bhk: u.bhk || '',
+        status: u.status || u.state || 'available',
+        built_up_area: u.built_up_area || u.builtUpArea || u.carpet_area || '',
+        super_area: u.super_area || u.superArea || '',
+        base_price: u.base_price || u.basePrice || u.price || 0,
+        final_price: u.final_price || u.finalPrice || u.price || 0,
+        price_per_sqft: u.price_per_sqft || u.pricePerSqft || 0,
+        parking_slots: u.parking_slots || u.parking || u.parkingSlots || 0,
+        listing_type: u.listing_type || u.listingType || u.looking_to || '',
+        keys_location: u.keys_location || u.keysLocation || '',
+        furnished_status: u.furnished_status || u.furnishedStatus || '',
+        owner_name: u.owner_name || '',
+        owner_phone: u.owner_phone || '',
+        availability_date: u.availability_date || u.availabilityDate || '',
+        remarks: u.remarks || u.keys_remarks || '',
+        thumbnail: null,
+        building_name: u.building_name || u.buildingName || u.tower || '',
+        project_name: (u.project && (u.project.name || u.project.title)) || u.project_name || '',
+        tower: u.tower || '',
+        amenities: (() => {
+          try {
+            if (Array.isArray(u.amenities)) return u.amenities.map(a => typeof a === 'string' ? a : (a.name || a.title || JSON.stringify(a)));
+            if (typeof u.amenities === 'string') return u.amenities.split(',').map(s => s.trim()).filter(Boolean);
+          } catch (e) {}
+          return [];
+        })(),
+        raw: u
+      });
+
+      let normalized = raw.map(normalize);
+
+      // Apply tolerant client-side BHK filtering
+      if (bhkFilterForClient) {
+        const filterBhkRaw = bhkFilterForClient.toString().toLowerCase();
+        const filterNum = (filterBhkRaw.match(/(\d+)/) || [])[0];
+        normalized = normalized.filter((u) => {
+          const unitBhkRaw = (u.bhk || '').toString().toLowerCase();
+          const unitNum = (unitBhkRaw.match(/(\d+)/) || [])[0];
+          if (filterNum) {
+            const fN = Number(filterNum);
+            if (filterBhkRaw.includes('+')) {
+              const uN = unitNum ? Number(unitNum) : NaN;
+              return !isNaN(uN) && uN >= fN;
+            }
+            if (unitNum) return Number(unitNum) === fN;
+            return unitBhkRaw.includes(filterNum);
+          }
+          const norm = (s) => (s || '').toString().toLowerCase().replace(/[_-]/g, ' ').replace(/\s+/g, ' ').trim();
+          return norm(unitBhkRaw).includes(norm(filterBhkRaw));
+        });
+      }
+
+      setMyUnits(normalized);
+      setMyUnitsCount(total);
+
+      // Fetch thumbnails for my units
+      const unitIds = normalized.map(u => u._id || u.id).filter(Boolean);
+      if (unitIds.length > 0) {
+        inventoryAPI.getUnitThumbnails(unitIds)
+          .then((thumbRes) => {
+            const thumbs = thumbRes.data?.thumbnails || {};
+            if (Object.keys(thumbs).length > 0) {
+              setUnitThumbnails(prev => ({ ...prev, ...thumbs }));
+            }
+          })
+          .catch(() => {});
+      }
+    } catch (err) {
+      console.error('Failed to fetch my units:', err);
+      setMyUnits([]);
+    } finally {
+      setMyUnitsLoading(false);
+    }
+  }, [filters]);
 
   // Fetch units
   const fetchUnits = useCallback(async () => {
@@ -261,7 +376,25 @@ function InventoryPage() {
     fetchUnits();
     fetchStats();
     fetchMyOwnerRequests();
-  }, [fetchUnits]);
+    fetchMyUnits();
+  }, [fetchUnits, fetchMyUnits]);
+
+  // Sync tab from URL search param (?tab=my)
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'my' && activeTab !== 'my') setActiveTab('my');
+  }, [searchParams]);
+
+  // Handle tab switch
+  const handleTabSwitch = (tab) => {
+    setActiveTab(tab);
+    if (tab === 'my') {
+      searchParams.set('tab', 'my');
+    } else {
+      searchParams.delete('tab');
+    }
+    setSearchParams(searchParams, { replace: true });
+  };
 
   // Auto-open unit from URL query param (?unit=<id>)
   useEffect(() => {
@@ -279,10 +412,11 @@ function InventoryPage() {
   useEffect(() => {
     const interval = setInterval(() => {
       fetchUnits();
+      fetchMyUnits();
       fetchStats();
     }, 30000);
     return () => clearInterval(interval);
-  }, [fetchUnits]);
+  }, [fetchUnits, fetchMyUnits]);
 
   // Real-time: listen for unit updates and inventory creation via shared socket
   const { on, off } = useSocket() || {};
@@ -297,6 +431,9 @@ function InventoryPage() {
         setUnits((prev) => prev.map((u) =>
           (u._id || u.id) === unitId ? { ...u, ...updatedUnit, raw: updatedUnit } : u
         ));
+        setMyUnits((prev) => prev.map((u) =>
+          (u._id || u.id) === unitId ? { ...u, ...updatedUnit, raw: updatedUnit } : u
+        ));
         fetchStats();
       } catch (e) {
         console.error('Error applying unit-updated payload', e);
@@ -309,9 +446,10 @@ function InventoryPage() {
   // Full refresh on inventory creation
   const refreshInventory = useCallback(() => {
     fetchUnits();
+    fetchMyUnits();
     fetchStats();
     fetchProjects();
-  }, [fetchUnits]);
+  }, [fetchUnits, fetchMyUnits]);
   useRealtimeData(['inventory-created'], refreshInventory);
 
   // Real-time: refresh "My Owner Requests" when access is approved/rejected
@@ -675,7 +813,8 @@ function InventoryPage() {
   };
 
   // Client-side displayed units (real-time, case-insensitive filtering)
-  const displayedUnits = units.filter((u) => {
+  const sourceUnits = activeTab === 'my' ? myUnits : units;
+  const displayedUnits = sourceUnits.filter((u) => {
     // start with true then apply filters
     try {
       const q = (filters.query || '').toString().trim().toLowerCase();
@@ -792,7 +931,9 @@ function InventoryPage() {
     return res;
   };
 
-  const liveStats = computeCounts(hasSearched ? displayedUnits : units);
+  const liveStats = activeTab === 'my'
+    ? computeCounts(hasSearched ? displayedUnits : myUnits)
+    : computeCounts(hasSearched ? displayedUnits : units);
 
   // Render UI (kept the original structure / classes)
   return (
@@ -830,6 +971,37 @@ function InventoryPage() {
                 + Add Inventory
               </button>
             </div>
+          </div>
+
+          {/* Tab Bar — All Inventory / My Inventory */}
+          <div className="flex items-center gap-1 mb-5 bg-white rounded-lg shadow p-1 w-fit">
+            <button
+              onClick={() => handleTabSwitch('all')}
+              className={`px-5 py-2.5 rounded-md text-sm font-semibold transition-all ${
+                activeTab === 'all'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              All Inventory
+            </button>
+            <button
+              onClick={() => handleTabSwitch('my')}
+              className={`px-5 py-2.5 rounded-md text-sm font-semibold transition-all flex items-center gap-2 ${
+                activeTab === 'my'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              My Inventory
+              {myUnitsCount > 0 && (
+                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                  activeTab === 'my' ? 'bg-white text-emerald-700' : 'bg-emerald-100 text-emerald-700'
+                }`}>
+                  {myUnitsCount}
+                </span>
+              )}
+            </button>
           </div>
 
           {/* Stats Cards — use liveStats (computed from loaded units) for accurate counts */}
@@ -1056,12 +1228,16 @@ function InventoryPage() {
 
           {/* Results */}
           <div className="bg-white rounded-lg shadow overflow-hidden">
-            {loading ? (
-              <div className="p-8 text-center text-gray-500">Searching...</div>
-            ) : !hasSearched ? (
+            {(activeTab === 'all' ? loading : myUnitsLoading) ? (
+              <div className="p-8 text-center text-gray-500">
+                {activeTab === 'my' ? 'Loading your inventory...' : 'Searching...'}
+              </div>
+            ) : activeTab === 'all' && !hasSearched ? (
               <div className="p-8 text-center text-gray-500">Use filters and click Search to view inventory units.</div>
             ) : displayedUnits.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">No units found matching filters.</div>
+              <div className="p-8 text-center text-gray-500">
+                {activeTab === 'my' ? 'You have not uploaded any inventory yet.' : 'No units found matching filters.'}
+              </div>
             ) : (
               <div className="p-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

@@ -30,6 +30,12 @@ router.use(requirePermission('Inventory'));
 router.post('/thumbnails', inventoryController.getUnitThumbnails);
 router.post('/units/thumbnails', inventoryController.getUnitThumbnails); // keep old path too
 
+// My Inventory — employee's own uploaded units (MUST be before :id routes)
+router.get('/my-units', inventoryController.getMyUnits);
+
+// Backfill createdBy for existing units (admin only, one-time migration)
+router.post('/backfill-created-by', role(['ADMIN']), inventoryController.backfillCreatedBy);
+
 // Activity logs (managers/admin only)
 router.get('/logs', role(['ADMIN', 'MANAGER']), inventoryController.getInventoryLogs);
 

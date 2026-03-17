@@ -273,6 +273,10 @@ createTower: (projectId, data) =>
   getUnits: (params = {}) =>
     api.get("/inventory/units", { params }),
 
+  // My Inventory — units created by the logged-in employee
+  getMyUnits: (params = {}) =>
+    api.get("/inventory/my-units", { params }),
+
   searchUnits: (params = {}) =>
     api.get("/inventory/search", { params }),
 
