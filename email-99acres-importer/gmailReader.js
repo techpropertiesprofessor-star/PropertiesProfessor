@@ -53,12 +53,72 @@ function extractLead(rawBody) {
   const phoneMatch = body.match(/\+91[-\s]?(\d{10})/);
   const phone = phoneMatch ? phoneMatch[1].trim() : null;
 
-  const nameMatch =
-    body.match(/Contact the (?:buyer|tenant) now\s*[-–]\s*(.+?)\s+\S+@\S+\s+\+91/i) ||
-    body.match(/Contact the (?:buyer|tenant) now\s*[-–]\s*(.+?)\s*\+91/i) ||
-    body.match(/Details of the Query\s+(.+?)\s+\S+@\S+\s+\+91/i) ||
-    body.match(/Details of the Query\s+(.+?)\s*\+91/i);
-  const name = nameMatch ? nameMatch[1].trim() : "Unknown";
+  // Try multiple name extraction patterns
+  let name = null;
+
+  // Pattern 1: "Details of the response Name email@domain.com" (Most common 99acres format)
+  // Use simple \S+@\S+ for email matching and capture everything before it
+  const pattern1 = body.match(/Details of the response\s+(.+?)\s+\S+@\S+/i);
+  if (pattern1) {
+    let extracted = pattern1[1].trim();
+    if (extracted && extracted.length > 1) name = extracted;
+  }
+
+  // Pattern 2: "Details of the response Name +91" (without email)
+  if (!name) {
+    const pattern2 = body.match(/Details of the response\s+(.+?)\s+\+91/i);
+    if (pattern2) {
+      let extracted = pattern2[1].trim();
+      // Remove any email if accidentally captured
+      extracted = extracted.replace(/\S+@\S+/g, '').trim();
+      if (extracted && extracted.length > 1) name = extracted;
+    }
+  }
+
+  // Pattern 3: "Contact the buyer/tenant now - Name email +91"
+  if (!name) {
+    const pattern3 = body.match(/Contact the (?:buyer|tenant) now\s*[-–]\s*(.+?)\s+\S+@\S+\s+\+91/i);
+    if (pattern3) name = pattern3[1].trim();
+  }
+
+  // Pattern 4: "Contact the buyer/tenant now - Name +91"
+  if (!name) {
+    const pattern4 = body.match(/Contact the (?:buyer|tenant) now\s*[-–]\s*(.+?)\s*\+91/i);
+    if (pattern4) name = pattern4[1].trim();
+  }
+
+  // Pattern 5: "Details of the Query Name email +91"
+  if (!name) {
+    const pattern5 = body.match(/Details of the Query\s+(.+?)\s+\S+@\S+\s+\+91/i);
+    if (pattern5) name = pattern5[1].trim();
+  }
+
+  // Pattern 6: "Details of the Query Name +91"
+  if (!name) {
+    const pattern6 = body.match(/Details of the Query\s+(.+?)\s*\+91/i);
+    if (pattern6) name = pattern6[1].trim();
+  }
+
+  // Pattern 7: "Name: Value" or "Buyer Name: Value" format
+  if (!name) {
+    const pattern7 = body.match(/(?:Buyer\s*)?Name\s*[:\-]\s*([A-Za-z][A-Za-z\s]{1,50}?)(?:\s+(?:Email|Phone|Mobile|\+91|[a-z0-9._%+-]+@))/i);
+    if (pattern7) name = pattern7[1].trim();
+  }
+
+  // Pattern 8: "Enquired By: Name"
+  if (!name) {
+    const pattern8 = body.match(/Enquired\s*By\s*[:\-]\s*([A-Za-z][A-Za-z\s]{1,50}?)(?:\s+(?:Email|Phone|Mobile|\+91|[a-z0-9._%+-]+@)|\s*$)/i);
+    if (pattern8) name = pattern8[1].trim();
+  }
+
+  // Pattern 9: Look for name before email pattern (common in 99acres)
+  if (!name) {
+    const pattern9 = body.match(/(?:^|\s)([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})\s+[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\s+\+91/i);
+    if (pattern9) name = pattern9[1].trim();
+  }
+
+  // Default to Unknown if no pattern matched
+  if (!name) name = "Unknown";
 
   const propertyMatch = body.match(/(?:query on\s+Rs[\d,]+\s*,?\s*)(.+?)\s*\(/i) ||
     body.match(/listing\s*\([^)]+\)\s*,?\s*(?:in\s+)?(.+?)\s+on\s+99acres\.com/i) ||

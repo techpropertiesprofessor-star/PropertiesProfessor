@@ -1,10 +1,10 @@
 /**
- * One-time bulk import script.
+ * Fix Unknown Names Script
  *
- * Reads ALL 99acres lead emails (read + unread, no date limit) and
- * imports them into the CRM as status "closed".
+ * Re-fetches 99acres emails from Gmail and updates leads that have
+ * "Unknown" as their contact name in the CRM.
  *
- * Usage: node importAll.js
+ * Usage: node fixUnknownNames.js
  */
 
 const fs = require("fs");
@@ -17,8 +17,7 @@ const TOKEN_PATH = path.join(__dirname, "token.json");
 const CREDENTIALS_PATH = path.join(__dirname, "credentials.json");
 
 const CRM_API = "https://propertiesprofessor.onrender.com/api/leads";
-const DUPLICATE_API =
-  "https://propertiesprofessor.onrender.com/api/leads/check?phone=";
+const CHECK_API = "https://propertiesprofessor.onrender.com/api/leads/check";
 
 /*
 Authorize Gmail
@@ -47,13 +46,10 @@ function stripHtml(html) {
 }
 
 /*
-Extract phone, name and property from email body
+Extract name from email body with improved patterns
 */
-function extractLead(rawBody) {
+function extractName(rawBody) {
   const body = stripHtml(rawBody);
-
-  const phoneMatch = body.match(/\+91[-\s]?(\d{10})/);
-  const phone = phoneMatch ? phoneMatch[1].trim() : null;
 
   // Try multiple name extraction patterns
   let name = null;
@@ -119,53 +115,40 @@ function extractLead(rawBody) {
     if (pattern9) name = pattern9[1].trim();
   }
 
-  // Default to Unknown if no pattern matched
-  if (!name) name = "Unknown";
-
-  // Extract full property description (e.g. "3 BHK, Flat/Apartment in Jaypee Greens...")
-  const propertyMatch = body.match(/(?:query on\s+Rs[\d,]+\s*,?\s*)(.+?)\s*\(/i) ||
-    body.match(/listing\s*\([^)]+\)\s*,?\s*(?:in\s+)?(.+?)\s+on\s+99acres\.com/i) ||
-    body.match(/(?:in|for)\s+(.+?)\s+on\s+99acres\.com/i);
-  const propertyName = propertyMatch ? propertyMatch[1].trim() : "";
-
-  // Extract 99acres listing ID (e.g. O88063692) and build URL
-  const listingMatch = body.match(/\(\s*([A-Z]\d{6,})\s*\)/i);
-  const propertyUrl = listingMatch
-    ? `https://www.99acres.com/${listingMatch[1]}`
-    : "";
-
-  return { name, phone, propertyName, propertyUrl };
+  return name;
 }
 
 /*
-Check if lead already exists in CRM
+Extract phone from email body
 */
-async function isDuplicate(phone) {
+function extractPhone(rawBody) {
+  const body = stripHtml(rawBody);
+  const phoneMatch = body.match(/\+91[-\s]?(\d{10})/);
+  return phoneMatch ? phoneMatch[1].trim() : null;
+}
+
+/*
+Check if lead exists and get its details (no auth required)
+*/
+async function checkLead(phone) {
   try {
-    const res = await axios.get(DUPLICATE_API + phone);
-    return res.data.exists;
-  } catch {
-    return false;
+    const res = await axios.get(`${CHECK_API}?phone=${phone}`);
+    return res.data; // { exists: true/false, lead: { _id, name, phone } }
+  } catch (err) {
+    console.error(`Error checking lead ${phone}:`, err.message);
+    return { exists: false, lead: null };
   }
 }
 
 /*
-Send lead to CRM
+Update lead name in CRM (no auth required for PUT)
 */
-async function sendLead(name, phone, propertyName, propertyUrl) {
+async function updateLeadName(leadId, newName) {
   try {
-    await axios.post(CRM_API, {
-      name,
-      phone,
-      source: "99acres",
-      status: "new",
-      propertyName: propertyName || "",
-      propertyUrl: propertyUrl || "",
-      message: propertyName ? `99acres lead for: ${propertyName}` : "",
-    });
+    await axios.put(`${CRM_API}/${leadId}`, { name: newName });
     return true;
   } catch (err) {
-    console.error("  CRM error:", err.response?.status, err.response?.data?.message || err.message);
+    console.error(`Error updating lead ${leadId}:`, err.message);
     return false;
   }
 }
@@ -200,25 +183,25 @@ Main
 */
 async function main() {
   console.log("===========================================");
-  console.log("  99acres Bulk Lead Importer (All-time)");
+  console.log("  Fix Unknown Names from 99acres Emails");
   console.log("===========================================\n");
 
+  // Authorize Gmail
   const auth = await authorize();
   const gmail = google.gmail({ version: "v1", auth });
 
-  console.log("Fetching all 99acres lead emails...");
-  const ids = await fetchAllMessageIds(
-    gmail,
-    "from:99acres"
-  );
-
+  // Fetch all 99acres emails
+  console.log("Fetching 99acres emails from Gmail...");
+  const ids = await fetchAllMessageIds(gmail, "from:99acres");
   console.log(`Found ${ids.length} emails. Processing...\n`);
 
-  let imported = 0;
-  let duplicates = 0;
+  let updated = 0;
+  let alreadyHasName = 0;
   let noPhone = 0;
-  let failed = 0;
+  let notInCRM = 0;
+  let noNameInEmail = 0;
 
+  // Process each email
   for (let i = 0; i < ids.length; i++) {
     const message = await gmail.users.messages.get({
       userId: "me",
@@ -230,39 +213,54 @@ async function main() {
     const parsed = await simpleParser(buffer);
     const body = parsed.text || parsed.html || "";
 
-    const { name, phone, propertyName, propertyUrl } = extractLead(body);
-
-    process.stdout.write(`[${i + 1}/${ids.length}] `);
-
+    const phone = extractPhone(body);
     if (!phone) {
-      console.log("No phone — skipped");
       noPhone++;
       continue;
     }
 
-    const dup = await isDuplicate(phone);
-    if (dup) {
-      console.log(`Duplicate — ${phone}`);
-      duplicates++;
+    // Check if this lead exists in CRM
+    const { exists, lead } = await checkLead(phone);
+
+    if (!exists || !lead) {
+      notInCRM++;
       continue;
     }
 
-    const saved = await sendLead(name, phone, propertyName, propertyUrl);
-    if (saved) {
-      console.log(`Imported — ${name} ${phone}`);
-      imported++;
+    // Check if name is already set (not Unknown)
+    if (lead.name && lead.name !== "Unknown" && lead.name.toLowerCase() !== "unknown") {
+      alreadyHasName++;
+      continue;
+    }
+
+    // Extract name from email
+    const name = extractName(body);
+
+    process.stdout.write(`[${i + 1}/${ids.length}] Phone: ${phone} - `);
+
+    if (!name) {
+      console.log("Could not extract name from email");
+      noNameInEmail++;
+      continue;
+    }
+
+    // Update the lead
+    const success = await updateLeadName(lead._id, name);
+    if (success) {
+      console.log(`Updated: "${name}"`);
+      updated++;
     } else {
-      console.log(`Failed    — ${phone}`);
-      failed++;
+      console.log("Update failed");
     }
   }
 
   console.log("\n===========================================");
   console.log(`  Done.`);
-  console.log(`  Imported : ${imported}`);
-  console.log(`  Duplicate: ${duplicates}`);
-  console.log(`  No phone : ${noPhone}`);
-  console.log(`  Failed   : ${failed}`);
+  console.log(`  Updated         : ${updated}`);
+  console.log(`  Already has name: ${alreadyHasName}`);
+  console.log(`  Not in CRM      : ${notInCRM}`);
+  console.log(`  No phone        : ${noPhone}`);
+  console.log(`  No name in email: ${noNameInEmail}`);
   console.log("===========================================");
 }
 
