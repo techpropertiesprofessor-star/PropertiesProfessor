@@ -32,7 +32,7 @@ async function sendLeadToCRM(lead) {
     name: lead.name,
     phone: lead.phone,
     email: lead.email || undefined,
-    source: 'website',         // Closest valid enum in Lead model
+    source: '99acres',         // 99acres leads appear in the 99acres tab
     message: messageParts.join(' - ') || '99acres lead'
   };
 
