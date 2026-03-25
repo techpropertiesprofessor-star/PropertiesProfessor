@@ -4,16 +4,20 @@
  * Reads 99acres lead notification emails from Gmail via OAuth,
  * deduplicates against CRM, and pushes new leads automatically.
  *
- * Cron schedule: every 5 minutes
+ * Cron schedule: configurable via CRON_SCHEDULE
  */
 
-const { startCron } = require("./cron/emailCron");
+require('dotenv').config();
+const { startCron } = require('./cron/leadCron');
+
+const configuredSchedule = process.env.CRON_SCHEDULE || '*/2 * * * *';
+const crmApiUrl = process.env.CRM_API_URL || 'http://localhost:5000/api/leads';
 
 console.log("===========================================");
-console.log("  99acres Email Lead Importer (Gmail API)");
+console.log("  99acres Email Lead Importer (IMAP)");
 console.log("===========================================");
-console.log("  Schedule: every 5 minutes");
-console.log("  API: https://propertiesprofessor.onrender.com/api/leads");
+console.log(`  Schedule: ${configuredSchedule}`);
+console.log(`  API: ${crmApiUrl}`);
 console.log("===========================================\n");
 
 /*

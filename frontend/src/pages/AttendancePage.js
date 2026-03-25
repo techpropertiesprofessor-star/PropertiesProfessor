@@ -70,7 +70,10 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
     };
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
-  const canViewTeamAttendance = user?.role === 'MANAGER' || (user?.role === 'EMPLOYEE' && user?.teamAttendanceAccess);
+  const canViewTeamAttendance =
+    user?.role === 'ADMIN' ||
+    user?.role === 'MANAGER' ||
+    (user?.role === 'EMPLOYEE' && (user?.teamAttendanceAccess || user?.permissions?.includes('Attendance Insights')));
   const { canViewAttendance, canMarkAttendance, loading: permissionsLoading } = usePermissions();
   const [attendance, setAttendance] = useState([]);
   const [leaveRequests, setLeaveRequests] = useState([]);
@@ -101,6 +104,9 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
   const [teamAttendance, setTeamAttendance] = useState([]);
   const [selectedMonth, setSelectedMonth] = useState(new Date());
   const [viewMode, setViewMode] = useState('daily'); // 'daily' or 'monthly'
+  const [selectedEmployeeTimeline, setSelectedEmployeeTimeline] = useState(null);
+  const [timelineData, setTimelineData] = useState(null);
+  const [timelineLoading, setTimelineLoading] = useState(false);
   
   // Employee-specific states
   const [employeeViewMode, setEmployeeViewMode] = useState('current'); // 'current' or 'history'
@@ -531,8 +537,8 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
       const date = new Date(year, month, day);
       const dayOfWeek = date.getDay();
       
-      // Skip Sundays (0) and Mondays (1 = weekly off)
-      if (dayOfWeek === 0 || dayOfWeek === 1) continue;
+      // Skip only Monday (1 = weekly off)
+      if (dayOfWeek === 1) continue;
       
       // Skip holidays
       if (holidayDays.has(day)) continue;
@@ -619,8 +625,8 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
     for (let day = startDay; day <= lastDay; day++) {
       const date = new Date(targetYear, targetMonth, day);
       const dayOfWeek = date.getDay();
-      // Skip Sundays (0) and Mondays (1 = weekly off)
-      if (dayOfWeek === 0 || dayOfWeek === 1) continue;
+      // Skip only Monday (1 = weekly off)
+      if (dayOfWeek === 1) continue;
       if (holidayDays.has(day)) continue;
       if (leaveDays.has(day)) continue;
       if (attendedDays.has(day)) continue;
@@ -633,7 +639,7 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
   const isTodayWorkingDay = useCallback(() => {
     const now = new Date();
     const dayOfWeek = now.getDay();
-    if (dayOfWeek === 0 || dayOfWeek === 1) return false;
+    if (dayOfWeek === 1) return false;
     const isHoliday = (holidays || []).some(h => new Date(h.date).toDateString() === now.toDateString());
     return !isHoliday;
   }, [holidays]);
@@ -648,27 +654,13 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
     return getAttendanceStatus(record);
   };
   
-  const getConsecutiveAbsences = (employeeId) => {
-    const empRecords = teamAttendance
-      .filter(a => String(a.employee) === String(employeeId))
-      .sort((a, b) => new Date(b.date) - new Date(a.date));
-    
-    let consecutive = 0;
-    for (let record of empRecords) {
-      const status = getAttendanceStatus(record);
-      if (status === 'A') consecutive++;
-      else break;
-    }
-    return consecutive;
-  };
-  
   const downloadAttendanceReport = () => {
     const today = new Date();
     const month = format(selectedMonth, 'MMMM yyyy');
     
     // Create CSV content
     let csv = `Attendance Report - ${month}\n\n`;
-    csv += 'Employee Name,Total Present,Total Absent,Total Leave,Weekly Off/Holiday,Consecutive Absences\n';
+    csv += 'Employee Name,Total Present,Total Absent,Total Leave,Weekly Off/Holiday\n';
     
     employees.filter(e => e.status !== 'inactive').forEach(emp => {
       const empAttendance = teamAttendance.filter(a => a.employee === emp._id);
@@ -676,9 +668,7 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
       const absent = calculateEmployeeAbsentDays(emp._id, selectedMonth.getMonth(), selectedMonth.getFullYear(), empAttendance, emp.joiningDate || emp.createdAt);
       const leave = empAttendance.filter(a => getAttendanceStatus(a) === 'L').length;
       const wo = empAttendance.filter(a => ['WO', 'H'].includes(getAttendanceStatus(a))).length;
-      const consecutive = getConsecutiveAbsences(emp._id);
-      
-      csv += `${emp.name || emp.email},${present},${absent},${leave},${wo},${consecutive}\n`;
+      csv += `${emp.name || emp.email},${present},${absent},${leave},${wo}\n`;
     });
     
     // Download
@@ -689,6 +679,34 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
     a.download = `attendance-report-${format(today, 'yyyy-MM-dd')}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
+  };
+
+  const openEmployeeTimeline = async (employee, monthDate = new Date()) => {
+    setSelectedEmployeeTimeline(employee);
+    setTimelineData(null);
+    setTimelineLoading(true);
+    try {
+      const month = monthDate.getMonth() + 1;
+      const year = monthDate.getFullYear();
+      const res = await attendanceAPI.getEmployeeMonthlyTimeline(employee._id, month, year);
+      setTimelineData(res.data);
+    } catch (err) {
+      console.error('Failed to load employee timeline:', err);
+      alert(err?.response?.data?.message || 'Failed to load daily attendance timeline');
+      setSelectedEmployeeTimeline(null);
+    } finally {
+      setTimelineLoading(false);
+    }
+  };
+
+  const getTimelineBadgeClass = (status) => {
+    if (status === 'PRESENT') return 'bg-green-100 text-green-800';
+    if (status === 'ABSENT') return 'bg-red-100 text-red-800';
+    if (status === 'LEAVE') return 'bg-blue-100 text-blue-800';
+    if (status === 'WEEK_OFF') return 'bg-purple-100 text-purple-800';
+    if (status === 'HOLIDAY') return 'bg-yellow-100 text-yellow-800';
+    if (status === 'HALF_DAY') return 'bg-orange-100 text-orange-800';
+    return 'bg-gray-100 text-gray-700';
   };
 
   if (permissionsLoading) {
@@ -875,13 +893,13 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                           <th className="px-4 py-3 text-center text-xs font-bold text-blue-800">Present</th>
                           <th className="px-4 py-3 text-center text-xs font-bold text-blue-800">Absent</th>
                           <th className="px-4 py-3 text-center text-xs font-bold text-blue-800">Leave</th>
-                          <th className="px-4 py-3 text-center text-xs font-bold text-blue-800">Consecutive Absences</th>
+                          <th className="px-4 py-3 text-center text-xs font-bold text-blue-800">Daily Records</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                         {employees.filter(e => e.status !== 'inactive').length === 0 ? (
                           <tr>
-                            <td colSpan="6" className="px-4 py-8 text-center text-gray-500">
+                            <td colSpan="7" className="px-4 py-8 text-center text-gray-500">
                               No team members found
                             </td>
                           </tr>
@@ -897,12 +915,11 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                             const present = empAttendance.filter(a => getAttendanceStatus(a) === 'P').length;
                             const absent = calculateEmployeeAbsentDays(emp._id, now.getMonth(), now.getFullYear(), empAttendance, emp.joiningDate || emp.createdAt);
                             const leave = empAttendance.filter(a => getAttendanceStatus(a) === 'L').length;
-                            const consecutive = getConsecutiveAbsences(emp._id);
                             
                             console.log(`👤 ${emp.name}: empAttendance=${empAttendance.length}, present=${present}, absent=${absent}, leave=${leave}`);
                             
                             return (
-                              <tr key={emp._id} className={`hover:bg-blue-50 transition ${consecutive >= 3 ? 'bg-red-50' : ''}`}>
+                              <tr key={emp._id} className="hover:bg-blue-50 transition">
                                 <td className="px-4 py-3">
                                   <div className="flex items-center gap-2">
                                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white font-bold text-xs">
@@ -935,16 +952,12 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                                   <span className="text-blue-700 font-bold">{leave}</span>
                                 </td>
                                 <td className="px-4 py-3 text-center">
-                                  {consecutive >= 3 ? (
-                                    <span className="inline-flex items-center gap-1 px-3 py-1 bg-red-100 text-red-800 rounded-full text-xs font-bold">
-                                      <FiAlertCircle size={14} />
-                                      {consecutive} days
-                                    </span>
-                                  ) : consecutive > 0 ? (
-                                    <span className="text-orange-700 font-bold">{consecutive} day{consecutive > 1 ? 's' : ''}</span>
-                                  ) : (
-                                    <span className="text-gray-400">-</span>
-                                  )}
+                                  <button
+                                    onClick={() => openEmployeeTimeline(emp, new Date())}
+                                    className="px-3 py-1 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 transition"
+                                  >
+                                    View Daily
+                                  </button>
                                 </td>
                               </tr>
                             );
@@ -1040,9 +1053,23 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                       </p>
                     </div>
                     <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl p-4 border border-yellow-200">
-                      <p className="text-xs text-yellow-700 font-semibold mb-1">High Risk</p>
+                      <p className="text-xs text-yellow-700 font-semibold mb-1">Low Attendance (&lt;75%)</p>
                       <p className="text-3xl font-extrabold text-yellow-800">
-                        {employees.filter(emp => emp.status !== 'inactive' && getConsecutiveAbsences(emp._id) >= 3).length}
+                        {employees.filter(emp => {
+                          if (emp.status === 'inactive') return false;
+                          const monthAtt = teamAttendance.filter(a => {
+                            const attDate = new Date(a.date);
+                            return attDate.getMonth() === selectedMonth.getMonth() &&
+                                   attDate.getFullYear() === selectedMonth.getFullYear() &&
+                                   String(a.employee) === String(emp._id);
+                          });
+                          const p = monthAtt.filter(a => getAttendanceStatus(a) === 'P').length;
+                          const wo = monthAtt.filter(a => getAttendanceStatus(a) === 'WO').length;
+                          const totalDays = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 0).getDate();
+                          const workingDays = totalDays - wo;
+                          const percent = workingDays > 0 ? Math.round((p / workingDays) * 100) : 0;
+                          return percent < 75;
+                        }).length}
                       </p>
                     </div>
                   </div>
@@ -1059,14 +1086,14 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                           <th className="px-4 py-3 text-center text-xs font-bold text-blue-800">Leave</th>
                           <th className="px-4 py-3 text-center text-xs font-bold text-purple-800">Weekly Off</th>
                           <th className="px-4 py-3 text-center text-xs font-bold text-yellow-800">Attendance %</th>
-                          <th className="px-4 py-3 text-center text-xs font-bold text-red-800">Consecutive Abs.</th>
                           <th className="px-4 py-3 text-center text-xs font-bold text-indigo-800">Action</th>
+                          <th className="px-4 py-3 text-center text-xs font-bold text-indigo-800">Daily Records</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                         {employees.filter(e => e.status !== 'inactive').length === 0 ? (
                           <tr>
-                            <td colSpan="9" className="px-4 py-8 text-center text-gray-500">
+                            <td colSpan="10" className="px-4 py-8 text-center text-gray-500">
                               No team members found
                             </td>
                           </tr>
@@ -1087,8 +1114,7 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                             const totalDays = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 0).getDate();
                             const workingDays = totalDays - weeklyOff;
                             const attendancePercent = workingDays > 0 ? Math.round((present / workingDays) * 100) : 0;
-                            const consecutive = getConsecutiveAbsences(emp._id);
-                            const isHighRisk = consecutive >= 3 || attendancePercent < 75;
+                            const isHighRisk = attendancePercent < 75;
                             
                             return (
                               <tr key={emp._id} className={`hover:bg-indigo-50 transition ${isHighRisk ? 'bg-red-50' : ''}`}>
@@ -1150,23 +1176,9 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                                   </div>
                                 </td>
                                 <td className="px-4 py-3 text-center">
-                                  {consecutive >= 3 ? (
-                                    <span className="inline-flex items-center gap-1 px-3 py-1 bg-red-200 text-red-900 rounded-full text-xs font-bold">
-                                      <FiAlertCircle size={14} />
-                                      {consecutive} days
-                                    </span>
-                                  ) : consecutive > 0 ? (
-                                    <span className="inline-block px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-xs font-bold">
-                                      {consecutive} day{consecutive > 1 ? 's' : ''}
-                                    </span>
-                                  ) : (
-                                    <span className="text-gray-400 text-xs">-</span>
-                                  )}
-                                </td>
-                                <td className="px-4 py-3 text-center">
                                   {isHighRisk ? (
                                     <button
-                                      onClick={() => alert(`Action required for ${emp.name}:\n\n${consecutive >= 3 ? `• ${consecutive} consecutive absences\n` : ''}${attendancePercent < 75 ? `• Low attendance: ${attendancePercent}%\n` : ''}\nRecommendation: Schedule a meeting to discuss attendance issues.`)}
+                                      onClick={() => alert(`Action required for ${emp.name}:\n\n• Low attendance: ${attendancePercent}%\n\nRecommendation: Schedule a meeting to discuss attendance issues.`)}
                                       className="px-3 py-1 bg-red-600 text-white rounded-lg text-xs font-semibold hover:bg-red-700 transition"
                                     >
                                       Take Action
@@ -1179,6 +1191,14 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                                       View Details
                                     </button>
                                   )}
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  <button
+                                    onClick={() => openEmployeeTimeline(emp, selectedMonth)}
+                                    className="px-3 py-1 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 transition"
+                                  >
+                                    View Daily
+                                  </button>
                                 </td>
                               </tr>
                             );
@@ -1241,7 +1261,7 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                             const totalDays = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 0).getDate();
                             const workingDays = totalDays - wo;
                             const percent = workingDays > 0 ? Math.round((p / workingDays) * 100) : 0;
-                            return percent < 75 || getConsecutiveAbsences(emp._id) >= 3;
+                            return percent < 75;
                           }).length} employee{employees.filter(emp => emp.status !== 'inactive').filter(emp => {
                             const monthAtt = teamAttendance.filter(a => {
                               const attDate = new Date(a.date);
@@ -1254,7 +1274,7 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                             const totalDays = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 0).getDate();
                             const workingDays = totalDays - wo;
                             const percent = workingDays > 0 ? Math.round((p / workingDays) * 100) : 0;
-                            return percent < 75 || getConsecutiveAbsences(emp._id) >= 3;
+                            return percent < 75;
                           }).length !== 1 ? 's' : ''}
                         </p>
                       </div>
@@ -1372,6 +1392,94 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
               <CalendarWidget tasks={[]} holidays={holidays} compact={true} />
             </div>
           </div>
+          {/* Employee Monthly View */}
+          {selectedEmployeeTimeline && (
+            <div className="fixed inset-0 z-50 bg-black/45 flex items-center justify-center p-4">
+              <div className="w-full max-w-5xl max-h-[85vh] bg-white rounded-2xl shadow-2xl border border-indigo-100 overflow-hidden">
+                <div className="flex items-center justify-between px-5 py-4 bg-gradient-to-r from-indigo-600 to-blue-600 text-white">
+                  <div>
+                    <h3 className="text-lg font-bold">Daily Punch-In Timeline</h3>
+                    <p className="text-xs text-indigo-100">
+                      {selectedEmployeeTimeline.name || selectedEmployeeTimeline.email}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setSelectedEmployeeTimeline(null)}
+                    className="px-3 py-1 rounded bg-white/20 hover:bg-white/30 text-sm font-semibold"
+                  >
+                    Close
+                  </button>
+                </div>
+
+                <div className="p-5 overflow-auto max-h-[calc(85vh-72px)]">
+                  {timelineLoading ? (
+                    <div className="text-sm text-gray-600">Loading daily records...</div>
+                  ) : timelineData ? (
+                    <>
+                      <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                          <p className="text-xs text-green-700">Present</p>
+                          <p className="text-xl font-bold text-green-800">{timelineData.summary?.present || 0}</p>
+                        </div>
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                          <p className="text-xs text-red-700">Absent</p>
+                          <p className="text-xl font-bold text-red-800">{timelineData.summary?.absent || 0}</p>
+                        </div>
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                          <p className="text-xs text-blue-700">Leave</p>
+                          <p className="text-xl font-bold text-blue-800">{timelineData.summary?.leave || 0}</p>
+                        </div>
+                        <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                          <p className="text-xs text-purple-700">Week Off</p>
+                          <p className="text-xl font-bold text-purple-800">{timelineData.summary?.weekOff || 0}</p>
+                        </div>
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                          <p className="text-xs text-yellow-700">Holiday</p>
+                          <p className="text-xl font-bold text-yellow-800">{timelineData.summary?.holiday || 0}</p>
+                        </div>
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                          <p className="text-xs text-gray-700">Month</p>
+                          <p className="text-base font-bold text-gray-800">{timelineData.month}/{timelineData.year}</p>
+                        </div>
+                      </div>
+
+                      <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-50 border-b border-gray-200">
+                            <tr>
+                              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Date</th>
+                              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Day</th>
+                              <th className="px-3 py-2 text-center text-xs font-semibold text-gray-700">Status</th>
+                              <th className="px-3 py-2 text-center text-xs font-semibold text-gray-700">Punch In</th>
+                              <th className="px-3 py-2 text-center text-xs font-semibold text-gray-700">Punch Out</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {(timelineData.days || []).map((row) => (
+                              <tr key={row.date}>
+                                <td className="px-3 py-2 text-gray-800">{format(new Date(row.date), 'dd MMM yyyy')}</td>
+                                <td className="px-3 py-2 text-gray-600">{row.dayLabel}</td>
+                                <td className="px-3 py-2 text-center">
+                                  <span className={`inline-block px-2 py-1 rounded-full text-xs font-semibold ${getTimelineBadgeClass(row.status)}`}>
+                                    {row.status === 'WEEK_OFF' ? 'WEEK OFF' : row.status}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2 text-center text-gray-700">{row.punchInTime || '-'}</td>
+                                <td className="px-3 py-2 text-center text-gray-700">{row.punchOutTime || '-'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-sm text-gray-600">No timeline data found.</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Employee Monthly View */}
           {user && user.role === 'EMPLOYEE' && (
             <div className="mb-8 bg-white rounded-2xl shadow-xl border border-blue-100 p-6">

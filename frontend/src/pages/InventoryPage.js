@@ -42,6 +42,9 @@ function InventoryPage() {
   const [activeMediaItem, setActiveMediaItem] = useState(null);
   const [videoModalSrc, setVideoModalSrc] = useState(null);
 
+  // Backend accepts max 10 files per request; keep client-side chunking unlimited.
+  const MEDIA_UPLOAD_BATCH_SIZE = 10;
+
   // Edit state
   const [editingUnitId, setEditingUnitId] = useState(null);
   const [editUnit, setEditUnit] = useState(null);
@@ -626,13 +629,28 @@ function InventoryPage() {
     setUploadError('');
     setUploadSuccess('');
     try {
-      const formData = new FormData();
-      Array.from(files).forEach((f) => formData.append('files', f));
-      if (caption) formData.append('caption', caption);
+      const selectedFiles = Array.from(files || []);
+      const totalFiles = selectedFiles.length;
+      const totalBatches = Math.ceil(totalFiles / MEDIA_UPLOAD_BATCH_SIZE);
+      const uploadedFiles = [];
 
-      const res = await inventoryAPI.uploadUnitMedia(unitId, formData);
-      const uploadedFiles = res.data?.files || [];
-      const uploadedCount = uploadedFiles.length || files.length;
+      for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+        const start = batchIndex * MEDIA_UPLOAD_BATCH_SIZE;
+        const end = start + MEDIA_UPLOAD_BATCH_SIZE;
+        const batchFiles = selectedFiles.slice(start, end);
+
+        const formData = new FormData();
+        batchFiles.forEach((f) => formData.append('files', f));
+        if (caption) formData.append('caption', caption);
+
+        const res = await inventoryAPI.uploadUnitMedia(unitId, formData);
+        const batchUploaded = res.data?.files || [];
+        uploadedFiles.push(...batchUploaded);
+
+        setUploadSuccess(`Uploading batch ${batchIndex + 1}/${totalBatches}...`);
+      }
+
+      const uploadedCount = uploadedFiles.length || totalFiles;
       setUploadSuccess(`${uploadedCount} file(s) uploaded successfully!`);
       setTimeout(() => setUploadSuccess(''), 5000);
 
@@ -1527,7 +1545,7 @@ function InventoryPage() {
                           />
                           <FiDownload className="text-blue-500 text-xl mb-1 rotate-180" />
                           <span className="text-xs text-blue-700 font-semibold">{uploading ? 'Uploading...' : 'Click to upload photos/videos'}</span>
-                          <span className="text-[10px] text-blue-400 mt-0.5">Files are stored on DigitalOcean Spaces</span>
+                          <span className="text-[10px] text-blue-400 mt-0.5">Files are stored on DigitalOcean Spaces (large selections auto-upload in batches)</span>
                         </label>
                         {uploadError && (
                           <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg">
@@ -1834,9 +1852,17 @@ function InventoryPage() {
                         let mediaUploadFailed = false;
                         if (unitId && form.photos && form.photos.length > 0) {
                           try {
-                            const mediaForm = new FormData();
-                            form.photos.forEach((file) => mediaForm.append('files', file));
-                            await inventoryAPI.uploadUnitMedia(unitId, mediaForm);
+                            const selectedFiles = Array.from(form.photos || []);
+                            const totalBatches = Math.ceil(selectedFiles.length / MEDIA_UPLOAD_BATCH_SIZE);
+
+                            for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+                              const start = batchIndex * MEDIA_UPLOAD_BATCH_SIZE;
+                              const end = start + MEDIA_UPLOAD_BATCH_SIZE;
+                              const batchFiles = selectedFiles.slice(start, end);
+                              const mediaForm = new FormData();
+                              batchFiles.forEach((file) => mediaForm.append('files', file));
+                              await inventoryAPI.uploadUnitMedia(unitId, mediaForm);
+                            }
                           } catch (mediaErr) {
                             console.error('Failed to upload photos:', mediaErr);
                             mediaUploadFailed = true;

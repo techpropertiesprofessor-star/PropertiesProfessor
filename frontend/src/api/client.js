@@ -193,6 +193,8 @@ export const attendanceAPI = {
     api.post("/attendance/check-out"),
   getHistory: () =>
     api.get("/attendance/history/mine"),
+  getEmployeeMonthlyTimeline: (employeeId, month, year) =>
+    api.get(`/attendance/team/${employeeId}/monthly`, { params: { month, year } }),
 };
 
 /**

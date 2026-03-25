@@ -20,6 +20,9 @@ router.get('/monthly-summary', attendanceController.monthlySummary);
 // Team attendance must come before /:employeeId to avoid route conflict
 // Also allow employees with teamAttendanceAccess flag
 router.get('/team', role(['ADMIN', 'MANAGER'], { field: 'teamAttendanceAccess' }), attendanceController.getTeamAttendance);
+// Monthly daily punch timeline for one employee (manager portal)
+// Also allow employees if manager grants "Attendance Insights" permission.
+router.get('/team/:employeeId/monthly', role(['ADMIN', 'MANAGER'], 'Attendance Insights'), attendanceController.getEmployeeMonthlyTimeline);
 // Employee-specific history (this catches any /:employeeId pattern)
 router.get('/:employeeId', role(['ADMIN', 'MANAGER']), attendanceController.employeeHistory);
 
