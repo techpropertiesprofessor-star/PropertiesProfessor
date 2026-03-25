@@ -8,6 +8,10 @@ REM Start backend server on port 5000
 start "Backend API (Port 5000)" cmd /k "cd /d %~dp0backend && npm run dev"
 timeout /t 3 /nobreak >nul
 
+REM Start 99acres email importer (auto lead sync)
+start "99acres Importer" cmd /k "cd /d %~dp0email-99acres-importer && npm start"
+timeout /t 2 /nobreak >nul
+
 REM Start frontend server on port 3000
 start "Main Dashboard (Port 3000)" cmd /k "cd /d %~dp0frontend && npm start"
 timeout /t 2 /nobreak >nul
@@ -20,6 +24,7 @@ echo ========================================
 echo All services are starting!
 echo ========================================
 echo Backend API:     http://localhost:5000
+echo Email Importer:  Running (99acres -> CRM auto sync)
 echo Main Dashboard:  http://localhost:3000
 echo Admin Panel:     http://localhost:3001
 echo ========================================
