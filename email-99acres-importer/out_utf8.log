@@ -1,0 +1,46 @@
+﻿[dotenv@17.3.1] injecting env (7) from .env -- tip: ΓÜÖ∩╕Å  specify custom .env file path with { path: '/custom/path/.env' }
+===========================================
+  99acres Email Lead Importer (IMAP)
+===========================================
+  Schedule: */5 * * * *
+  API: https://propertiesprofessor.onrender.com/api/leads
+===========================================
+
+[LeadCron] Scheduler started ΓÇö running every: */5 * * * *
+
+[LeadCron] ===== Starting lead import at 2026-03-26T07:46:37.703Z =====
+node : [EmailReader] IMAP 
+connection error: 
+i.e39f90c7 
+AuthenticationError id: 
+i.e39f90c7_PLR_1
+At line:1 char:1
++ node server.js > out.log 
+2>&1
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~
+    + CategoryInfo          
+    : NotSpecified: ([Emai  
+  lReader] I....e39f90c7_   
+ PLR_1:String) [], Remot    
+eException
+    + FullyQualifiedErrorId 
+    : NativeCommandError
+ 
+[EmailReader] Titan 
+accepted the network 
+connection but rejected 
+mailbox authentication. 
+Verify EMAIL_USER and 
+EMAIL_PASS, confirm IMAP 
+access is enabled for the 
+mailbox, and use an app 
+password if Titan account 
+security requires it.
+[LeadCron] Critical error 
+during lead import: 
+i.e39f90c7 
+AuthenticationError id: 
+i.e39f90c7_PLR_1
+[EmailReader] IMAP connection closed
+

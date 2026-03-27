@@ -342,8 +342,8 @@ exports.getEmployeeMonthlyTimeline = async (req, res, next) => {
         status,
         checkIn: record?.checkIn || null,
         checkOut: record?.checkOut || null,
-        punchInTime: record?.checkIn ? new Date(record.checkIn).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : null,
-        punchOutTime: record?.checkOut ? new Date(record.checkOut).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : null,
+        punchInTime: record?.checkIn ? new Date(record.checkIn).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Kolkata' }) : null,
+        punchOutTime: record?.checkOut ? new Date(record.checkOut).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Kolkata' }) : null,
         holidayName: holidayName || null
       });
     }

@@ -64,7 +64,7 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
   const [remarkNoteModal, setRemarkNoteModal] = useState(null); // { leadId, remark }
   const [remarkNoteText, setRemarkNoteText] = useState('');
   const [remarkFilter, setRemarkFilter] = useState('All'); // Filter tabs: All, Interested, Not Interested, Busy, Invalid Number
-  const [sourceTab, setSourceTab] = useState('website'); // 'website' | '99acres' | 'housing.com'
+  const [sourceTab, setSourceTab] = useState('99acres'); // '99acres' | 'housing.com' | 'website'
   const [employees, setEmployees] = useState([]); // All employees/managers
   const [inventoryUnits, setInventoryUnits] = useState([]); // For property selection in Add Lead
   const [loading, setLoading] = useState(false);  const [showUpload, setShowUpload] = useState(false);
@@ -370,9 +370,9 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
             {/* Source Tabs */}
             <div className="flex flex-wrap gap-2 mb-4">
               {[
-                { key: 'website', label: 'Website' },
                 { key: '99acres', label: '99acres' },
                 { key: 'housing.com', label: 'Housing.com' },
+                { key: 'website', label: 'Website' },
               ].map((tab) => (
                 <button
                   key={tab.key}

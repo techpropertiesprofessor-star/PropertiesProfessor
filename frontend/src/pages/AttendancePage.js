@@ -1063,11 +1063,11 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                                    attDate.getFullYear() === selectedMonth.getFullYear() &&
                                    String(a.employee) === String(emp._id);
                           });
-                          const p = monthAtt.filter(a => getAttendanceStatus(a) === 'P').length;
+                          const absent = calculateEmployeeAbsentDays(emp._id, selectedMonth.getMonth(), selectedMonth.getFullYear(), monthAtt, emp.joiningDate || emp.createdAt);
                           const wo = monthAtt.filter(a => getAttendanceStatus(a) === 'WO').length;
                           const totalDays = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 0).getDate();
                           const workingDays = totalDays - wo;
-                          const percent = workingDays > 0 ? Math.round((p / workingDays) * 100) : 0;
+                          const percent = workingDays > 0 ? Math.max(0, Math.round(100 - (absent / workingDays) * 100)) : 100;
                           return percent < 75;
                         }).length}
                       </p>
@@ -1086,7 +1086,6 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                           <th className="px-4 py-3 text-center text-xs font-bold text-blue-800">Leave</th>
                           <th className="px-4 py-3 text-center text-xs font-bold text-purple-800">Weekly Off</th>
                           <th className="px-4 py-3 text-center text-xs font-bold text-yellow-800">Attendance %</th>
-                          <th className="px-4 py-3 text-center text-xs font-bold text-indigo-800">Action</th>
                           <th className="px-4 py-3 text-center text-xs font-bold text-indigo-800">Daily Records</th>
                         </tr>
                       </thead>
@@ -1113,11 +1112,11 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                             const weeklyOff = monthAttendance.filter(a => getAttendanceStatus(a) === 'WO').length;
                             const totalDays = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 0).getDate();
                             const workingDays = totalDays - weeklyOff;
-                            const attendancePercent = workingDays > 0 ? Math.round((present / workingDays) * 100) : 0;
-                            const isHighRisk = attendancePercent < 75;
+                            // Calculate attendance as 100% minus absent percentage
+                            const attendancePercent = workingDays > 0 ? Math.max(0, Math.round(100 - (absent / workingDays) * 100)) : 100;
                             
                             return (
-                              <tr key={emp._id} className={`hover:bg-indigo-50 transition ${isHighRisk ? 'bg-red-50' : ''}`}>
+                              <tr key={emp._id} className="hover:bg-indigo-50 transition">
                                 <td className="px-4 py-3 sticky left-0 bg-white">
                                   <div className="flex items-center gap-2">
                                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white font-bold text-xs">
@@ -1125,7 +1124,6 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                                     </div>
                                     <div>
                                       <span className="font-semibold text-gray-800 block">{emp.name || emp.email}</span>
-                                      {isHighRisk && <span className="text-xs text-red-600 font-bold">⚠ High Risk</span>}
                                     </div>
                                   </div>
                                 </td>
@@ -1159,38 +1157,17 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                                     <div className="w-24 bg-gray-200 rounded-full h-2">
                                       <div 
                                         className={`h-2 rounded-full ${
-                                          attendancePercent >= 90 ? 'bg-green-600' :
-                                          attendancePercent >= 75 ? 'bg-yellow-500' :
-                                          'bg-red-600'
+                                          attendancePercent >= 75 ? 'bg-green-600' : 'bg-red-600'
                                         }`}
                                         style={{ width: `${attendancePercent}%` }}
                                       ></div>
                                     </div>
                                     <span className={`font-bold text-sm ${
-                                      attendancePercent >= 90 ? 'text-green-700' :
-                                      attendancePercent >= 75 ? 'text-yellow-700' :
-                                      'text-red-700'
+                                      attendancePercent >= 75 ? 'text-green-700' : 'text-red-700'
                                     }`}>
                                       {attendancePercent}%
                                     </span>
                                   </div>
-                                </td>
-                                <td className="px-4 py-3 text-center">
-                                  {isHighRisk ? (
-                                    <button
-                                      onClick={() => alert(`Action required for ${emp.name}:\n\n• Low attendance: ${attendancePercent}%\n\nRecommendation: Schedule a meeting to discuss attendance issues.`)}
-                                      className="px-3 py-1 bg-red-600 text-white rounded-lg text-xs font-semibold hover:bg-red-700 transition"
-                                    >
-                                      Take Action
-                                    </button>
-                                  ) : (
-                                    <button
-                                      onClick={() => alert(`${emp.name}'s performance is satisfactory.\n\nAttendance: ${attendancePercent}%\nNo action required.`)}
-                                      className="px-3 py-1 bg-green-600 text-white rounded-lg text-xs font-semibold hover:bg-green-700 transition"
-                                    >
-                                      View Details
-                                    </button>
-                                  )}
                                 </td>
                                 <td className="px-4 py-3 text-center">
                                   <button
@@ -1232,11 +1209,11 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                                        attDate.getFullYear() === selectedMonth.getFullYear() &&
                                        String(a.employee) === String(emp._id);
                               });
-                              const p = monthAtt.filter(a => getAttendanceStatus(a) === 'P').length;
+                              const absent = calculateEmployeeAbsentDays(emp._id, selectedMonth.getMonth(), selectedMonth.getFullYear(), monthAtt, emp.joiningDate || emp.createdAt);
                               const wo = monthAtt.filter(a => getAttendanceStatus(a) === 'WO').length;
                               const totalDays = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 0).getDate();
                               const workingDays = totalDays - wo;
-                              const percent = workingDays > 0 ? Math.round((p / workingDays) * 100) : 0;
+                              const percent = workingDays > 0 ? Math.max(0, Math.round(100 - (absent / workingDays) * 100)) : 100;
                               if (percent > maxPercent) {
                                 maxPercent = percent;
                                 best = emp.name || emp.email;
@@ -1249,33 +1226,23 @@ export default function AttendancePage({ newMessageCount = 0, resetNewMessageCou
                       <div>
                         <p className="text-red-700 font-semibold mb-1">⚠ Requires Attention</p>
                         <p className="text-xs text-red-600">
-                          {employees.filter(emp => emp.status !== 'inactive').filter(emp => {
-                            const monthAtt = teamAttendance.filter(a => {
-                              const attDate = new Date(a.date);
-                              return attDate.getMonth() === selectedMonth.getMonth() &&
-                                     attDate.getFullYear() === selectedMonth.getFullYear() &&
-                                     String(a.employee) === String(emp._id);
-                            });
-                            const p = monthAtt.filter(a => getAttendanceStatus(a) === 'P').length;
-                            const wo = monthAtt.filter(a => getAttendanceStatus(a) === 'WO').length;
-                            const totalDays = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 0).getDate();
-                            const workingDays = totalDays - wo;
-                            const percent = workingDays > 0 ? Math.round((p / workingDays) * 100) : 0;
-                            return percent < 75;
-                          }).length} employee{employees.filter(emp => emp.status !== 'inactive').filter(emp => {
-                            const monthAtt = teamAttendance.filter(a => {
-                              const attDate = new Date(a.date);
-                              return attDate.getMonth() === selectedMonth.getMonth() &&
-                                     attDate.getFullYear() === selectedMonth.getFullYear() &&
-                                     String(a.employee) === String(emp._id);
-                            });
-                            const p = monthAtt.filter(a => getAttendanceStatus(a) === 'P').length;
-                            const wo = monthAtt.filter(a => getAttendanceStatus(a) === 'WO').length;
-                            const totalDays = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 0).getDate();
-                            const workingDays = totalDays - wo;
-                            const percent = workingDays > 0 ? Math.round((p / workingDays) * 100) : 0;
-                            return percent < 75;
-                          }).length !== 1 ? 's' : ''}
+                          {(() => {
+                            const lowAttendanceCount = employees.filter(emp => emp.status !== 'inactive').filter(emp => {
+                              const monthAtt = teamAttendance.filter(a => {
+                                const attDate = new Date(a.date);
+                                return attDate.getMonth() === selectedMonth.getMonth() &&
+                                       attDate.getFullYear() === selectedMonth.getFullYear() &&
+                                       String(a.employee) === String(emp._id);
+                              });
+                              const absent = calculateEmployeeAbsentDays(emp._id, selectedMonth.getMonth(), selectedMonth.getFullYear(), monthAtt, emp.joiningDate || emp.createdAt);
+                              const wo = monthAtt.filter(a => getAttendanceStatus(a) === 'WO').length;
+                              const totalDays = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 0).getDate();
+                              const workingDays = totalDays - wo;
+                              const percent = workingDays > 0 ? Math.max(0, Math.round(100 - (absent / workingDays) * 100)) : 100;
+                              return percent < 75;
+                            }).length;
+                            return `${lowAttendanceCount} employee${lowAttendanceCount !== 1 ? 's' : ''}`;
+                          })()}
                         </p>
                       </div>
                     </div>

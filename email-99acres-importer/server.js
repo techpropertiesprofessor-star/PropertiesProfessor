@@ -8,13 +8,13 @@
  */
 
 require('dotenv').config();
-const { startCron } = require('./cron/leadCron');
+const { startCron } = require('./cron/emailCron');
 
 const configuredSchedule = process.env.CRON_SCHEDULE || '*/2 * * * *';
 const crmApiUrl = process.env.CRM_API_URL || 'http://localhost:5000/api/leads';
 
 console.log("===========================================");
-console.log("  99acres Email Lead Importer (IMAP)");
+console.log("  99acres Email Lead Importer (Gmail API)");
 console.log("===========================================");
 console.log(`  Schedule: ${configuredSchedule}`);
 console.log(`  API: ${crmApiUrl}`);
