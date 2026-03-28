@@ -132,8 +132,8 @@ function parseLeadEmail(parsed) {
   // Also try to extract from subject for property info
   const subject = parsed.subject || '';
 
-  // Extract name
-  const name = extractField(text, [
+  // Extract name - try multiple patterns
+  let name = extractField(text, [
     'Buyer(?:\\s*Name)?',
     'Name',
     'Contact\\s*Person',
@@ -141,6 +141,47 @@ function parseLeadEmail(parsed) {
     'Enquired\\s*By',
     'Lead\\s*Name'
   ]);
+
+  // Additional name extraction patterns for 99acres format
+  if (!name || name.toLowerCase() === 'unknown') {
+    // Pattern: "Details of the response Name email@domain.com"
+    const pattern1 = text.match(/Details of the response\s+([A-Za-z][A-Za-z\s]+?)\s+[\w.+-]+@/i);
+    if (pattern1 && pattern1[1].trim().length > 1) {
+      name = pattern1[1].trim();
+    }
+  }
+
+  if (!name || name.toLowerCase() === 'unknown') {
+    // Pattern: "Details of the response Name +91"
+    const pattern2 = text.match(/Details of the response\s+([A-Za-z][A-Za-z\s]+?)\s+\+91/i);
+    if (pattern2 && pattern2[1].trim().length > 1) {
+      name = pattern2[1].trim();
+    }
+  }
+
+  if (!name || name.toLowerCase() === 'unknown') {
+    // Pattern: "Contact the buyer/tenant now - Name email +91"
+    const pattern3 = text.match(/Contact the buyer.*?now\s*[-–]\s*([A-Za-z][A-Za-z\s]+?)\s+[\w.+-]+@/i);
+    if (pattern3 && pattern3[1].trim().length > 1) {
+      name = pattern3[1].trim();
+    }
+  }
+
+  if (!name || name.toLowerCase() === 'unknown') {
+    // Pattern: "Dear Agent, Name is interested"
+    const pattern4 = text.match(/Dear\s+\w+,?\s*([A-Za-z][A-Za-z\s]+?)\s+is\s+interested/i);
+    if (pattern4 && pattern4[1].trim().length > 1) {
+      name = pattern4[1].trim();
+    }
+  }
+
+  if (!name || name.toLowerCase() === 'unknown') {
+    // Pattern: Look for name after "Buyer:" or "Name:" in various formats
+    const pattern5 = text.match(/(?:Buyer|Name|Customer)\s*[:\-]\s*([A-Za-z][A-Za-z\s]{1,50}?)(?:\s*[,\n]|\s+[\w.+-]+@|\s+\+91)/i);
+    if (pattern5 && pattern5[1].trim().length > 1) {
+      name = pattern5[1].trim();
+    }
+  }
 
   // Extract phone
   const phone = extractPhone(text);
@@ -176,13 +217,20 @@ function parseLeadEmail(parsed) {
     'City'
   ]);
 
-  // Must have at least name and phone to be a valid lead
-  if (!name || !phone) {
+  // Must have at least phone to be a valid lead (name can be Unknown)
+  if (!phone) {
     return null;
   }
 
+  // Clean up name - remove any email addresses that might have been captured
+  if (name) {
+    name = name.replace(/[\w.+-]+@[\w.-]+\.\w{2,}/g, '').trim();
+    // Remove trailing numbers or special chars
+    name = name.replace(/[\d\s,.:;]+$/, '').trim();
+  }
+
   return {
-    name: name.trim(),
+    name: (name && name.length > 1) ? name.trim() : 'Unknown',
     phone,
     email: email || null,
     property: property ? property.trim() : null,

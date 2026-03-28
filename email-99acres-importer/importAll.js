@@ -16,9 +16,8 @@ const axios = require("axios");
 const TOKEN_PATH = path.join(__dirname, "token.json");
 const CREDENTIALS_PATH = path.join(__dirname, "credentials.json");
 
-const CRM_API = "https://propertiesprofessor.onrender.com/api/leads";
-const DUPLICATE_API =
-  "https://propertiesprofessor.onrender.com/api/leads/check?phone=";
+const CRM_API = "http://127.0.0.1:5000/api/leads";
+const DUPLICATE_API = "http://127.0.0.1:5000/api/leads/check?phone=";
 
 /*
 Authorize Gmail

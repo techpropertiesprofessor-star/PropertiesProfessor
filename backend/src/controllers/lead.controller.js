@@ -313,116 +313,16 @@ exports.getLeads = async (req, res, next) => {
       filter.assignedTo = employeeId;
     }
 
-    // De-duplicate only true repeated entries while preserving distinct historical leads.
-    const dedupePipeline = [
-      { $match: filter },
-      {
-        $addFields: {
-          _normalizedPhone: {
-            $trim: {
-              input: {
-                $replaceAll: {
-                  input: { $toString: { $ifNull: ['$phone', ''] } },
-                  find: ' ',
-                  replacement: ''
-                }
-              }
-            }
-          },
-          _normalizedSource: { $toLower: { $ifNull: ['$source', ''] } },
-          _normalizedName: {
-            $toLower: {
-              $trim: {
-                input: { $toString: { $ifNull: ['$name', ''] } }
-              }
-            }
-          },
-          _normalizedPropertyKey: {
-            $toLower: {
-              $trim: {
-                input: {
-                  $toString: {
-                    $ifNull: [
-                      '$propertyId',
-                      {
-                        $ifNull: [
-                          '$propertyUrl',
-                          { $ifNull: ['$propertyName', ''] }
-                        ]
-                      }
-                    ]
-                  }
-                }
-              }
-            }
-          },
-          _nameQuality: {
-            $cond: [
-              {
-                $in: [
-                  '$_normalizedName',
-                  ['', 'unknown', 'unknoen', 'n/a', 'na', 'null', 'undefined', 'not provided']
-                ]
-              },
-              0,
-              1
-            ]
-          },
-          _dedupePhone: {
-            $cond: [
-              { $eq: ['$_normalizedPhone', ''] },
-              { $toString: '$_id' },
-              '$_normalizedPhone'
-            ]
-          },
-          _dedupeProperty: {
-            $cond: [
-              { $eq: ['$_normalizedPropertyKey', ''] },
-              { $toString: '$_id' },
-              '$_normalizedPropertyKey'
-            ]
-          }
-        }
-      },
-      { $sort: { _nameQuality: -1, createdAt: -1, _id: -1 } },
-      {
-        $group: {
-          _id: {
-            phone: '$_dedupePhone',
-            source: '$_normalizedSource',
-            property: '$_dedupeProperty'
-          },
-          leadId: { $first: '$_id' },
-          createdAt: { $first: '$createdAt' }
-        }
-      },
-      { $sort: { createdAt: -1, leadId: -1 } },
-      {
-        $facet: {
-          paged: [
-            { $skip: skip },
-            { $limit: pageLimit },
-            { $project: { _id: '$leadId' } }
-          ],
-          meta: [{ $count: 'totalLeads' }]
-        }
-      }
-    ];
-
-    const [aggregateResult] = await Lead.aggregate(dedupePipeline);
-    const pagedIds = (aggregateResult?.paged || []).map(item => String(item._id));
-    const totalLeads = aggregateResult?.meta?.[0]?.totalLeads || 0;
-
-    let leads = [];
-    if (pagedIds.length > 0) {
-      const leadDocs = await Lead.find({ _id: { $in: pagedIds } })
-        .populate({ path: 'assignedTo', select: 'name email role' })
-        .populate({ path: 'remarkNotes.addedBy', select: 'name email' })
-        .populate({ path: 'propertyId', select: 'unitNumber project tower bhk floor_number' });
-
-      const leadMap = new Map(leadDocs.map(doc => [String(doc._id), doc]));
-      leads = pagedIds.map(id => leadMap.get(id)).filter(Boolean);
-    }
+    // Simple query - show all leads sorted by date
+    const totalLeads = await Lead.countDocuments(filter);
+    
+    const leads = await Lead.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(pageLimit)
+      .populate({ path: 'assignedTo', select: 'name email role' })
+      .populate({ path: 'remarkNotes.addedBy', select: 'name email' })
+      .populate({ path: 'propertyId', select: 'unitNumber project tower bhk floor_number' });
 
     res.json({
       leads,
@@ -437,7 +337,7 @@ exports.getLeads = async (req, res, next) => {
   } catch (err) {
     next(err);
   }
-};
+};;
 
 
 // =======================================
