@@ -313,7 +313,7 @@ exports.getLeads = async (req, res, next) => {
       filter.assignedTo = employeeId;
     }
 
-    // Keep only the latest lead per phone+source combination to avoid duplicate rows.
+    // De-duplicate only true repeated entries while preserving distinct historical leads.
     const dedupePipeline = [
       { $match: filter },
       {
@@ -330,21 +330,67 @@ exports.getLeads = async (req, res, next) => {
             }
           },
           _normalizedSource: { $toLower: { $ifNull: ['$source', ''] } },
+          _normalizedName: {
+            $toLower: {
+              $trim: {
+                input: { $toString: { $ifNull: ['$name', ''] } }
+              }
+            }
+          },
+          _normalizedPropertyKey: {
+            $toLower: {
+              $trim: {
+                input: {
+                  $toString: {
+                    $ifNull: [
+                      '$propertyId',
+                      {
+                        $ifNull: [
+                          '$propertyUrl',
+                          { $ifNull: ['$propertyName', ''] }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          _nameQuality: {
+            $cond: [
+              {
+                $in: [
+                  '$_normalizedName',
+                  ['', 'unknown', 'unknoen', 'n/a', 'na', 'null', 'undefined', 'not provided']
+                ]
+              },
+              0,
+              1
+            ]
+          },
           _dedupePhone: {
             $cond: [
               { $eq: ['$_normalizedPhone', ''] },
               { $toString: '$_id' },
               '$_normalizedPhone'
             ]
+          },
+          _dedupeProperty: {
+            $cond: [
+              { $eq: ['$_normalizedPropertyKey', ''] },
+              { $toString: '$_id' },
+              '$_normalizedPropertyKey'
+            ]
           }
         }
       },
-      { $sort: { createdAt: -1, _id: -1 } },
+      { $sort: { _nameQuality: -1, createdAt: -1, _id: -1 } },
       {
         $group: {
           _id: {
             phone: '$_dedupePhone',
-            source: '$_normalizedSource'
+            source: '$_normalizedSource',
+            property: '$_dedupeProperty'
           },
           leadId: { $first: '$_id' },
           createdAt: { $first: '$createdAt' }
