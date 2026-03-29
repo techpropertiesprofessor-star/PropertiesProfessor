@@ -76,7 +76,7 @@ function LeadsPage({ newMessageCount = 0, resetNewMessageCount }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalLeads, setTotalLeads] = useState(0);
-  const pageLimit = 15;
+  const pageLimit = 20;
 
   // =====================
   // REAL-TIME UPDATES VIA SHARED SOCKET

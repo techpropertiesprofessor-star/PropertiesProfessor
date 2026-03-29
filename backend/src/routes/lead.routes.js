@@ -42,6 +42,9 @@ router.get('/download', auth, role(['MANAGER', 'ADMIN']), leadController.downloa
 // Duplicate phone check (no auth — used by email importer)
 router.get('/check', leadController.checkLeadByPhone);
 
+// Remove duplicate leads (MANAGER/ADMIN only)
+router.delete('/remove-duplicates', auth, role(['MANAGER', 'ADMIN']), leadController.removeDuplicateLeads);
+
 // GET /api/leads - requires Leads permission
 router.get('/', auth, requirePermission('Leads'), leadController.getLeads);
 
@@ -63,11 +66,3 @@ router.get('/:id', leadController.getLeadById);
 router.put('/:id', leadController.updateLead);
 
 module.exports = router;
-exports.getUploadHistory = async (req, res, next) => {
-  try {
-    const uploads = await UploadHistory.find({}).sort({ uploadedAt: -1 });
-    res.json(uploads);
-  } catch (err) {
-    next(err);
-  }
-};

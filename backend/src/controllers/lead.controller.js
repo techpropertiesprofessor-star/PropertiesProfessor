@@ -23,6 +23,46 @@ exports.getUploadHistory = async (req, res, next) => {
     next(err);
   }
 };
+
+// =======================================
+// REMOVE DUPLICATE LEADS (Keep oldest one)
+// =======================================
+exports.removeDuplicateLeads = async (req, res, next) => {
+  try {
+    const duplicates = await Lead.aggregate([
+      {
+        $group: {
+          _id: '$phone',
+          count: { $sum: 1 },
+          docs: { $push: '$_id' },
+          firstDoc: { $first: '$_id' }
+        }
+      },
+      {
+        $match: { count: { $gt: 1 } }
+      }
+    ]);
+
+    let deletedCount = 0;
+    for (const dup of duplicates) {
+      // Keep the first (oldest) document, delete the rest
+      const toDelete = dup.docs.filter(id => !id.equals(dup.firstDoc));
+      if (toDelete.length > 0) {
+        const result = await Lead.deleteMany({ _id: { $in: toDelete } });
+        deletedCount += result.deletedCount;
+      }
+    }
+
+    res.json({ 
+      message: 'Duplicate leads removed successfully', 
+      duplicateGroupsFound: duplicates.length,
+      deletedCount 
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // =======================================
 // UPLOAD LEADS (CSV/XLSX)
 // =======================================
@@ -37,13 +77,37 @@ exports.uploadLeads = async (req, res, next) => {
     const sheet = workbook.Sheets[sheetName];
     const leads = xlsx.utils.sheet_to_json(sheet);
 
-    // Insert leads into DB (basic example, adjust as needed)
-    const insertedLeads = await Lead.insertMany(leads);
+    // Filter out duplicate leads based on phone number
+    const phoneNumbers = leads.map(lead => lead.phone?.toString().trim()).filter(Boolean);
+    const existingLeads = await Lead.find({ phone: { $in: phoneNumbers } }).select('phone');
+    const existingPhones = new Set(existingLeads.map(lead => lead.phone?.toString().trim()));
+    
+    // Remove duplicates from file itself (keep first occurrence)
+    const seenPhones = new Set();
+    const uniqueNewLeads = leads.filter(lead => {
+      const phone = lead.phone?.toString().trim();
+      if (!phone || existingPhones.has(phone) || seenPhones.has(phone)) {
+        return false;
+      }
+      seenPhones.add(phone);
+      return true;
+    });
+
+    let insertedLeads = [];
+    if (uniqueNewLeads.length > 0) {
+      insertedLeads = await Lead.insertMany(uniqueNewLeads);
+    }
 
     // Save upload history
     await UploadHistory.create({ filename: req.file.filename, uploadedAt: new Date(), count: insertedLeads.length });
 
-    res.status(201).json({ message: 'Leads uploaded successfully', count: insertedLeads.length });
+    const skippedCount = leads.length - insertedLeads.length;
+    res.status(201).json({ 
+      message: 'Leads uploaded successfully', 
+      count: insertedLeads.length,
+      skipped: skippedCount,
+      total: leads.length
+    });
   } catch (err) {
     next(err);
   }
@@ -313,16 +377,37 @@ exports.getLeads = async (req, res, next) => {
       filter.assignedTo = employeeId;
     }
 
-    // Simple query - show all leads sorted by date
+    // Use aggregation to show Interested leads first, then by date
     const totalLeads = await Lead.countDocuments(filter);
     
-    const leads = await Lead.find(filter)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(pageLimit)
-      .populate({ path: 'assignedTo', select: 'name email role' })
-      .populate({ path: 'remarkNotes.addedBy', select: 'name email' })
-      .populate({ path: 'propertyId', select: 'unitNumber project tower bhk floor_number' });
+    const leads = await Lead.aggregate([
+      { $match: filter },
+      {
+        $addFields: {
+          remarkPriority: {
+            $switch: {
+              branches: [
+                { case: { $eq: ['$remarks', 'Interested'] }, then: 1 },
+                { case: { $eq: ['$remarks', 'Busy'] }, then: 2 },
+                { case: { $eq: ['$remarks', 'Not Interested'] }, then: 3 },
+                { case: { $eq: ['$remarks', 'Invalid Number'] }, then: 4 }
+              ],
+              default: 5
+            }
+          }
+        }
+      },
+      { $sort: { remarkPriority: 1, createdAt: -1 } },
+      { $skip: skip },
+      { $limit: pageLimit }
+    ]);
+
+    // Populate the results
+    await Lead.populate(leads, [
+      { path: 'assignedTo', select: 'name email role' },
+      { path: 'remarkNotes.addedBy', select: 'name email' },
+      { path: 'propertyId', select: 'unitNumber project tower bhk floor_number' }
+    ]);
 
     res.json({
       leads,
