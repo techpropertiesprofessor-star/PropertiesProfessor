@@ -185,6 +185,17 @@ exports.createLead = async (req, res, next) => {
       return res.status(400).json({ message: 'Name and phone are required' });
     }
 
+    // Check for duplicate lead by phone number
+    const normalizedPhone = phone.toString().trim();
+    const existingLead = await Lead.findOne({ phone: normalizedPhone });
+    if (existingLead) {
+      return res.status(200).json({ 
+        message: 'Lead with this phone number already exists',
+        duplicate: true,
+        lead: existingLead 
+      });
+    }
+
     let assignedToId = null;
     if (assignedTo) {
       try {
