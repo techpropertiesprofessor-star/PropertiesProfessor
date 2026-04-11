@@ -51,43 +51,123 @@ function extractLead(rawBody, subject) {
 
   if (!phone) return null;
 
-  // Extract name using multiple patterns
+  // Extract name using multiple patterns (IMPROVED)
   let name = null;
 
   // Pattern 1: "Details of the response Name email@domain.com"
-  const pattern1 = body.match(/Details of the response\s+([A-Za-z][A-Za-z\s]+?)\s+[\w.+-]+@/i);
-  if (pattern1 && pattern1[1].trim().length > 1) {
-    name = pattern1[1].trim();
+  const pattern1 = body.match(/Details of the response\s+(.+?)\s+[\w.+-]+@/i);
+  if (pattern1) {
+    let extracted = pattern1[1].trim();
+    if (extracted && extracted.length > 2 && !/^\+91|^\d{10}/.test(extracted)) {
+      name = extracted;
+    }
   }
 
   // Pattern 2: "Details of the response Name +91"
   if (!name) {
-    const pattern2 = body.match(/Details of the response\s+([A-Za-z][A-Za-z\s]+?)\s+\+91/i);
-    if (pattern2 && pattern2[1].trim().length > 1) {
-      name = pattern2[1].trim();
+    const pattern2 = body.match(/Details of the response\s+(.+?)\s+\+91/i);
+    if (pattern2) {
+      let extracted = pattern2[1].trim();
+      extracted = extracted.replace(/[\w.+-]+@[\w.-]+\.\w{2,}/g, '').trim();
+      if (extracted && extracted.length > 2) {
+        name = extracted;
+      }
     }
   }
 
-  // Pattern 3: Look for "Name:" or "Buyer:" labels
+  // Pattern 3: "Contact the buyer/tenant/seller now - Name"
   if (!name) {
-    const pattern3 = body.match(/(?:Name|Buyer|Customer)\s*[:\-]\s*([A-Za-z][A-Za-z\s]{1,50}?)(?:\s*[,\n]|\s+[\w.+-]+@|\s+\+91)/i);
-    if (pattern3 && pattern3[1].trim().length > 1) {
-      name = pattern3[1].trim();
+    const pattern3 = body.match(/Contact the (?:buyer|tenant|seller|owner) now\s*[-–]\s*(.+?)\s+[\w.+-]+@/i);
+    if (pattern3) {
+      let extracted = pattern3[1].trim();
+      if (extracted && extracted.length > 2) {
+        name = extracted;
+      }
     }
   }
 
-  // Pattern 4: "Contact the buyer/tenant now - Name"
+  // Pattern 4: "Contact the buyer/tenant now - Name +91"
   if (!name) {
-    const pattern4 = body.match(/Contact the buyer.*?now\s*[-–]\s*([A-Za-z][A-Za-z\s]+?)\s+[\w.+-]+@/i);
-    if (pattern4 && pattern4[1].trim().length > 1) {
-      name = pattern4[1].trim();
+    const pattern4 = body.match(/Contact the (?:buyer|tenant|seller|owner) now\s*[-–]\s*(.+?)\s*\+91/i);
+    if (pattern4) {
+      let extracted = pattern4[1].trim();
+      if (extracted && extracted.length > 2) {
+        name = extracted;
+      }
     }
   }
 
-  // Clean up name
+  // Pattern 5: "Details of the Query Name email +91"
+  if (!name) {
+    const pattern5 = body.match(/Details of the Query\s+(.+?)\s+[\w.+-]+@/i);
+    if (pattern5) {
+      let extracted = pattern5[1].trim();
+      if (extracted && extracted.length > 2) {
+        name = extracted;
+      }
+    }
+  }
+
+  // Pattern 6: "Details of the Query Name +91"
+  if (!name) {
+    const pattern6 = body.match(/Details of the Query\s+(.+?)\s*\+91/i);
+    if (pattern6) {
+      let extracted = pattern6[1].trim();
+      if (extracted && extracted.length > 2) {
+        name = extracted;
+      }
+    }
+  }
+
+  // Pattern 7: "Name:" or "Buyer:" or "Contact Name:" labels
+  if (!name) {
+    const pattern7 = body.match(/(?:Buyer\s*)?(?:Contact\s*)?Name\s*[:\-]\s*(.+?)(?:\s+(?:Email|Phone|Mobile|\+91|[a-z0-9._%+-]+@)|\s*$)/i);
+    if (pattern7) {
+      let extracted = pattern7[1].trim();
+      if (extracted && extracted.length > 2) {
+        name = extracted;
+      }
+    }
+  }
+
+  // Pattern 8: "Enquired By: Name"
+  if (!name) {
+    const pattern8 = body.match(/Enquired\s*By\s*[:\-]\s*(.+?)(?:\s+(?:Email|Phone|Mobile|\+91|[a-z0-9._%+-]+@)|\s*$)/i);
+    if (pattern8) {
+      let extracted = pattern8[1].trim();
+      if (extracted && extracted.length > 2) {
+        name = extracted;
+      }
+    }
+  }
+
+  // Pattern 9: Name before email pattern
+  if (!name) {
+    const pattern9 = body.match(/(?:^|\s|:)([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})\s+[\w.+-]+@[\w.-]+\.\w{2,}\s+\+91/i);
+    if (pattern9) {
+      let extracted = pattern9[1].trim();
+      if (extracted && extracted.length > 2) {
+        name = extracted;
+      }
+    }
+  }
+
+  // Clean up extracted name
   if (name) {
-    name = name.replace(/[\w.+-]+@[\w.-]+\.\w{2,}/g, '').trim();
-    name = name.replace(/[\d\s,.:;]+$/, '').trim();
+    name = name
+      .replace(/[\w.+-]+@[\w.-]+\.\w{2,}/g, '') // Remove emails
+      .replace(/\s+\+91.*$/, '') // Remove phone prefix
+      .replace(/[\d\s,.:;]+$/, '') // Remove trailing digits/punctuation
+      .replace(/\s+/g, ' ') // Normalize spaces
+      .trim();
+
+    // Validate it looks like a name (at least 2 chars, starts with letter)
+    if (name && name.length > 2 && /^[A-Za-z]/.test(name)) {
+      // Take only first 3 words max
+      name = name.split(/\s+/).slice(0, 3).join(' ');
+    } else {
+      name = null;
+    }
   }
 
   // Extract property from subject
@@ -105,11 +185,11 @@ function extractLead(rawBody, subject) {
     ? `https://www.99acres.com/${listingMatch[1]}`
     : "";
 
-  return { 
-    name: name || 'Unknown', 
-    phone, 
-    propertyName, 
-    propertyUrl 
+  return {
+    name: name || `Customer ${phone.slice(-4)}`,
+    phone,
+    propertyName,
+    propertyUrl
   };
 }
 
